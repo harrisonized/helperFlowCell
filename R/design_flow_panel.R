@@ -2,6 +2,7 @@
 
 wd = dirname(this.path::here())  # wd = '~/github/R/harrisonRTools'
 library('readxl')
+library('tidyr')
 library('optparse')
 library('logr')
 source(file.path(wd, 'R', 'functions', 'text_tools.R'))
@@ -56,6 +57,7 @@ log_print(paste(Sys.time(), 'Reading data...'))
 # instrument config
 instr_cfg <- read_excel(file.path(wd, opt[['instrument-config']]))
 colnames(instr_cfg) <- unlist(lapply(colnames(instr_cfg), title_to_snake_case))  # format columns
+instr_cfg <- separate_rows(instr_cfg, 'fluorochrome_detected', sep=', ')  # split comma-separated list
 
 
 # antibody inventory
