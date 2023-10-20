@@ -6,6 +6,7 @@ library('tidyr')
 library('optparse')
 library('logr')
 source(file.path(wd, 'R', 'functions', 'text_tools.R'))
+source(file.path(wd, 'R', 'functions', 'list_tools.R'))  # find_first_match_index
 
 
 # ----------------------------------------------------------------------
@@ -24,14 +25,6 @@ option_list = list(
     make_option(c("-c", "--instrument-config"), default='data/flow/instrument_config.xlsx',
                 metavar='data/flow/instrument_config.xlsx', type="character",
                 help="instrument configuration file"),
-
-    make_option(c("-o", "--output-dir"), default="data/flow",
-                metavar="data/flow", type="character",
-                help="set the output directory for the data"),
-
-    make_option(c("-f", "--figures-dir"), default="figures/flow",
-                metavar="figures/flow", type="character",
-                help="set the output directory for the figures"),
 
     make_option(c("-t", "--troubleshooting"), default=FALSE, action="store_true",
                 metavar="FALSE", type="logical",
@@ -62,11 +55,29 @@ instr_cfg <- separate_rows(instr_cfg, 'fluorochrome_detected', sep=', ')  # spli
 
 # antibody inventory
 ab_inv <- read_excel(file.path(wd, opt[['antibody-inventory']]))
-
-# format columns
 ab_inv <- ab_inv[, 1:(find_first_match_index('\\.{3}\\d{2}', colnames(ab_inv))-1)]  # filter extra columns
 colnames(ab_inv) <- unlist(lapply(colnames(ab_inv), title_to_snake_case))  # column names
 colnames(ab_inv) <- unlist(lapply(colnames(ab_inv), function(x) gsub('[.]', '', x)))  # column nmaes
+
+# remove 'c2 a0', the "no-break space"
+# see: https://stackoverflow.com/questions/68982813/r-string-encoding-best-practice
+for (col in colnames(ab_inv)) {
+    ab_inv[(!is.na(ab_inv[[col]]) & ab_inv[[col]] == enc2utf8("\u00a0")), col] <- NA
+}
+
+# save
+if (!troubleshooting) {
+    directory = file.path(wd, dirname(opt[['antibody-inventory']]), 'troubleshooting')
+    if (!dir.exists(directory)) {
+        dir.create(directory, recursive=TRUE)
+    }
+    filepath = file.path(
+        directory,
+        paste0('_', tools::file_path_sans_ext(basename(opt[['antibody-inventory']])), '.csv')  # filename
+    )
+    write.csv(ab_inv, file = filepath, row.names = FALSE)
+}
+
 
 
 

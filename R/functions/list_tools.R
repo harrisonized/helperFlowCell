@@ -2,6 +2,7 @@
 ## check_if_a_in_b
 ## items_in_a_not_b
 ## filter_list_for_match
+## find_first_match_index
 ## replace_specific_items
 
 
