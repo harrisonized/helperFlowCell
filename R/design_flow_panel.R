@@ -5,7 +5,7 @@ library('readxl')
 library('tidyr')
 library('optparse')
 library('logr')
-source(file.path(wd, 'R', 'functions', 'text_tools.R'))
+source(file.path(wd, 'R', 'functions', 'text_tools.R'))  # text_strip
 source(file.path(wd, 'R', 'functions', 'list_tools.R'))  # find_first_match_index
 
 
@@ -49,12 +49,15 @@ cleanup_antibody_names <- function(df, columns = c('antibody', 'alternative_name
 
     for (col in columns) {
 
+        # line endings
+        df[[col]] = unlist( lapply(df[[col]], function(x) txt_strip(x, chars='() ') ) )
+
         # lower/capital
         df[[col]] = unlist( lapply(df[[col]], function(x) sub(".*^[Cc][Dd]", "CD", x)) )
         df[[col]] = unlist( lapply(df[[col]], function(x) sub(".*^[Ii][Ll]", "IL", x)) )
         df[[col]] = unlist( lapply(df[[col]], function(x) gsub('(IL)([0-9]+)', '\\1-\\2', x)) )
         df[[col]] = unlist( lapply(df[[col]], function(x) sub(".*^Ly-", "Ly", x)) )
-        df[[col]] = unlist( lapply(df[[col]], function(x) sub(".*^[Bb][Cc][Ll1]-{0,1}", "Bcl-", x)) )
+        df[[col]] = unlist( lapply(df[[col]], function(x) gsub("[Bb][Cc][Ll1]-{0,1}", "Bcl-", x)) )
         df[[col]] = unlist( lapply(df[[col]], function(x) sub(".*^[Oo]nly", "Only", x)) )  # "Only clone name"
         df[[col]] = unlist( lapply(df[[col]], function(x) gsub(".*^[Tt][Cc][Rr]", "TCR", x)) )
         df[[col]] = unlist( lapply(df[[col]], function(x) gsub(".*^[Tt][Dd][Tt]", "TdT", x)) )
@@ -63,25 +66,43 @@ cleanup_antibody_names <- function(df, columns = c('antibody', 'alternative_name
         df[[col]] = unlist( lapply(df[[col]], function(x) gsub("[Gg]oat", "goat", x)) )
         df[[col]] = unlist( lapply(df[[col]], function(x) gsub("[Mm]ouse", "mouse", x)) )
         df[[col]] = unlist( lapply(df[[col]], function(x) gsub("[Rr]at", "rat", x)) )
+        df[[col]] = unlist( lapply(df[[col]], function(x) gsub("[Dd]onkey", "donkey", x)) )
+        df[[col]] = unlist( lapply(df[[col]], function(x) gsub("[Bb]ovine", "bovine", x)) )
+        df[[col]] = unlist( lapply(df[[col]], function(x) gsub("[Ss]heep", "sheep", x)) )
 
         # special characters
         df[[col]] = unlist( lapply(df[[col]], function(x) sub("α", "a", x)) )
+        df[[col]] = unlist( lapply(df[[col]], function(x) sub("β", "b", x)) )
         df[[col]] = unlist( lapply(df[[col]], function(x) sub("γ", "g", x)) )
         df[[col]] = unlist( lapply(df[[col]], function(x) gsub("™", "", x)) )
+        df[[col]] = unlist( lapply(df[[col]], function(x) gsub(
+            "([A-Za-z0-9],)\\s*([A-Za-z0-9])", "\\1 \\2", x)
+        ))  # comma-separated list
 
         # specific genes
+        df[[col]] = unlist( lapply(df[[col]], function(x) sub(" Fixable Viability Kit", "", x)) )
         df[[col]] = unlist( lapply(df[[col]], function(x) sub("FoxP3", "Foxp3", x)) )
         df[[col]] = unlist( lapply(df[[col]], function(x) sub("INFg", "IFNg", x)) )
+        df[[col]] = unlist( lapply(df[[col]], function(x) gsub("Immunoglobulin ", "Ig", x)) )
         df[[col]] = unlist( lapply(df[[col]], function(x) sub("MHC II", "MHCII", x)) )
         df[[col]] = unlist( lapply(df[[col]], function(x) sub("NK cell Pan", "CD49b", x)) )
         df[[col]] = unlist( lapply(df[[col]], function(x) sub("NK cells", "CD49b", x)) )
         df[[col]] = unlist( lapply(df[[col]], function(x) sub(".*^[Nn][Oo]tch", "Notch", x)) )
         df[[col]] = unlist( lapply(df[[col]], function(x) sub("[Rr][Oo][Rr][gγy][yt]", "RORgt", x)) )
-        df[[col]] = unlist( lapply(df[[col]], function(x) sub(" Fixable Viability Kit", "", x)) )
+        df[[col]] = unlist( lapply(df[[col]], function(x) sub("[Tt][Cc][Rr][Bb-]\\w*", "TCRb", x)) )
+        df[[col]] = unlist( lapply(df[[col]], function(x) sub("[Tt][Gg][Ff][Bb-]\\w*", "TGFb", x)) )
+        df[[col]] = unlist( lapply(df[[col]], function(x) sub("Vb8.1 Vb8.2", "Vb8.1, Vb8.2", x)) )
+        df[[col]] = unlist( lapply(df[[col]], function(x) sub("Vb8.1, 2", "Vb8.1, Vb8.2", x)) )
+        df[[col]] = unlist( lapply(df[[col]], function(x) gsub(
+            "\\(Tonegawa nomenclat", "(Tonegawa nomenclat)", x)
+        ))  # removed above
     }
 
     return (df)
 }
+
+
+
 
 
 # ----------------------------------------------------------------------
@@ -133,11 +154,11 @@ if (!troubleshooting) {
     }
 
     filepath = file.path(directory, '_antibodies.txt')
-    write.table(unique(df[['antibody']]), filepath,
+    write.table(sort(unique(df[['antibody']])), filepath,
                 row.names = FALSE, col.names = FALSE, quote = FALSE)
 
     filepath = file.path(directory, '_alternative_names.txt')
-    write.table(unique(df[['alternative_name']]), filepath,
+    write.table(sort(unique(df[['alternative_name']])), filepath,
                 row.names = FALSE, col.names = FALSE, quote = FALSE)
 }
 
