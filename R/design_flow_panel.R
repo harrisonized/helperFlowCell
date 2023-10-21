@@ -42,6 +42,49 @@ log_print(paste('Script started at:', start_time))
 
 
 # ----------------------------------------------------------------------
+# Preprocessing
+
+
+cleanup_antibody_names <- function(df, columns = c('antibody', 'alternative_name')) {
+
+    for (col in columns) {
+
+        # lower/capital
+        df[[col]] = unlist( lapply(df[[col]], function(x) sub(".*^[Cc][Dd]", "CD", x)) )
+        df[[col]] = unlist( lapply(df[[col]], function(x) sub(".*^[Ii][Ll]", "IL", x)) )
+        df[[col]] = unlist( lapply(df[[col]], function(x) gsub('(IL)([0-9]+)', '\\1-\\2', x)) )
+        df[[col]] = unlist( lapply(df[[col]], function(x) sub(".*^Ly-", "Ly", x)) )
+        df[[col]] = unlist( lapply(df[[col]], function(x) sub(".*^[Bb][Cc][Ll1]-{0,1}", "Bcl-", x)) )
+        df[[col]] = unlist( lapply(df[[col]], function(x) sub(".*^[Oo]nly", "Only", x)) )  # "Only clone name"
+        df[[col]] = unlist( lapply(df[[col]], function(x) gsub(".*^[Tt][Cc][Rr]", "TCR", x)) )
+        df[[col]] = unlist( lapply(df[[col]], function(x) gsub(".*^[Tt][Dd][Tt]", "TdT", x)) )
+
+        # animals
+        df[[col]] = unlist( lapply(df[[col]], function(x) gsub("[Gg]oat", "goat", x)) )
+        df[[col]] = unlist( lapply(df[[col]], function(x) gsub("[Mm]ouse", "mouse", x)) )
+        df[[col]] = unlist( lapply(df[[col]], function(x) gsub("[Rr]at", "rat", x)) )
+
+        # special characters
+        df[[col]] = unlist( lapply(df[[col]], function(x) sub("α", "a", x)) )
+        df[[col]] = unlist( lapply(df[[col]], function(x) sub("γ", "g", x)) )
+        df[[col]] = unlist( lapply(df[[col]], function(x) gsub("™", "", x)) )
+
+        # specific genes
+        df[[col]] = unlist( lapply(df[[col]], function(x) sub("FoxP3", "Foxp3", x)) )
+        df[[col]] = unlist( lapply(df[[col]], function(x) sub("INFg", "IFNg", x)) )
+        df[[col]] = unlist( lapply(df[[col]], function(x) sub("MHC II", "MHCII", x)) )
+        df[[col]] = unlist( lapply(df[[col]], function(x) sub("NK cell Pan", "CD49b", x)) )
+        df[[col]] = unlist( lapply(df[[col]], function(x) sub("NK cells", "CD49b", x)) )
+        df[[col]] = unlist( lapply(df[[col]], function(x) sub(".*^[Nn][Oo]tch", "Notch", x)) )
+        df[[col]] = unlist( lapply(df[[col]], function(x) sub("[Rr][Oo][Rr][gγy][yt]", "RORgt", x)) )
+        df[[col]] = unlist( lapply(df[[col]], function(x) sub(" Fixable Viability Kit", "", x)) )
+    }
+
+    return (df)
+}
+
+
+# ----------------------------------------------------------------------
 # Format reference files
 
 log_print(paste(Sys.time(), 'Reading data...'))
@@ -54,16 +97,20 @@ instr_cfg <- separate_rows(instr_cfg, 'fluorochrome_detected', sep=', ')  # spli
 
 
 # antibody inventory
-ab_inv <- read_excel(file.path(wd, opt[['antibody-inventory']]))
-ab_inv <- ab_inv[, 1:(find_first_match_index('\\.{3}\\d{2}', colnames(ab_inv))-1)]  # filter extra columns
-colnames(ab_inv) <- unlist(lapply(colnames(ab_inv), title_to_snake_case))  # column names
-colnames(ab_inv) <- unlist(lapply(colnames(ab_inv), function(x) gsub('[.]', '', x)))  # column nmaes
+df <- read_excel(file.path(wd, opt[['antibody-inventory']]))
+df <- df[, 1:(find_first_match_index('\\.{3}\\d{2}', colnames(df))-1)]  # filter extra columns
+colnames(df) <- unlist(lapply(colnames(df), title_to_snake_case))  # column names
+colnames(df) <- unlist(lapply(colnames(df), function(x) gsub('[.]', '', x)))  # column nmaes
 
 # remove 'c2 a0', the "no-break space"
 # see: https://stackoverflow.com/questions/68982813/r-string-encoding-best-practice
-for (col in colnames(ab_inv)) {
-    ab_inv[(!is.na(ab_inv[[col]]) & ab_inv[[col]] == enc2utf8("\u00a0")), col] <- NA
+for (col in colnames(df)) {
+    df[(!is.na(df[[col]]) & df[[col]] == enc2utf8("\u00a0")), col] <- NA
 }
+
+df <- cleanup_antibody_names(df)
+
+# TODO: cleanup_fluorophore_names
 
 # save
 if (!troubleshooting) {
@@ -75,10 +122,24 @@ if (!troubleshooting) {
         directory,
         paste0('_', tools::file_path_sans_ext(basename(opt[['antibody-inventory']])), '.csv')  # filename
     )
-    write.csv(ab_inv, file = filepath, row.names = FALSE)
+    write.table(df, file = filepath, row.names = FALSE, sep=',')
 }
 
+# save
+if (!troubleshooting) {
+    directory = file.path(wd, dirname(opt[['antibody-inventory']]), 'troubleshooting')
+    if (!dir.exists(directory)) {
+        dir.create(directory, recursive=TRUE)
+    }
 
+    filepath = file.path(directory, '_antibodies.txt')
+    write.table(unique(df[['antibody']]), filepath,
+                row.names = FALSE, col.names = FALSE, quote = FALSE)
+
+    filepath = file.path(directory, '_alternative_names.txt')
+    write.table(unique(df[['alternative_name']]), filepath,
+                row.names = FALSE, col.names = FALSE, quote = FALSE)
+}
 
 
 # ----------------------------------------------------------------------
