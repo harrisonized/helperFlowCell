@@ -5,8 +5,8 @@ library('readxl')
 library('tidyr')
 library('optparse')
 library('logr')
-source(file.path(wd, 'R', 'functions', 'text_tools.R'))  # text_strip
-source(file.path(wd, 'R', 'functions', 'list_tools.R'))  # find_first_match_index
+source(file.path(wd, 'R', 'functions', 'text_tools.R'))  # title_to_snake_case
+source(file.path(wd, 'R', 'functions', 'list_tools.R'))  # find_first_match_index, multiple_replacement
 
 
 # ----------------------------------------------------------------------
@@ -14,7 +14,7 @@ source(file.path(wd, 'R', 'functions', 'list_tools.R'))  # find_first_match_inde
 
 # args
 option_list = list(
-    make_option(c("-p", "--panel-input"), default='data/flow/panel_input.xlsx',
+    make_option(c("-i", "--input-file"), default='data/flow/input_file.xlsx',
                 metavar='data/flow/panel_input.xlsx', type="character",
                 help="specify the antibodies to use in your flow panel"),
 
@@ -42,67 +42,50 @@ log_print(paste('Script started at:', start_time))
 
 
 # ----------------------------------------------------------------------
-# Preprocessing
+# Configs
 
+# cleanup antibody names
+replacements <- c(
 
-cleanup_antibody_names <- function(df, columns = c('antibody', 'alternative_name')) {
+    # lower/capital
+    ".*^[Cc][Dd]" = "CD",
+    ".*^[Ii][Ll]" = "IL",
+    "(IL)([0-9]+)" = "\\1-\\2",
+    ".*^Ly-" = "Ly",
+    "[Bb][Cc][Ll1]-{0,1}" = "Bcl-",
+    ".*^[Oo]nly" = "Only",
+    ".*^[Tt][Cc][Rr]" = "TCR",
+    ".*^[Tt][Dd][Tt]" = "TdT",
 
-    for (col in columns) {
+    # animals
+    "[Gg][Oo][Aa][Tt]" = "goat",
+    "[Mm][Oo][Uu][Ss][Ee]" = "mouse",
+    "[Rr][Aa][Tt]" = "rat",
+    "[Dd][Oo][Nn][Kk][Ee][Yy]" = "donkey",
+    "[Bb][Oo][Vv][Ii][Nn][Ee]" = "bovine",
+    "[Ss][Hh][Ee][Ee][Pp]" = "sheep",
 
-        # line endings
-        df[[col]] = unlist( lapply(df[[col]], function(x) txt_strip(x, chars='() ') ) )
+    # special characters
+    "α" = "a",
+    "β" = "b",
+    "γ" = "g",
+    "™" = "",
+    "([A-Za-z0-9],)\\s*([A-Za-z0-9])" = "\\1 \\2",  # comma-separated list
 
-        # lower/capital
-        df[[col]] = unlist( lapply(df[[col]], function(x) sub(".*^[Cc][Dd]", "CD", x)) )
-        df[[col]] = unlist( lapply(df[[col]], function(x) sub(".*^[Ii][Ll]", "IL", x)) )
-        df[[col]] = unlist( lapply(df[[col]], function(x) gsub('(IL)([0-9]+)', '\\1-\\2', x)) )
-        df[[col]] = unlist( lapply(df[[col]], function(x) sub(".*^Ly-", "Ly", x)) )
-        df[[col]] = unlist( lapply(df[[col]], function(x) gsub("[Bb][Cc][Ll1]-{0,1}", "Bcl-", x)) )
-        df[[col]] = unlist( lapply(df[[col]], function(x) sub(".*^[Oo]nly", "Only", x)) )  # "Only clone name"
-        df[[col]] = unlist( lapply(df[[col]], function(x) gsub(".*^[Tt][Cc][Rr]", "TCR", x)) )
-        df[[col]] = unlist( lapply(df[[col]], function(x) gsub(".*^[Tt][Dd][Tt]", "TdT", x)) )
-
-        # animals
-        df[[col]] = unlist( lapply(df[[col]], function(x) gsub("[Gg]oat", "goat", x)) )
-        df[[col]] = unlist( lapply(df[[col]], function(x) gsub("[Mm]ouse", "mouse", x)) )
-        df[[col]] = unlist( lapply(df[[col]], function(x) gsub("[Rr]at", "rat", x)) )
-        df[[col]] = unlist( lapply(df[[col]], function(x) gsub("[Dd]onkey", "donkey", x)) )
-        df[[col]] = unlist( lapply(df[[col]], function(x) gsub("[Bb]ovine", "bovine", x)) )
-        df[[col]] = unlist( lapply(df[[col]], function(x) gsub("[Ss]heep", "sheep", x)) )
-
-        # special characters
-        df[[col]] = unlist( lapply(df[[col]], function(x) sub("α", "a", x)) )
-        df[[col]] = unlist( lapply(df[[col]], function(x) sub("β", "b", x)) )
-        df[[col]] = unlist( lapply(df[[col]], function(x) sub("γ", "g", x)) )
-        df[[col]] = unlist( lapply(df[[col]], function(x) gsub("™", "", x)) )
-        df[[col]] = unlist( lapply(df[[col]], function(x) gsub(
-            "([A-Za-z0-9],)\\s*([A-Za-z0-9])", "\\1 \\2", x)
-        ))  # comma-separated list
-
-        # specific genes
-        df[[col]] = unlist( lapply(df[[col]], function(x) sub(" Fixable Viability Kit", "", x)) )
-        df[[col]] = unlist( lapply(df[[col]], function(x) sub("FoxP3", "Foxp3", x)) )
-        df[[col]] = unlist( lapply(df[[col]], function(x) sub("INFg", "IFNg", x)) )
-        df[[col]] = unlist( lapply(df[[col]], function(x) gsub("Immunoglobulin ", "Ig", x)) )
-        df[[col]] = unlist( lapply(df[[col]], function(x) sub("MHC II", "MHCII", x)) )
-        df[[col]] = unlist( lapply(df[[col]], function(x) sub("NK cell Pan", "CD49b", x)) )
-        df[[col]] = unlist( lapply(df[[col]], function(x) sub("NK cells", "CD49b", x)) )
-        df[[col]] = unlist( lapply(df[[col]], function(x) sub(".*^[Nn][Oo]tch", "Notch", x)) )
-        df[[col]] = unlist( lapply(df[[col]], function(x) sub("[Rr][Oo][Rr][gγy][yt]", "RORgt", x)) )
-        df[[col]] = unlist( lapply(df[[col]], function(x) sub("[Tt][Cc][Rr][Bb-]\\w*", "TCRb", x)) )
-        df[[col]] = unlist( lapply(df[[col]], function(x) sub("[Tt][Gg][Ff][Bb-]\\w*", "TGFb", x)) )
-        df[[col]] = unlist( lapply(df[[col]], function(x) sub("Vb8.1 Vb8.2", "Vb8.1, Vb8.2", x)) )
-        df[[col]] = unlist( lapply(df[[col]], function(x) sub("Vb8.1, 2", "Vb8.1, Vb8.2", x)) )
-        df[[col]] = unlist( lapply(df[[col]], function(x) gsub(
-            "\\(Tonegawa nomenclat", "(Tonegawa nomenclat)", x)
-        ))  # removed above
-    }
-
-    return (df)
-}
-
-
-
+    # specific genes
+    " Fixable Viability Kit" = "",
+    "FoxP3" = "Foxp3",
+    "INFg" = "IFNg",
+    "Immunoglobulin " = "Ig",
+    "MHC II" = "MHCII",
+    "NK cell Pan" = "CD49b",
+    ".*^[Nn][Oo]tch" = "Notch",
+    "[Rr][Oo][Rr][gγy][yt]" = "RORgt",
+    "[Tt][Cc][Rr][Bb-]\\w*" = "TCRb",
+    "[Tt][Gg][Ff][Bb-]\\w*" = "TGFb",
+    "Vb8.1 Vb8.2" = "Vb8.1, Vb8.2",
+    "Vb8.1, 2" = "Vb8.1, Vb8.2"
+)
 
 
 # ----------------------------------------------------------------------
@@ -129,7 +112,10 @@ for (col in colnames(df)) {
     df[(!is.na(df[[col]]) & df[[col]] == enc2utf8("\u00a0")), col] <- NA
 }
 
-df <- cleanup_antibody_names(df)
+# cleanup antibody names
+for (col in c('antibody', 'alternative_name')) {
+    df[[col]] = multiple_replacement(df[[col]], replacements, func='gsub')
+}
 
 # TODO: cleanup_fluorophore_names
 

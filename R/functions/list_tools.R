@@ -4,6 +4,7 @@
 ## filter_list_for_match
 ## find_first_match_index
 ## replace_specific_items
+## multiple_replacement
 
 
 #' https://stackoverflow.com/questions/53086053/how-to-check-if-a-list-contains-a-certain-element-in-r
@@ -57,4 +58,32 @@ replace_specific_items <- function(items, replacer) {
         items[idx] <- replacer[items[idx]]
     }
     return(items)
+}
+
+
+#' Convenience function to perform multiple replacements on a list
+#' 
+#' Example:
+#' replacement_dict <- c(
+#'     '[A-Za-z]' = '',
+#'     '[0-9]+' = ''
+#' )
+#' 
+#' @export
+multiple_replacement <- function(items, replace_dict, func='gsub') {
+
+    if (func == 'gsub') {
+        replace_func = gsub
+    } else if (func == 'sub') {
+        replace_func = sub
+    } else {
+        return(items)
+    }
+
+    for (pattern in names(replace_dict)) {
+        replacement = replace_dict[[pattern]]
+        items <- unlist( lapply(items, function(x) replace_func(pattern, replacement, x)) )
+    }
+
+    return (items)
 }
