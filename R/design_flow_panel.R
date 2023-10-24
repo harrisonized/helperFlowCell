@@ -5,6 +5,7 @@ library('readxl')
 library('tidyr')
 library('optparse')
 library('logr')
+source(file.path(wd, 'R', 'functions', 'df_tools.R'))  # rename_columns
 source(file.path(wd, 'R', 'functions', 'text_tools.R'))  # title_to_snake_case
 source(file.path(wd, 'R', 'functions', 'list_tools.R'))  # find_first_match_index, multiple_replacement
 
@@ -34,6 +35,13 @@ opt_parser = OptionParser(option_list=option_list)
 opt = parse_args(opt_parser)
 troubleshooting = opt[['troubleshooting']]
 
+if (!troubleshooting) {
+    data_dir = file.path(wd, dirname(opt[['input-file']]), 'troubleshooting')
+    if (!dir.exists(file.path(data_dir, 'lists'))) {
+        dir.create(file.path(data_dir, 'lists'), recursive=TRUE)
+    }
+}
+
 # Start Log
 start_time = Sys.time()
 log <- log_open(paste0("design_flow_panel-",
@@ -43,6 +51,11 @@ log_print(paste('Script started at:', start_time))
 
 # ----------------------------------------------------------------------
 # Configs
+
+
+col_to_new_col = c(
+    'fluorochrome_detected'='fluorochrome'
+)
 
 
 antibody_replacements <- c(
@@ -148,21 +161,23 @@ log_print(paste(Sys.time(), 'Reading data...'))
 # instrument config
 instr_cfg <- read_excel(file.path(wd, opt[['instrument-config']]))
 colnames(instr_cfg) <- unlist(lapply(colnames(instr_cfg), title_to_snake_case))  # format columns
-instr_cfg <- separate_rows(instr_cfg, 'fluorochrome_detected', sep=', ')  # split comma-separated list
+instr_cfg <- rename_columns(instr_cfg, col_to_new_col)
 
-instr_cfg[['fluorochrome_detected']] = multiple_replacement(
-    instr_cfg[['fluorochrome_detected']], fluorophore_replacements, func='gsub'
+instr_cfg[['fluorochrome']] = multiple_replacement(
+    instr_cfg[['fluorochrome']], fluorophore_replacements, func='gsub'
 )
+
+# split comma-separated list
+fluorochromes <- separate_rows(instr_cfg, 'fluorochrome', sep=', ')[['fluorochrome']]
+
 
 # save
 if (!troubleshooting) {
-    directory = file.path(wd, dirname(opt[['input-file']]), 'troubleshooting')
-    if (!dir.exists(directory)) {
-        dir.create(directory, recursive=TRUE)
-    }
+    filepath = file.path(data_dir, '_instrument_config.csv')
+    write.table(instr_cfg, file = filepath, row.names = FALSE, sep=',')
 
-    filepath = file.path(directory, '_fluorochromes.txt')
-    write.table(sort(unique(instr_cfg[['fluorochrome_detected']])), filepath,
+    filepath = file.path(data_dir, 'lists', '_fluorochromes.txt')
+    write.table(sort(unique(fluorochromes)), filepath,
                 row.names = FALSE, col.names = FALSE, quote = FALSE)
 }
 
@@ -193,25 +208,21 @@ for (col in c('antibody', 'alternative_name')) {
 df[['fluorophore']] = multiple_replacement(df[['fluorophore']], fluorophore_replacements, func='gsub')
 
 
-# # save
+# save
 if (!troubleshooting) {
-    directory = file.path(wd, dirname(opt[['input-file']]), 'troubleshooting')
-    if (!dir.exists(directory)) {
-        dir.create(directory, recursive=TRUE)
-    }
 
-    filepath = file.path(directory, '_antibody_inventory.csv')
+    filepath = file.path(data_dir, '_antibody_inventory.csv')
     write.table(df, file = filepath, row.names = FALSE, sep=',')
 
-    filepath = file.path(directory, '_antibodies.txt')
+    filepath = file.path(data_dir, 'lists', '_antibodies.txt')
     write.table(sort(unique(df[['antibody']])), filepath,
                 row.names = FALSE, col.names = FALSE, quote = FALSE)
 
-    filepath = file.path(directory, '_alternative_names.txt')
+    filepath = file.path(data_dir, 'lists', '_alternative_names.txt')
     write.table(sort(unique(df[['alternative_name']])), filepath,
                 row.names = FALSE, col.names = FALSE, quote = FALSE)
 
-    filepath = file.path(directory, '_fluorophores.txt')
+    filepath = file.path(data_dir, 'lists', '_fluorophores.txt')
     write.table(sort(unique(df[['fluorophore']])), filepath,
                 row.names = FALSE, col.names = FALSE, quote = FALSE)
 }
@@ -219,6 +230,17 @@ if (!troubleshooting) {
 # ----------------------------------------------------------------------
 # Join
 
+missing_fluorochromes = items_in_a_not_b(
+    sort(unique( df[['fluorophore']] )),
+    sort(unique( fluorochromes ))
+)
+
+# save
+if (!troubleshooting) {
+    filepath = file.path(data_dir, 'lists', '_missing_fluorochromes.txt')
+    write.table(sort(unique(missing_fluorochromes)), filepath,
+                row.names = FALSE, col.names = FALSE, quote = FALSE)
+}
 
 
 
