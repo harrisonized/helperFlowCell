@@ -62,49 +62,49 @@ col_to_new_col = c(
 antibody_replacements <- c(
 
     # special characters
-    "α" = "a",
-    "β" = "b",
-    "γ" = "g",
-    "™" = "",
-    "([A-Za-z0-9],)\\s*([A-Za-z0-9])" = "\\1 \\2",  # comma-separated list
+    'α' = 'a',
+    'β' = 'b',
+    'γ' = 'g',
+    '™' = '',
+    '([A-Za-z0-9],)\\s*([A-Za-z0-9])' = '\\1 \\2',  # comma-separated list
 
     # animals
-    "[Gg][Oo][Aa][Tt]" = "goat",
-    "[Mm][Oo][Uu][Ss][Ee]" = "mouse",
-    "[Rr][Aa][Tt]" = "rat",
-    "[Dd][Oo][Nn][Kk][Ee][Yy]" = "donkey",
-    "[Bb][Oo][Vv][Ii][Nn][Ee]" = "bovine",
-    "[Ss][Hh][Ee][Ee][Pp]" = "sheep",
+    '[Gg][Oo][Aa][Tt]' = 'goat',
+    '[Mm][Oo][Uu][Ss][Ee]' = 'mouse',
+    '[Rr][Aa][Tt]' = 'rat',
+    '[Dd][Oo][Nn][Kk][Ee][Yy]' = 'donkey',
+    '[Bb][Oo][Vv][Ii][Nn][Ee]' = 'bovine',
+    '[Ss][Hh][Ee][Ee][Pp]' = 'sheep',
 
     # general replacements
-    "[Bb][Cc][Ll1]-{0,1}" = "Bcl-",
-    ".*^[Cc][Dd]" = "CD",
-    "FoxP3" = "Foxp3",
+    '[Bb][Cc][Ll1]-{0,1}' = 'Bcl-',
+    '.*^[Cc][Dd]' = 'CD',
+    'FoxP3' = 'Foxp3',
     'gammaDelta' = 'gd',
-    "INFg" = "IFNg",
-    "Immunoglobulin " = "Ig",
-    ".*^[Ii][Ll]" = "IL",
-    "(IL)([0-9]+)" = "\\1-\\2",
-    ".*^Ly-" = "Ly",
-    "MHC {0,1}(I{1,2})" = "MHC\\1",
-    ".*^[Nn][Oo]tch" = "Notch",
-    ".*^[Oo]nly" = "Only",
-    "[Rr][Oo][Rr][gγy][yt]" = "RORgt",
-    ".*^[Tt][Cc][Rr]" = "TCR",
-    "[Tt][Cc][Rr][Bb-]\\w*" = "TCRb",
-    ".*^[Tt][Dd][Tt]" = "TdT",
-    "[Tt][Gg][Ff][Bb-]\\w*" = "TGFb",
-    "Unlabel{1,2}ed" = "Unlabeled",
-    "Va(lpha|) {0,1}([0-9]+)" = "Va\\2",
-    "Vbeta" = "Vb",
+    'INFg' = 'IFNg',
+    'Immunoglobulin ' = 'Ig',
+    '.*^[Ii][Ll]' = 'IL',
+    '(IL)([0-9]+)' = '\\1-\\2',
+    '.*^Ly-' = 'Ly',
+    'MHC {0,1}(I{1,2})' = 'MHC\\1',
+    '.*^[Nn][Oo]tch' = 'Notch',
+    '.*^[Oo]nly' = 'Only',
+    '[Rr][Oo][Rr][gγy][yt]' = 'RORgt',
+    '.*^[Tt][Cc][Rr]' = 'TCR',
+    '[Tt][Cc][Rr][Bb-]\\w*' = 'TCRb',
+    '.*^[Tt][Dd][Tt]' = 'TdT',
+    '[Tt][Gg][Ff][Bb-]\\w*' = 'TGFb',
+    'Unlabel{1,2}ed' = 'Unlabeled',
+    'Va(lpha|) {0,1}([0-9]+)' = 'Va\\2',
+    'Vbeta' = 'Vb',
     
     # custom exact replacements
-    "^\\(CXCR4\\)$" = "CXCR4",
-    " Fixable Viability Kit" = "",
-    "NK cell Pan" = "CD49b",
-    "TCRb TCRcb" = "TCRb, TCRcb",
+    '^\\(CXCR4\\)$' = 'CXCR4',
+    ' Fixable Viability Kit' = '',
+    'NK cell Pan' = 'CD49b',
+    'TCRb TCRcb' = 'TCRb, TCRcb',
     'Vb8.1 Vb8.2' = 'Vb8.1, 2',
-    " {0,1}\\(Tonegawa nomenclat\\)" = ""
+    ' {0,1}\\(Tonegawa nomenclat\\)' = ''
 )
 
 
@@ -130,6 +130,7 @@ fluorophore_replacements <- c(
     'e[Ff]((l|)uor|) {0,1}([0-9]+)' = 'eFluor \\3',
     'eVolve {0,1}([0-9]+)' = 'eVolve \\1',
     'Fluos' = 'Annexin-V-FLUOS',
+    'FITC-AF488' = 'FITC',  # was previously 'FITC/AF488'
     'Indo {0,1}1' = 'Indo-1',
     'Maybe ' = '',
     '(Pac Blue|PB)' = 'Pacific Blue',
@@ -146,29 +147,33 @@ fluorophore_replacements <- c(
     'red' = 'Red',
     'Tx{0,1}Re{0,1}d{0,1}' = 'Texas Red',
     'Vio([0-9]+)' = 'Vio \\1',
+    'YG([0-9]+)' = 'YG \\1',
 
     # custom exact replacements
     '^eFluor 506 and eFluor 780 \\(APC-Cy7\\)$' = 'APC-Cy7',
     '^eFluor 660 \\(APC\\)$' = 'APC',
     '^PE-Vio {0,1}([0-9]+) \\(txRed\\)$' = 'PE-Vio \\1',
-    '^Fire 750$' = 'APC-Cy7'  # this was a typo in the original data
+
+    # possible typos
+    '^Fire 750$' = 'APC-Cy7',
+    '^BUV427$' = 'BV421'
 )
 
 
 # ----------------------------------------------------------------------
 # Instrument Config
 
-log_print(paste(Sys.time(), 'Reading data...'))
 
-# instrument config
 instr_cfg <- read_excel_or_csv(file.path(wd, opt[['instrument-config']]))
 colnames(instr_cfg) <- unlist(lapply(colnames(instr_cfg), title_to_snake_case))  # format columns
 instr_cfg <- rename_columns(instr_cfg, col_to_new_col)
 
+# standardize names
 instr_cfg[['fluorochrome']] = multiple_replacement(
     instr_cfg[['fluorochrome']], fluorophore_replacements, func='gsub'
 )
 
+# order list
 instr_cfg <- instr_cfg[
     wrapr::orderv(instr_cfg[, c('excitation', 'bandpass_filter')], decreasing=TRUE), 
 ]
@@ -176,13 +181,12 @@ instr_cfg <- instr_cfg[
 # split comma-separated list
 fluorochromes <- separate_rows(instr_cfg, 'fluorochrome', sep=', ')[['fluorochrome']]
 
-
 # save
 if (!troubleshooting) {
     filepath = file.path(data_dir, '_instrument_config.csv')
     write.table(instr_cfg, file = filepath, row.names = FALSE, sep=',')
 
-    filepath = file.path(data_dir, 'lists', '_fluorochromes.txt')
+    filepath = file.path(data_dir, 'lists', 'fluorochromes.txt')
     write.table(sort(unique(fluorochromes)), filepath,
                 row.names = FALSE, col.names = FALSE, quote = FALSE)
 }
@@ -190,6 +194,7 @@ if (!troubleshooting) {
 
 # ----------------------------------------------------------------------
 # Antibody Inventory
+
 
 df <- read_excel_or_csv(file.path(wd, opt[['antibody-inventory']]))
 df <- df[, 1:(find_first_match_index('\\.{3}\\d{2}', colnames(df))-1)]  # filter extra columns
@@ -205,12 +210,10 @@ for (col in colnames(df)) {
     )    
 }
 
-# cleanup antibody names
+# standardize names
 for (col in c('antibody', 'alternative_name')) {
     df[[col]] = multiple_replacement(df[[col]], antibody_replacements, func='gsub')
 }
-
-# cleanup fluorophore names
 df[['fluorophore']] = multiple_replacement(df[['fluorophore']], fluorophore_replacements, func='gsub')
 
 
@@ -220,21 +223,22 @@ if (!troubleshooting) {
     filepath = file.path(data_dir, '_antibody_inventory.csv')
     write.table(df, file = filepath, row.names = FALSE, sep=',')
 
-    filepath = file.path(data_dir, 'lists', '_antibodies.txt')
+    filepath = file.path(data_dir, 'lists', 'antibodies.txt')
     write.table(sort(unique(df[['antibody']])), filepath,
                 row.names = FALSE, col.names = FALSE, quote = FALSE)
 
-    filepath = file.path(data_dir, 'lists', '_alternative_names.txt')
+    filepath = file.path(data_dir, 'lists', 'alternative_names.txt')
     write.table(sort(unique(df[['alternative_name']])), filepath,
                 row.names = FALSE, col.names = FALSE, quote = FALSE)
 
-    filepath = file.path(data_dir, 'lists', '_fluorophores.txt')
+    filepath = file.path(data_dir, 'lists', 'fluorophores.txt')
     write.table(sort(unique(df[['fluorophore']])), filepath,
                 row.names = FALSE, col.names = FALSE, quote = FALSE)
 }
 
+
 # ----------------------------------------------------------------------
-# Join
+# Missing Fluorochromes
 
 missing_fluorochromes = items_in_a_not_b(
     sort(unique( df[['fluorophore']] )),
@@ -243,11 +247,10 @@ missing_fluorochromes = items_in_a_not_b(
 
 # save
 if (!troubleshooting) {
-    filepath = file.path(data_dir, 'lists', '_missing_fluorochromes.txt')
+    filepath = file.path(data_dir, 'lists', 'missing_fluorochromes.txt')
     write.table(sort(unique(missing_fluorochromes)), filepath,
                 row.names = FALSE, col.names = FALSE, quote = FALSE)
 }
-
 
 
 end_time = Sys.time()
