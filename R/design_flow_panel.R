@@ -44,7 +44,7 @@ log_print(paste('Script started at:', start_time))
 # ----------------------------------------------------------------------
 # Configs
 
-# cleanup antibody names
+
 antibody_replacements <- c(
 
     # special characters
@@ -66,12 +66,13 @@ antibody_replacements <- c(
     "[Bb][Cc][Ll1]-{0,1}" = "Bcl-",
     ".*^[Cc][Dd]" = "CD",
     "FoxP3" = "Foxp3",
+    'gammaDelta' = 'gd',
     "INFg" = "IFNg",
     "Immunoglobulin " = "Ig",
     ".*^[Ii][Ll]" = "IL",
     "(IL)([0-9]+)" = "\\1-\\2",
     ".*^Ly-" = "Ly",
-    "MHC II" = "MHCII",
+    "MHC {0,1}(I{1,2})" = "MHC\\1",
     ".*^[Nn][Oo]tch" = "Notch",
     ".*^[Oo]nly" = "Only",
     "[Rr][Oo][Rr][gγy][yt]" = "RORgt",
@@ -79,12 +80,17 @@ antibody_replacements <- c(
     "[Tt][Cc][Rr][Bb-]\\w*" = "TCRb",
     ".*^[Tt][Dd][Tt]" = "TdT",
     "[Tt][Gg][Ff][Bb-]\\w*" = "TGFb",
-    "Vb8.1 Vb8.2" = "Vb8.1, Vb8.2",
-    "Vb8.1, 2" = "Vb8.1, Vb8.2",
-
-    # custom replacements
+    "Unlabel{1,2}ed" = "Unlabeled",
+    "Va(lpha|) {0,1}([0-9]+)" = "Va\\2",
+    "Vbeta" = "Vb",
+    
+    # custom exact replacements
+    "^\\(CXCR4\\)$" = "CXCR4",
     " Fixable Viability Kit" = "",
-    "NK cell Pan" = "CD49b"
+    "NK cell Pan" = "CD49b",
+    "TCRb TCRcb" = "TCRb, TCRcb",
+    'Vb8.1 Vb8.2' = 'Vb8.1, 2',
+    " {0,1}\\(Tonegawa nomenclat\\)" = ""
 )
 
 
@@ -209,6 +215,11 @@ if (!troubleshooting) {
     write.table(sort(unique(df[['fluorophore']])), filepath,
                 row.names = FALSE, col.names = FALSE, quote = FALSE)
 }
+
+# ----------------------------------------------------------------------
+# Join
+
+
 
 
 end_time = Sys.time()
