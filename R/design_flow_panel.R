@@ -45,17 +45,14 @@ log_print(paste('Script started at:', start_time))
 # Configs
 
 # cleanup antibody names
-replacements <- c(
+antibody_replacements <- c(
 
-    # lower/capital
-    ".*^[Cc][Dd]" = "CD",
-    ".*^[Ii][Ll]" = "IL",
-    "(IL)([0-9]+)" = "\\1-\\2",
-    ".*^Ly-" = "Ly",
-    "[Bb][Cc][Ll1]-{0,1}" = "Bcl-",
-    ".*^[Oo]nly" = "Only",
-    ".*^[Tt][Cc][Rr]" = "TCR",
-    ".*^[Tt][Dd][Tt]" = "TdT",
+    # special characters
+    "α" = "a",
+    "β" = "b",
+    "γ" = "g",
+    "™" = "",
+    "([A-Za-z0-9],)\\s*([A-Za-z0-9])" = "\\1 \\2",  # comma-separated list
 
     # animals
     "[Gg][Oo][Aa][Tt]" = "goat",
@@ -65,42 +62,108 @@ replacements <- c(
     "[Bb][Oo][Vv][Ii][Nn][Ee]" = "bovine",
     "[Ss][Hh][Ee][Ee][Pp]" = "sheep",
 
-    # special characters
-    "α" = "a",
-    "β" = "b",
-    "γ" = "g",
-    "™" = "",
-    "([A-Za-z0-9],)\\s*([A-Za-z0-9])" = "\\1 \\2",  # comma-separated list
-
-    # specific genes
-    " Fixable Viability Kit" = "",
+    # general replacements
+    "[Bb][Cc][Ll1]-{0,1}" = "Bcl-",
+    ".*^[Cc][Dd]" = "CD",
     "FoxP3" = "Foxp3",
     "INFg" = "IFNg",
     "Immunoglobulin " = "Ig",
+    ".*^[Ii][Ll]" = "IL",
+    "(IL)([0-9]+)" = "\\1-\\2",
+    ".*^Ly-" = "Ly",
     "MHC II" = "MHCII",
-    "NK cell Pan" = "CD49b",
     ".*^[Nn][Oo]tch" = "Notch",
+    ".*^[Oo]nly" = "Only",
     "[Rr][Oo][Rr][gγy][yt]" = "RORgt",
+    ".*^[Tt][Cc][Rr]" = "TCR",
     "[Tt][Cc][Rr][Bb-]\\w*" = "TCRb",
+    ".*^[Tt][Dd][Tt]" = "TdT",
     "[Tt][Gg][Ff][Bb-]\\w*" = "TGFb",
     "Vb8.1 Vb8.2" = "Vb8.1, Vb8.2",
-    "Vb8.1, 2" = "Vb8.1, Vb8.2"
+    "Vb8.1, 2" = "Vb8.1, Vb8.2",
+
+    # custom replacements
+    " Fixable Viability Kit" = "",
+    "NK cell Pan" = "CD49b"
+)
+
+
+fluorophore_replacements <- c(
+
+    # special characters
+    '®' = '',
+    '/' = '-',
+    '^ ([A-Za-z]+)' = '\\1',
+
+    # general replacements
+    '(Alexa) {0,1}(Fluor|) {0,1}' = 'AF',
+    'A(F|) {0,1}([0-9]+)' = 'AF\\2',
+    '[Aa][Pp][Cc]' = 'APC',
+    'APC {0,1}-{0,1}([A-Za-z]+)' = 'APC-\\1',
+    '[Ff]ire {0,1}([0-9]+)' = 'Fire \\1',
+    '^APC-[Ff]ire$' = 'APC-Fire 750',
+    '[Bb][Ii][Oo](tin|)' = 'Biotin',
+    '(BU[Vv]) {0,1}([0-9]+)' = 'BUV\\2',
+    '(B[Vv]) {0,1}([0-9]+)' = 'BV\\2',
+    '([Dd][Ll]|Dy[Ll]ight) {0,1}-{0,1}([0-9]+)' = 'DL\\2',
+    'e[Ff]((l|)uor|) {0,1}([0-9]+)' = 'eFluor \\3',
+    'eVolve {0,1}([0-9]+)' = 'eVolve \\1',
+    'Fluos' = 'Annexin-V-FLUOS',
+    'Indo {0,1}1' = 'Indo-1',
+    'Maybe ' = '',
+    '(Pac Blue|PB)' = 'Pacific Blue',
+    '[Pp][Ee] {0,1}-{0,1}([A-QS-Za-qs-z])' = 'PE-\\1',
+    '^PE ' = '^PE-',
+    '^[Pp][Ee]$' = 'PE',
+    '^PE-Dazzle$' = 'PE-Dazzle 594',
+    'PerCP {0,1}-{0,1}([A-Za-z]+)' = 'PerCP-\\1',
+    '(Zenon {0,1}|)(pHrodo) (iFL|) {0,1}([A-Za-z]+)' = '\\2 \\4',
+    '(Ultra-LEAF |)([Pp]urified|[Pp]ure|[Uu]nlabeled)' = 'Purified',
+    '(Q[D|d])(ot|) ([0-9]+)' = 'QD\\3',
+    '^RPE$' = 'R-PE',
+    '^RPM$' = 'R-PE',
+    'red' = 'Red',
+    'Tx{0,1}Re{0,1}d{0,1}' = 'Texas Red',
+    'Vio([0-9]+)' = 'Vio \\1',
+
+    # custom exact replacements
+    '^eFluor 506 and eFluor 780 \\(APC-Cy7\\)$' = 'APC-Cy7',
+    '^eFluor 660 \\(APC\\)$' = 'APC',
+    '^PE-Vio {0,1}([0-9]+) \\(txRed\\)$' = 'PE-Vio \\1',
+    '^Fire 750$' = 'APC-Cy7'  # this was a typo in the original data
 )
 
 
 # ----------------------------------------------------------------------
-# Format reference files
+# Instrument Config
 
 log_print(paste(Sys.time(), 'Reading data...'))
-
 
 # instrument config
 instr_cfg <- read_excel(file.path(wd, opt[['instrument-config']]))
 colnames(instr_cfg) <- unlist(lapply(colnames(instr_cfg), title_to_snake_case))  # format columns
 instr_cfg <- separate_rows(instr_cfg, 'fluorochrome_detected', sep=', ')  # split comma-separated list
 
+instr_cfg[['fluorochrome_detected']] = multiple_replacement(
+    instr_cfg[['fluorochrome_detected']], fluorophore_replacements, func='gsub'
+)
 
-# antibody inventory
+# save
+if (!troubleshooting) {
+    directory = file.path(wd, dirname(opt[['input-file']]), 'troubleshooting')
+    if (!dir.exists(directory)) {
+        dir.create(directory, recursive=TRUE)
+    }
+
+    filepath = file.path(directory, '_fluorochromes.txt')
+    write.table(sort(unique(instr_cfg[['fluorochrome_detected']])), filepath,
+                row.names = FALSE, col.names = FALSE, quote = FALSE)
+}
+
+
+# ----------------------------------------------------------------------
+# Antibody Inventory
+
 df <- read_excel(file.path(wd, opt[['antibody-inventory']]))
 df <- df[, 1:(find_first_match_index('\\.{3}\\d{2}', colnames(df))-1)]  # filter extra columns
 colnames(df) <- unlist(lapply(colnames(df), title_to_snake_case))  # column names
@@ -109,35 +172,30 @@ colnames(df) <- unlist(lapply(colnames(df), function(x) gsub('[.]', '', x)))  # 
 # remove 'c2 a0', the "no-break space"
 # see: https://stackoverflow.com/questions/68982813/r-string-encoding-best-practice
 for (col in colnames(df)) {
-    df[(!is.na(df[[col]]) & df[[col]] == enc2utf8("\u00a0")), col] <- NA
+    df[(!is.na(df[[col]]) & (df[[col]] == enc2utf8("\u00a0"))), col] <- NA
+    df[[col]] = unlist(
+        lapply(df[[col]], function(x) gsub(paste0('.*^', enc2utf8("\u00a0"), '+'), '', x))
+    )    
 }
 
 # cleanup antibody names
 for (col in c('antibody', 'alternative_name')) {
-    df[[col]] = multiple_replacement(df[[col]], replacements, func='gsub')
+    df[[col]] = multiple_replacement(df[[col]], antibody_replacements, func='gsub')
 }
 
-# TODO: cleanup_fluorophore_names
+# cleanup fluorophore names
+df[['fluorophore']] = multiple_replacement(df[['fluorophore']], fluorophore_replacements, func='gsub')
 
-# save
+
+# # save
 if (!troubleshooting) {
-    directory = file.path(wd, dirname(opt[['antibody-inventory']]), 'troubleshooting')
+    directory = file.path(wd, dirname(opt[['input-file']]), 'troubleshooting')
     if (!dir.exists(directory)) {
         dir.create(directory, recursive=TRUE)
     }
-    filepath = file.path(
-        directory,
-        paste0('_', tools::file_path_sans_ext(basename(opt[['antibody-inventory']])), '.csv')  # filename
-    )
+
+    filepath = file.path(directory, '_antibody_inventory.csv')
     write.table(df, file = filepath, row.names = FALSE, sep=',')
-}
-
-# save
-if (!troubleshooting) {
-    directory = file.path(wd, dirname(opt[['antibody-inventory']]), 'troubleshooting')
-    if (!dir.exists(directory)) {
-        dir.create(directory, recursive=TRUE)
-    }
 
     filepath = file.path(directory, '_antibodies.txt')
     write.table(sort(unique(df[['antibody']])), filepath,
@@ -146,11 +204,11 @@ if (!troubleshooting) {
     filepath = file.path(directory, '_alternative_names.txt')
     write.table(sort(unique(df[['alternative_name']])), filepath,
                 row.names = FALSE, col.names = FALSE, quote = FALSE)
+
+    filepath = file.path(directory, '_fluorophores.txt')
+    write.table(sort(unique(df[['fluorophore']])), filepath,
+                row.names = FALSE, col.names = FALSE, quote = FALSE)
 }
-
-
-# ----------------------------------------------------------------------
-# Do stuff
 
 
 end_time = Sys.time()
