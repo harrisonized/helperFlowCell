@@ -5,6 +5,7 @@ library('readxl')
 library('tidyr')
 library('optparse')
 library('logr')
+source(file.path(wd, 'R', 'functions', 'file_io.R'))  # read_excel_or_csv
 source(file.path(wd, 'R', 'functions', 'df_tools.R'))  # rename_columns
 source(file.path(wd, 'R', 'functions', 'text_tools.R'))  # title_to_snake_case
 source(file.path(wd, 'R', 'functions', 'list_tools.R'))  # find_first_match_index, multiple_replacement
@@ -23,8 +24,8 @@ option_list = list(
                 metavar='data/flow/antibody_inventory.xlsx', type="character",
                 help="antibody inventory table"),
 
-    make_option(c("-c", "--instrument-config"), default='data/flow/instrument_config.xlsx',
-                metavar='data/flow/instrument_config.xlsx', type="character",
+    make_option(c("-c", "--instrument-config"), default='data/flow/instrument_config.csv',
+                metavar='data/flow/instrument_config.csv', type="character",
                 help="instrument configuration file"),
 
     make_option(c("-t", "--troubleshooting"), default=FALSE, action="store_true",
@@ -121,6 +122,7 @@ fluorophore_replacements <- c(
     'APC {0,1}-{0,1}([A-Za-z]+)' = 'APC-\\1',
     '[Ff]ire {0,1}([0-9]+)' = 'Fire \\1',
     '^APC-[Ff]ire$' = 'APC-Fire 750',
+    '^Atto-' = 'ATTO ',
     '[Bb][Ii][Oo](tin|)' = 'Biotin',
     '(BU[Vv]) {0,1}([0-9]+)' = 'BUV\\2',
     '(B[Vv]) {0,1}([0-9]+)' = 'BV\\2',
@@ -159,13 +161,17 @@ fluorophore_replacements <- c(
 log_print(paste(Sys.time(), 'Reading data...'))
 
 # instrument config
-instr_cfg <- read_excel(file.path(wd, opt[['instrument-config']]))
+instr_cfg <- read_excel_or_csv(file.path(wd, opt[['instrument-config']]))
 colnames(instr_cfg) <- unlist(lapply(colnames(instr_cfg), title_to_snake_case))  # format columns
 instr_cfg <- rename_columns(instr_cfg, col_to_new_col)
 
 instr_cfg[['fluorochrome']] = multiple_replacement(
     instr_cfg[['fluorochrome']], fluorophore_replacements, func='gsub'
 )
+
+instr_cfg <- instr_cfg[
+    wrapr::orderv(instr_cfg[, c('excitation', 'bandpass_filter')], decreasing=TRUE), 
+]
 
 # split comma-separated list
 fluorochromes <- separate_rows(instr_cfg, 'fluorochrome', sep=', ')[['fluorochrome']]
@@ -185,7 +191,7 @@ if (!troubleshooting) {
 # ----------------------------------------------------------------------
 # Antibody Inventory
 
-df <- read_excel(file.path(wd, opt[['antibody-inventory']]))
+df <- read_excel_or_csv(file.path(wd, opt[['antibody-inventory']]))
 df <- df[, 1:(find_first_match_index('\\.{3}\\d{2}', colnames(df))-1)]  # filter extra columns
 colnames(df) <- unlist(lapply(colnames(df), title_to_snake_case))  # column names
 colnames(df) <- unlist(lapply(colnames(df), function(x) gsub('[.]', '', x)))  # column nmaes
