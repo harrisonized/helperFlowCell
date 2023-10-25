@@ -3,6 +3,7 @@
 wd = dirname(this.path::here())  # wd = '~/github/R/harrisonRTools'
 library('readxl')
 library('tidyr')
+suppressMessages(library('dplyr'))
 library('optparse')
 library('logr')
 source(file.path(wd, 'R', 'functions', 'file_io.R'))  # read_excel_or_csv
@@ -16,8 +17,8 @@ source(file.path(wd, 'R', 'functions', 'list_tools.R'))  # find_first_match_inde
 
 # args
 option_list = list(
-    make_option(c("-i", "--input-file"), default='data/flow/input_file.xlsx',
-                metavar='data/flow/panel_input.xlsx', type="character",
+    make_option(c("-i", "--input-file"), default='data/flow/panel.txt',
+                metavar='data/flow/panel.txt', type="character",
                 help="specify the antibodies to use in your flow panel"),
 
     make_option(c("-a", "--antibody-inventory"), default='data/flow/antibody_inventory.xlsx',
@@ -37,6 +38,7 @@ opt = parse_args(opt_parser)
 troubleshooting = opt[['troubleshooting']]
 
 if (!troubleshooting) {
+    # note: except for the last file, all files are output in the troubleshooting folder
     data_dir = file.path(wd, dirname(opt[['input-file']]), 'troubleshooting')
     if (!dir.exists(file.path(data_dir, 'lists'))) {
         dir.create(file.path(data_dir, 'lists'), recursive=TRUE)
@@ -55,7 +57,9 @@ log_print(paste('Script started at:', start_time))
 
 
 col_to_new_col = c(
-    'fluorochrome_detected'='fluorochrome'
+    'id'='laser_id',
+    'fluorochrome_detected'='fluorophore',
+    'fluorochrome'='fluorophore'
 )
 
 
@@ -163,14 +167,13 @@ fluorophore_replacements <- c(
 # ----------------------------------------------------------------------
 # Instrument Config
 
-
 instr_cfg <- read_excel_or_csv(file.path(wd, opt[['instrument-config']]))
 colnames(instr_cfg) <- unlist(lapply(colnames(instr_cfg), title_to_snake_case))  # format columns
 instr_cfg <- rename_columns(instr_cfg, col_to_new_col)
 
 # standardize names
-instr_cfg[['fluorochrome']] = multiple_replacement(
-    instr_cfg[['fluorochrome']], fluorophore_replacements, func='gsub'
+instr_cfg[['fluorophore']] = multiple_replacement(
+    instr_cfg[['fluorophore']], fluorophore_replacements, func='gsub'
 )
 
 # order list
@@ -179,7 +182,7 @@ instr_cfg <- instr_cfg[
 ]
 
 # split comma-separated list
-fluorochromes <- separate_rows(instr_cfg, 'fluorochrome', sep=', ')[['fluorochrome']]
+fluorochromes <- separate_rows(instr_cfg, 'fluorophore', sep=', ')[['fluorophore']]
 
 # save
 if (!troubleshooting) {
@@ -191,48 +194,50 @@ if (!troubleshooting) {
                 row.names = FALSE, col.names = FALSE, quote = FALSE)
 }
 
+instr_cfg <- separate_rows(instr_cfg, 'fluorophore', sep=', ')
+# drop duplicates?
+
 
 # ----------------------------------------------------------------------
 # Antibody Inventory
 
-
-df <- read_excel_or_csv(file.path(wd, opt[['antibody-inventory']]))
-df <- df[, 1:(find_first_match_index('\\.{3}\\d{2}', colnames(df))-1)]  # filter extra columns
-colnames(df) <- unlist(lapply(colnames(df), title_to_snake_case))  # column names
-colnames(df) <- unlist(lapply(colnames(df), function(x) gsub('[.]', '', x)))  # column nmaes
+ab_inv <- read_excel_or_csv(file.path(wd, opt[['antibody-inventory']]))
+ab_inv <- ab_inv[, 1:(find_first_match_index('\\.{3}\\d{2}', colnames(ab_inv))-1)]  # filter extra columns
+colnames(ab_inv) <- unlist(lapply(colnames(ab_inv), title_to_snake_case))  # column names
+colnames(ab_inv) <- unlist(lapply(colnames(ab_inv), function(x) gsub('[.]', '', x)))  # column nmaes
 
 # remove 'c2 a0', the "no-break space"
 # see: https://stackoverflow.com/questions/68982813/r-string-encoding-best-practice
-for (col in colnames(df)) {
-    df[(!is.na(df[[col]]) & (df[[col]] == enc2utf8("\u00a0"))), col] <- NA
-    df[[col]] = unlist(
-        lapply(df[[col]], function(x) gsub(paste0('.*^', enc2utf8("\u00a0"), '+'), '', x))
+for (col in colnames(ab_inv)) {
+    ab_inv[(!is.na(ab_inv[[col]]) & (ab_inv[[col]] == enc2utf8("\u00a0"))), col] <- NA
+    ab_inv[[col]] = unlist(
+        lapply(ab_inv[[col]], function(x) gsub(paste0('.*^', enc2utf8("\u00a0"), '+'), '', x))
     )    
 }
 
 # standardize names
 for (col in c('antibody', 'alternative_name')) {
-    df[[col]] = multiple_replacement(df[[col]], antibody_replacements, func='gsub')
+    ab_inv[[col]] = multiple_replacement(ab_inv[[col]], antibody_replacements, func='gsub')
 }
-df[['fluorophore']] = multiple_replacement(df[['fluorophore']], fluorophore_replacements, func='gsub')
+ab_inv[['fluorophore']] = multiple_replacement(ab_inv[['fluorophore']], fluorophore_replacements, func='gsub')
 
 
 # save
 if (!troubleshooting) {
 
     filepath = file.path(data_dir, '_antibody_inventory.csv')
-    write.table(df, file = filepath, row.names = FALSE, sep=',')
+    write.table(ab_inv, file = filepath, row.names = FALSE, sep=',')
 
     filepath = file.path(data_dir, 'lists', 'antibodies.txt')
-    write.table(sort(unique(df[['antibody']])), filepath,
+    write.table(sort(unique(ab_inv[['antibody']])), filepath,
                 row.names = FALSE, col.names = FALSE, quote = FALSE)
 
     filepath = file.path(data_dir, 'lists', 'alternative_names.txt')
-    write.table(sort(unique(df[['alternative_name']])), filepath,
+    write.table(sort(unique(ab_inv[['alternative_name']])), filepath,
                 row.names = FALSE, col.names = FALSE, quote = FALSE)
 
     filepath = file.path(data_dir, 'lists', 'fluorophores.txt')
-    write.table(sort(unique(df[['fluorophore']])), filepath,
+    write.table(sort(unique(ab_inv[['fluorophore']])), filepath,
                 row.names = FALSE, col.names = FALSE, quote = FALSE)
 }
 
@@ -241,7 +246,7 @@ if (!troubleshooting) {
 # Missing Fluorochromes
 
 missing_fluorochromes = items_in_a_not_b(
-    sort(unique( df[['fluorophore']] )),
+    sort(unique( ab_inv[['fluorophore']] )),
     sort(unique( fluorochromes ))
 )
 
@@ -250,6 +255,79 @@ if (!troubleshooting) {
     filepath = file.path(data_dir, 'lists', 'missing_fluorochromes.txt')
     write.table(sort(unique(missing_fluorochromes)), filepath,
                 row.names = FALSE, col.names = FALSE, quote = FALSE)
+}
+
+
+# ----------------------------------------------------------------------
+# Panel
+
+# read data
+panel <- read_csv_from_text(file.path(wd, opt[['input-file']]), encoding='UTF-8')
+
+# merge laser_ids
+panel = merge(
+    ab_inv[(ab_inv[['antibody']] %in% panel[[1]]),
+           c('antibody', 'company', 'catalog_no', 'fluorophore')],
+    instr_cfg[, c('fluorophore', 'laser_id')],  # lasers
+    by='fluorophore', suffixes=c('', '_'),
+    all.x=FALSE, all.y=FALSE,
+    na_matches = 'never'
+)
+
+# count number of unique fluorophores per antibody and laser_id
+ab_counts <- panel %>%
+    group_by(antibody, laser_id) %>%
+    summarise(
+        # num_antibodies=n(),  # don't necessarily need this
+        num_fluorophores=n_distinct(fluorophore),
+        most_common_fluorophore=names(
+            table(fluorophore)
+        )[which.max(table(fluorophore))],
+    )
+
+# cor each laser_id, compute fluorophore with most antibodies
+lasers_vs_fluorophores <- ab_counts %>%
+    group_by(laser_id) %>%
+    summarise(representative_fluorophore=names(
+        table(most_common_fluorophore)[which.max(table(most_common_fluorophore))]
+    ))
+fluorophores_for_lasers = lasers_vs_fluorophores[['representative_fluorophore']]
+names(fluorophores_for_lasers) = lasers_vs_fluorophores[['laser_id']]
+
+# for each antibody, aggregate fluorophores into comma-separated list
+abs_vs_fluorophores <- ab_counts %>%
+    group_by(antibody) %>%
+    summarise(fluorophores = toString(unique(most_common_fluorophore)))
+
+
+# pivot into table where rows are antibodies and columns are non-overlapping colors
+ab_vs_lasers <- pivot_wider(
+    ab_counts,
+    id_cols = 'antibody',
+    names_from = 'laser_id',
+    values_from = 'num_fluorophores',
+    values_fill = 0
+)
+
+# add comma-separated fluorophore list to each row
+ab_vs_lasers = merge(
+    abs_vs_fluorophores,
+    ab_vs_lasers,
+    by='antibody', suffixes=c('', '_'),
+    all.x=FALSE, all.y=FALSE,
+    na_matches = 'never'
+)
+
+# replace laser_ids as column names with representative fluorophore
+laser_ids <- items_in_a_not_b(colnames(ab_vs_lasers), c('antibody', 'fluorophores'))
+fluorophore_names <- unname(fluorophores_for_lasers[laser_ids])
+colnames(ab_vs_lasers) <- c('antibody', 'fluorophores', fluorophore_names)
+
+
+# save
+if (!troubleshooting) {
+    filepath = file.path(dirname(data_dir), 'antibodies_vs_lasers.csv')
+    write.table(ab_vs_lasers, file = filepath, row.names = FALSE, sep=',')
 }
 
 
