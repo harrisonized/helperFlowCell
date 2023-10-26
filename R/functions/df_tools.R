@@ -5,11 +5,15 @@ source(file.path(
 
 ## Functions
 ## rename_columns
-## rev_df
 ## fillna
-## smelt
+## get_unique_values
+## rev_df
 ## reset_index
+## append_dataframe
 ## filter_dataframe_column_by_list
+## dataframe_row_from_named_list
+## stranspose
+## smelt
 ## pivot
 
 
@@ -30,13 +34,13 @@ rename_columns <- function(df, columns, inplace=FALSE) {
 #' fill a specific column with na
 #' 
 #' @export
-fillna <- function(df, cols, val=0, inplace=FALSE) {
+fillna <- function(df, cols, val=0, var_name='df', inplace=FALSE) {
     for (col in cols) {
         df[is.na(df[, col]), col] <- val
     }
     if (inplace) {
         # see: https://stackoverflow.com/questions/3969852/update-data-frame-via-function-doesnt-work
-        assign('df', df, envir=.GlobalEnv)
+        assign(var_name, df, envir=.GlobalEnv)
     } else {
         return(df)
     }
@@ -69,6 +73,89 @@ rev_df <- function(df, how='row') {
 }
 
 
+#' See: https://stackoverflow.com/questions/36396911/r-move-index-column-to-first-column
+#' 
+#' @export
+reset_index <- function(df, index_name='index', drop=FALSE) {
+    df <- cbind(index = rownames(df), df)
+    rownames(df) <- 1:nrow(df)
+    colnames(df)[colnames(df) == "index"] = index_name
+    if (drop == TRUE) {
+        df <- df[, items_in_a_not_b(colnames(df), 'index')]
+    }
+    return (df)
+}
+
+
+#' append df2 to df1
+#'
+#' @export
+append_dataframe <- function(df1, df2, infront=FALSE, reset_index=TRUE) {
+
+    missing_cols <- items_in_a_not_b(colnames(df1), colnames(df2))
+    for (col in missing_cols) {
+        df2[[col]] <- NA
+    }
+    if (infront) {
+        df <- rbind(df2[, intersect(colnames(df1), colnames(df2))], df1)
+    } else {
+        df <- rbind(df1, df2[, intersect(colnames(df1), colnames(df2))])
+    }
+    if (reset_index) {
+        df <- reset_index(df, drop=TRUE)
+    }
+
+    return(df)
+}
+
+
+#' @export
+filter_dataframe_column_by_list <- function(
+    dataframe,
+    colname,
+    items,
+    index_name='index',
+    return_index=FALSE
+) {
+    
+    data <- reset_index(dataframe, index_name=index_name)
+    rownames(data) <- data[, colname]
+    data <- (data[intersect(data[, colname], items),])  # filter data
+    rownames(data) <- data[, index_name]  # optional preserve index for troubleshooting
+    
+    if (return_index==TRUE) {
+        return (data)
+    } else {
+        return (data[, items_in_a_not_b(colnames(data), 'index')])
+    }
+}
+
+
+#' convert a named list into a row in a dataframe
+#'
+#' @export
+dataframe_row_from_named_list <- function(items) {
+    df <- data.frame('1'=unname(items))
+    df <- as.data.frame(t(df))  # transpose
+    rownames(df) <- 1
+    colnames(df) <- names(items)
+    return(df)
+}
+
+
+#' convenience function to also set the column name with the transpose
+#'
+#' @export
+stranspose <- function(df, colname=NULL) {
+    tdf <- as.data.frame(t(df))
+    if (!is.null(colname)) {
+        colnames(tdf) <- tdf[colname,]
+        tdf <- tdf[items_in_a_not_b(rownames(tdf), colname), ]
+    }
+    return(tdf)
+}
+
+
 #' Special Melt
 #' 
 #' Convert a dataframe from a table to long format
@@ -85,33 +172,6 @@ smelt <- function(
    melted <- transform(stack(setNames(df, colnames(df))), id=rownames(df))
    colnames(melted) <- c(valname, colname, rowname)
    return(rev(melted))
-}
-
-
-#' See: https://stackoverflow.com/questions/36396911/r-move-index-column-to-first-column
-#' 
-#' @export
-reset_index <- function(df, index_name='index') {
-    df <- cbind(index = rownames(df), df)
-    rownames(df) <- 1:nrow(df)
-    colnames(df)[colnames(df) == "index"] = index_name
-    return (df)
-}
-
-
-#' @export
-filter_dataframe_column_by_list <- function(dataframe, colname, items, index_name='index', return_index=FALSE) {
-    
-    data <- reset_index(dataframe, index_name=index_name)
-    rownames(data) <- data[, colname]
-    data <- (data[intersect(data[, colname], items),])  # filter genes shared by both gtf files
-    rownames(data) <- data[, index_name]  # optional preserve index for troubleshooting
-    
-    if (return_index==TRUE) {
-        return (data)
-    } else {
-        return (data[, items_in_a_not_b(colnames(data), 'index')])
-    }
 }
 
 

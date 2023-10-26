@@ -36,6 +36,7 @@ option_list = list(
 opt_parser = OptionParser(option_list=option_list)
 opt = parse_args(opt_parser)
 troubleshooting = opt[['troubleshooting']]
+# troubleshooting = TRUE
 
 if (!troubleshooting) {
     # note: except for the last file, all files are output in the troubleshooting folder
@@ -55,9 +56,8 @@ log_print(paste('Script started at:', start_time))
 # ----------------------------------------------------------------------
 # Configs
 
-
 col_to_new_col = c(
-    'id'='laser_id',
+    'id'='channel_id',
     'fluorochrome_detected'='fluorophore',
     'fluorochrome'='fluorophore'
 )
@@ -127,7 +127,7 @@ fluorophore_replacements <- c(
     '[Ff]ire {0,1}([0-9]+)' = 'Fire \\1',
     '^APC-[Ff]ire$' = 'APC-Fire 750',
     '^Atto-' = 'ATTO ',
-    '[Bb][Ii][Oo](tin|)' = 'Biotin',
+    '[Bb][Ii][Oo](tin|)(,|)( |)([A-Za-z]+|)' = 'Biotin',
     '(BU[Vv]) {0,1}([0-9]+)' = 'BUV\\2',
     '(B[Vv]) {0,1}([0-9]+)' = 'BV\\2',
     '([Dd][Ll]|Dy[Ll]ight) {0,1}-{0,1}([0-9]+)' = 'DL\\2',
@@ -163,6 +163,8 @@ fluorophore_replacements <- c(
     '^BUV427$' = 'BV421'
 )
 
+fixable_dyes <- c("DAPI", "Zombie UV", "Zombie Aqua")
+
 
 # ----------------------------------------------------------------------
 # Instrument Config
@@ -181,21 +183,19 @@ instr_cfg <- instr_cfg[
     wrapr::orderv(instr_cfg[, c('excitation', 'bandpass_filter')], decreasing=TRUE), 
 ]
 
-# split comma-separated list
-fluorochromes <- separate_rows(instr_cfg, 'fluorophore', sep=', ')[['fluorophore']]
+available_fluorophores <- separate_rows(instr_cfg, 'fluorophore', sep=', ')[['fluorophore']]
 
 # save
 if (!troubleshooting) {
     filepath = file.path(data_dir, '_instrument_config.csv')
     write.table(instr_cfg, file = filepath, row.names = FALSE, sep=',')
 
-    filepath = file.path(data_dir, 'lists', 'fluorochromes.txt')
-    write.table(sort(unique(fluorochromes)), filepath,
+    filepath = file.path(data_dir, 'lists', 'available_fluorophores.txt')
+    write.table(sort(unique(available_fluorophores)), filepath,
                 row.names = FALSE, col.names = FALSE, quote = FALSE)
 }
 
-instr_cfg <- separate_rows(instr_cfg, 'fluorophore', sep=', ')
-# drop duplicates?
+instr_cfg_expanded <- separate_rows(instr_cfg, 'fluorophore', sep=', ')
 
 
 # ----------------------------------------------------------------------
@@ -221,6 +221,14 @@ for (col in c('antibody', 'alternative_name')) {
 }
 ab_inv[['fluorophore']] = multiple_replacement(ab_inv[['fluorophore']], fluorophore_replacements, func='gsub')
 
+# fill in missing fixable_dyes
+mask <- (ab_inv[['antibody']] %in% fixable_dyes) & (is.na(ab_inv[['fluorophore']]))
+ab_inv[mask, 'fluorophore'] <- ab_inv[mask, 'antibody']
+
+unavailable_fluorophores = items_in_a_not_b(
+    sort(unique( ab_inv[['fluorophore']] )),
+    sort(unique( available_fluorophores ))
+)
 
 # save
 if (!troubleshooting) {
@@ -236,100 +244,145 @@ if (!troubleshooting) {
     write.table(sort(unique(ab_inv[['alternative_name']])), filepath,
                 row.names = FALSE, col.names = FALSE, quote = FALSE)
 
-    filepath = file.path(data_dir, 'lists', 'fluorophores.txt')
+    filepath = file.path(data_dir, 'lists', 'all_fluorophores.txt')
     write.table(sort(unique(ab_inv[['fluorophore']])), filepath,
                 row.names = FALSE, col.names = FALSE, quote = FALSE)
-}
 
-
-# ----------------------------------------------------------------------
-# Missing Fluorochromes
-
-missing_fluorochromes = items_in_a_not_b(
-    sort(unique( ab_inv[['fluorophore']] )),
-    sort(unique( fluorochromes ))
-)
-
-# save
-if (!troubleshooting) {
-    filepath = file.path(data_dir, 'lists', 'missing_fluorochromes.txt')
-    write.table(sort(unique(missing_fluorochromes)), filepath,
+    filepath = file.path(data_dir, 'lists', 'unavailable_fluorophores.txt')
+    write.table(sort(unique(unavailable_fluorophores)), filepath,
                 row.names = FALSE, col.names = FALSE, quote = FALSE)
 }
 
 
 # ----------------------------------------------------------------------
-# Panel
+# Build matrix
 
-# read data
+
+# Read data
 panel <- read_csv_from_text(file.path(wd, opt[['input-file']]), encoding='UTF-8')
 
-# merge laser_ids
+# merge channel_ids
 panel = merge(
-    ab_inv[(ab_inv[['antibody']] %in% panel[[1]]),
+    ab_inv[(ab_inv[['antibody']] %in% panel[[1]]),  # selected antibodies only
            c('antibody', 'company', 'catalog_no', 'fluorophore')],
-    instr_cfg[, c('fluorophore', 'laser_id')],  # lasers
+    instr_cfg_expanded[, c('fluorophore', 'channel_id')],  # channels
     by='fluorophore', suffixes=c('', '_'),
-    all.x=FALSE, all.y=FALSE,
+    all.x=TRUE, all.y=FALSE,
     na_matches = 'never'
 )
+panel <- fillna(panel, c('channel_id'), val='other')  # Biotin
 
-# count number of unique fluorophores per antibody and laser_id
+
+# compute metadata for the panel
 ab_counts <- panel %>%
-    group_by(antibody, laser_id) %>%
+    group_by(antibody, channel_id) %>%
     summarise(
         # num_antibodies=n(),  # don't necessarily need this
         num_fluorophores=n_distinct(fluorophore),
-        most_common_fluorophore=names(
-            table(fluorophore)
-        )[which.max(table(fluorophore))],
+        fluorophores = toString(unique(fluorophore)),
+        most_common_fluorophore=names(table(fluorophore))[which.max(table(fluorophore))],
+        .groups='keep'
     )
+instr_metadata <- ab_counts %>%
+    group_by(channel_id) %>%
+    summarise(
+        fluorophores = toString(unique(most_common_fluorophore)),
+        representative_fluorophore=names(
+            table(most_common_fluorophore)[which.max(table(most_common_fluorophore))]
+        )
+    )
+instr_metadata <- merge(
+    instr_metadata,
+    instr_cfg[, c('channel_id', 'laser', 'pmt')],
+    by='channel_id', suffixes=c('', '_'),
+    all.x=TRUE, all.y=FALSE,
+    na_matches = 'never',
+    sort=FALSE
+)
 
-# cor each laser_id, compute fluorophore with most antibodies
-lasers_vs_fluorophores <- ab_counts %>%
-    group_by(laser_id) %>%
-    summarise(representative_fluorophore=names(
-        table(most_common_fluorophore)[which.max(table(most_common_fluorophore))]
-    ))
-fluorophores_for_lasers = lasers_vs_fluorophores[['representative_fluorophore']]
-names(fluorophores_for_lasers) = lasers_vs_fluorophores[['laser_id']]
 
+# ----------------------------------------------------------------------
+# Build matrix
+
+# pivot into table where rows are antibodies and columns are non-overlapping colors
+df <- pivot_wider(
+    ab_counts,
+    id_cols = 'antibody',
+    names_from = 'channel_id',
+    values_from = 'num_fluorophores',
+    values_fill = 0
+) %>% ungroup()
+
+
+# Note: it is important that rowSums are computed before colSums
+
+# Sort rows
+num_channels_per_ab <- df %>%
+    select_if(is.numeric) %>%
+    mutate_at(
+        colnames(select_if(df, is.numeric)),
+        function(x) ifelse(x >= 1, 1, 0)
+    ) %>% rowSums()
+df[['num_channels_per_ab']] <- num_channels_per_ab
+df <- df[order(df[['num_channels_per_ab']]), ]
+
+# Sort columns
+num_abs_per_channel <- df %>%
+    select_if(is.numeric) %>%
+    mutate_at(
+        colnames(select_if(df, is.numeric)),
+        function(x) ifelse(x >= 1, 1, 0)
+    ) %>% colSums()
+df <- append_dataframe(df, dataframe_row_from_named_list(num_abs_per_channel), reset_index=FALSE)
+df <- df[ , order(unlist(df['count', ]), decreasing=TRUE)]  # sort columns
+
+# Move id columns to the front
+id_cols <- c('antibody', 'num_channels_per_ab', 'other')
+channel_cols <- items_in_a_not_b(colnames(df), id_cols)
+df <- df[ , c('antibody', 'num_channels_per_ab', channel_cols, 'other')]
+
+
+# ----------------------------------------------------------------------
+# Add additional data
+
+# add comma-separated fluorophore list to each row
 # for each antibody, aggregate fluorophores into comma-separated list
 abs_vs_fluorophores <- ab_counts %>%
     group_by(antibody) %>%
     summarise(fluorophores = toString(unique(most_common_fluorophore)))
-
-
-# pivot into table where rows are antibodies and columns are non-overlapping colors
-ab_vs_lasers <- pivot_wider(
-    ab_counts,
-    id_cols = 'antibody',
-    names_from = 'laser_id',
-    values_from = 'num_fluorophores',
-    values_fill = 0
-)
-
-# add comma-separated fluorophore list to each row
-ab_vs_lasers = merge(
+df = merge(
+    df,
     abs_vs_fluorophores,
-    ab_vs_lasers,
     by='antibody', suffixes=c('', '_'),
-    all.x=FALSE, all.y=FALSE,
-    na_matches = 'never'
+    all.x=TRUE, all.y=FALSE,
+    na_matches = 'never',
+    sort=FALSE
 )
 
-# replace laser_ids as column names with representative fluorophore
-laser_ids <- items_in_a_not_b(colnames(ab_vs_lasers), c('antibody', 'fluorophores'))
-fluorophore_names <- unname(fluorophores_for_lasers[laser_ids])
-colnames(ab_vs_lasers) <- c('antibody', 'fluorophores', fluorophore_names)
+# add instrument metadata and available fluorophores to each column
+df <- append_dataframe(
+    df,
+    stranspose(instr_metadata[
+        items_in_a_not_b(colnames(instr_metadata), 'representative_fluorophore')
+    ], 'channel_id'),
+    infront=TRUE, reset_index=FALSE
+)
+
+# Optional: Rename column names from channel_id (1, 2, 3, etc.) to representative_fluorophore
+fluorophores_for_channels = instr_metadata[['representative_fluorophore']]
+names(fluorophores_for_channels) = instr_metadata[['channel_id']]
+df <- rename_columns(df, fluorophores_for_channels[channel_cols])
+
+# last row is the count
+row.names(df)[nrow(df)] <- 'count'
+df <- reset_index(df)  # export index information without the frameshift
 
 
 # save
 if (!troubleshooting) {
-    filepath = file.path(dirname(data_dir), 'antibodies_vs_lasers.csv')
-    write.table(ab_vs_lasers, file = filepath, row.names = FALSE, sep=',')
+    filepath = file.path(dirname(data_dir), 'antibodies_vs_channels.csv')
+    write.table(df, file = filepath, row.names = FALSE, sep=',')
 }
-
 
 end_time = Sys.time()
 log_print(paste('Script ended at:', Sys.time()))
