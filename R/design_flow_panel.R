@@ -4,6 +4,7 @@ wd = dirname(this.path::here())  # wd = '~/github/R/helperFlowCell'
 library('readxl')
 library('tidyr')
 suppressMessages(library('dplyr'))
+suppressMessages(library('tibble'))
 library('optparse')
 library('logr')
 source(file.path(wd, 'R', 'preprocessing.R'))
@@ -21,13 +22,17 @@ option_list = list(
                 metavar='data/panel.txt', type="character",
                 help="specify the antibodies to use in your flow panel"),
 
-    make_option(c("-a", "--antibody-inventory"), default='data/antibody_inventory.xlsx',
-                metavar='data/antibody_inventory.xlsx', type="character",
+    make_option(c("-a", "--antibody-inventory"), default='ref/antibody_inventory.xlsx',
+                metavar='ref/antibody_inventory.xlsx', type="character",
                 help="antibody inventory table"),
 
-    make_option(c("-c", "--instrument-config"), default='data/instrument_config.xlsx',
-                metavar='data/instrument_config.xlsx', type="character",
+    make_option(c("-c", "--instrument-config"), default='ref/instrument_config.xlsx',
+                metavar='ref/instrument_config.xlsx', type="character",
                 help="instrument configuration file"),
+
+    make_option(c("-o", "--output-dir"), default="data/output",
+                metavar="data/output", type="character",
+                help="set the output directory for the data"),
 
     make_option(c("-t", "--troubleshooting"), default=FALSE, action="store_true",
                 metavar="FALSE", type="logical",
@@ -36,19 +41,19 @@ option_list = list(
 opt_parser = OptionParser(option_list=option_list)
 opt = parse_args(opt_parser)
 troubleshooting = opt[['troubleshooting']]
+output_dir <- file.path(wd, opt[['output-dir']])
 
 if (!troubleshooting) {
-    # note: except for the last file, all files are output in the troubleshooting folder
-    data_dir = file.path(wd, dirname(opt[['input-file']]), 'troubleshooting')
-    if (!dir.exists(file.path(data_dir, 'lists'))) {
-        dir.create(file.path(data_dir, 'lists'), recursive=TRUE)
+    troubleshooting_dir = file.path(output_dir, 'troubleshooting')
+    if (!dir.exists(file.path(troubleshooting_dir))) {
+        dir.create(file.path(troubleshooting_dir), recursive=TRUE)
     }
 }
 
 # Start Log
 start_time = Sys.time()
 log <- log_open(paste0("design_flow_panel-",
-                       strftime(start_time, format="%Y%m%d_%H%M%S"), '.log'))
+    strftime(start_time, format="%Y%m%d_%H%M%S"), '.log'))
 log_print(paste('Script started at:', start_time))
 
 
@@ -58,16 +63,13 @@ log_print(paste('Script started at:', start_time))
 instr_cfg <- read_excel_or_csv(file.path(wd, opt[['instrument-config']]))
 instr_cfg <- preprocess_instrument_config(instr_cfg)
 instr_cfg_long <- separate_rows(instr_cfg, 'fluorophore', sep=', ')
-available_fluorophores <- instr_cfg_long[['fluorophore']]
 
 # save
 if (!troubleshooting) {
-    filepath = file.path(data_dir, '_instrument_config.csv')
+    filepath = file.path(troubleshooting_dir, 
+        paste0('_', tools::file_path_sans_ext(basename(opt[['instrument-config']])), '.csv')
+    )
     write.table(instr_cfg, file = filepath, row.names = FALSE, sep=',')
-
-    filepath = file.path(data_dir, 'lists', 'available_fluorophores.txt')
-    write.table(sort(unique(available_fluorophores)), filepath,
-                row.names = FALSE, col.names = FALSE, quote = FALSE)
 }
 
 
@@ -77,51 +79,58 @@ if (!troubleshooting) {
 ab_inv <- read_excel_or_csv(file.path(wd, opt[['antibody-inventory']]))
 ab_inv <- preprocess_antibody_inventory(ab_inv)
 
+# add fluorophores in this list to your instrument-config file
 unavailable_fluorophores = sort(items_in_a_not_b(
-    unique( ab_inv[['fluorophore']] ),
-    unique( available_fluorophores )
+    unique( ab_inv[['fluorophore']] ), unique( instr_cfg_long[['fluorophore']] )
 ))
 
 # save
 if (!troubleshooting) {
-
-    filepath = file.path(data_dir, '_antibody_inventory.csv')
-    write.table(ab_inv, file = filepath, row.names = FALSE, sep=',')
-
-    filepath = file.path(data_dir, 'lists', 'antibodies.txt')
+    filepath = file.path(troubleshooting_dir, 'antibodies.txt')
     write.table(sort(unique(ab_inv[['antibody']])), filepath,
                 row.names = FALSE, col.names = FALSE, quote = FALSE)
 
-    filepath = file.path(data_dir, 'lists', 'alternative_names.txt')
-    write.table(sort(unique(ab_inv[['alternative_name']])), filepath,
-                row.names = FALSE, col.names = FALSE, quote = FALSE)
-
-    filepath = file.path(data_dir, 'lists', 'all_fluorophores.txt')
-    write.table(sort(unique(ab_inv[['fluorophore']])), filepath,
-                row.names = FALSE, col.names = FALSE, quote = FALSE)
-
-    filepath = file.path(data_dir, 'lists', 'unavailable_fluorophores.txt')
-    write.table(sort(unique(unavailable_fluorophores)), filepath,
+    filepath = file.path(troubleshooting_dir, 'unavailable_fluorophores.txt')
+    write.table(unavailable_fluorophores, filepath,
                 row.names = FALSE, col.names = FALSE, quote = FALSE)
 }
 
 
 # ----------------------------------------------------------------------
-# Build table
+# Build design_matrix
 
 # Read data
-panel_list <- read_csv_from_text(file.path(wd, opt[['input-file']]), encoding='UTF-8')
-panel <- ab_inv[
-        (ab_inv[['antibody']] %in% panel_list[[1]]),
-        c('antibody', 'company', 'catalog_no', 'fluorophore')
-    ] %>% 
+panel_list <- read_csv_from_text(file.path(wd, opt[['input-file']]),
+    columns='antibody', encoding='UTF-8')
+ab_shortlist <- merge(panel_list, ab_inv, by='antibody',
+    all.x=FALSE, all.y=FALSE, na_matches = 'never', sort=FALSE)
+ab_shortlist <- ab_shortlist[, colnames(ab_inv)]
+
+antibodies_not_found = sort(items_in_a_not_b(
+    unique( panel_list[['antibody']] ), unique( ab_inv[['antibody']] )
+))
+
+# save
+if (!troubleshooting) {
+    filepath = file.path(output_dir, 
+        paste0(tools::file_path_sans_ext(basename(opt[['antibody-inventory']])),
+               '-shortlist', '.csv')
+    )
+    write.table(ab_shortlist , file = filepath, row.names = FALSE, sep=',')
+
+    if (length(antibodies_not_found) > 0) {
+        filepath = file.path(troubleshooting_dir, 'antibodies_not_found.txt')
+        write.table(antibodies_not_found, filepath,
+            row.names = FALSE, col.names = FALSE, quote = FALSE)
+    }
+}
+
+# compute base table with antibody + instrument channel information in each row
+ab_counts <- ab_shortlist[, c('antibody', 'company', 'catalog_no', 'fluorophore')] %>% 
     merge(instr_cfg_long[, c('fluorophore', 'channel_id')],
           by='fluorophore', suffixes=c('', '_'),
           all.x=TRUE, all.y=FALSE, na_matches = 'never') %>% 
-    fillna(c('channel_id'), val='other')  # Biotin
-
-# compute metadata for the panel
-ab_counts <- panel %>%
+    fillna(c('channel_id'), val='other') %>%
     group_by(antibody, channel_id) %>%
     summarise(
         num_fluorophores=n_distinct(fluorophore),
@@ -131,11 +140,12 @@ ab_counts <- panel %>%
     )
 
 # pivot to table where rows are antibodies and columns are instrument channels
-df <- pivot_wider(
+design_matrix <- pivot_wider(
         ab_counts,
         id_cols = 'antibody', names_from = 'channel_id',
         values_from = 'num_fluorophores', values_fill = 0
-    ) %>% ungroup()
+    ) %>%
+    ungroup()
 
 
 # ----------------------------------------------------------------------
@@ -145,58 +155,51 @@ df <- pivot_wider(
 # 'num_channels_per_ab' sums to the number of antibodies
 
 # Sort rows
-num_channels_per_ab <- df %>%
-    select_if(is.numeric) %>%
-    mutate_at(colnames(select_if(df, is.numeric)),
+num_channels_per_ab <- select_if(design_matrix, is.numeric) %>%
+    mutate_at(colnames(select_if(design_matrix, is.numeric)),
               function(x) ifelse(x >= 1, 1, 0)) %>%
     rowSums()
-df[['num_channels_per_ab']] <- num_channels_per_ab
-df <- df[order(df[['num_channels_per_ab']]), ]
+design_matrix[['num_channels_per_ab']] <- num_channels_per_ab
+design_matrix <- design_matrix[order(design_matrix[['num_channels_per_ab']]), ]
 
 # Sort columns
-num_abs_per_channel <- df %>%
-    select_if(is.numeric) %>%
-    mutate_at(colnames(select_if(df, is.numeric)),
+num_abs_per_channel <- select_if(design_matrix, is.numeric) %>%
+    mutate_at(colnames(select_if(design_matrix, is.numeric)),
               function(x) ifelse(x >= 1, 1, 0)) %>%
     colSums()
-df <- append_dataframe(df, dataframe_row_from_named_list(num_abs_per_channel),
-                       reset_index=FALSE)
-df <- df[ , order(unlist(df['count', ]), decreasing=TRUE)]  # sort columns
+design_matrix <- append_dataframe(
+    design_matrix, dataframe_row_from_named_list(num_abs_per_channel),
+    reset_index=FALSE
+)
+design_matrix <- design_matrix[ , order(unlist(design_matrix['count', ]), decreasing=TRUE)]  # sort columns
 
 # Move channel_cols to the middle
-non_channel_cols <- c('antibody', 'num_channels_per_ab', 'other')
-channel_cols <- items_in_a_not_b(colnames(df), non_channel_cols)
-df <- df[ , c('antibody', 'num_channels_per_ab', channel_cols, 'other')]
+id_cols <- c('antibody', 'num_channels_per_ab')
+channel_cols <- items_in_a_not_b(colnames(design_matrix), c(id_cols, 'other'))
+design_matrix <- design_matrix[ , c(id_cols, channel_cols, 'other')]
 
 
 # ----------------------------------------------------------------------
 # Add metadata
 
-# for each antibody, aggregate fluorophores into comma-separated list
-abs_vs_fluorophores <- ab_counts %>%
+# Add comma-separated fluorophore list to each row
+row_metadata <- ab_counts %>%
     group_by(antibody) %>%
     summarise(fluorophores = toString(unique(most_common_fluorophore)))
+design_matrix = merge(design_matrix, row_metadata,
+    by='antibody', suffixes=c('', '_'),
+    all.x=TRUE, all.y=FALSE, na_matches = 'never', sort=FALSE
+)
 
-# add comma-separated fluorophore list to each row
-df = merge(df, abs_vs_fluorophores,
-           by='antibody', suffixes=c('', '_'),
-           all.x=TRUE, all.y=FALSE, na_matches = 'never', sort=FALSE)
-
-# compute instrument metadata
-instr_info <- ab_counts %>%
+# Add available fluorophores and instrument info to each column
+col_metadata <- ab_counts %>%
     group_by(channel_id) %>%
-    summarise(fluorophores = toString(unique(most_common_fluorophore)),
-              representative_fluorophore=names(
-                  table(most_common_fluorophore)[which.max(table(most_common_fluorophore))]
-              )) %>%
+    summarise(all_fluorophores = toString(unique(most_common_fluorophore))) %>%
     merge(instr_cfg[, c('channel_id', 'laser', 'pmt')],
           by='channel_id', suffixes=c('', '_'),
           all.x=TRUE, all.y=FALSE, na_matches = 'never', sort=FALSE)
-
-# add available fluorophores and instrument info to each column
-selected_instr_info <- instr_info[, c('channel_id', 'fluorophores', 'laser', 'pmt')]
-df <- df %>% append_dataframe(
-    stranspose(selected_instr_info, colname='channel_id'),
+design_matrix <- design_matrix %>% append_dataframe(
+    stranspose(col_metadata, colname='channel_id'),
     infront=TRUE, reset_index=FALSE
 )
 
@@ -204,19 +207,23 @@ df <- df %>% append_dataframe(
 # ----------------------------------------------------------------------
 # Postprocessing
 
-# Rename columns from channel_id (1, 2, 3, etc.) to representative_fluorophore
-fluorophores_for_channels = instr_info[['representative_fluorophore']]
-names(fluorophores_for_channels) = instr_info[['channel_id']]
-df <- rename_columns(df, fluorophores_for_channels[channel_cols])
+# Rename columns from channel_id (1, 2, 3, etc.) to representative_fluorophore (AF488, FITC, PE, etc.)
+fluorophore_for_channel <- ab_counts %>%
+    group_by(channel_id) %>%
+    summarise(representative_fluorophore=names(
+        table(most_common_fluorophore)[which.max(table(most_common_fluorophore))]
+    )) %>%
+    deframe()
+design_matrix <- rename_columns(design_matrix, fluorophore_for_channel)
 
 # Rename last row
-row.names(df)[nrow(df)] <- 'count'
-df <- reset_index(df)  # export index information without frameshift
+row.names(design_matrix)[nrow(design_matrix)] <- 'count'
+design_matrix <- reset_index(design_matrix)  # export index information without frameshift
 
 # save
 if (!troubleshooting) {
-    filepath = file.path(dirname(data_dir), 'antibodies_vs_channels.csv')
-    write.table(df, file = filepath, row.names = FALSE, sep=',')
+    filepath = file.path(output_dir, 'design_matrix.csv')
+    write.table(design_matrix, file = filepath, row.names = FALSE, sep=',')
 }
 
 
