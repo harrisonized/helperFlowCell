@@ -6,15 +6,10 @@ source(file.path(
 ## Functions
 ## rename_columns
 ## fillna
-## get_unique_values
-## rev_df
 ## reset_index
 ## append_dataframe
-## filter_dataframe_column_by_list
 ## dataframe_row_from_named_list
 ## stranspose
-## smelt
-## pivot
 
 
 #' rename specific dataframe columns
@@ -43,32 +38,6 @@ fillna <- function(df, cols, val=0, var_name='df', inplace=FALSE) {
         assign(var_name, df, envir=.GlobalEnv)
     } else {
         return(df)
-    }
-}
-
-
-#' get unique values from each column
-#' 
-#' @export
-get_unique_values <- function(df, cols) {
-    items <- c()
-    for (col in cols) {
-        items <- append(items, unique(df[[col]]))
-    }
-    return(sort(unique(items)))
-}
-
-
-#' Reverse a dataframe
-#' 
-#' @export
-rev_df <- function(df, how='row') {
-    if (how == 'row') {
-        return(df[dim(df)[1]:1,])
-    } else if (how == 'col') {
-        return(rev(df))
-    } else {
-        stop("Choose how='row' or how='col'")
     }
 }
 
@@ -109,28 +78,6 @@ append_dataframe <- function(df1, df2, infront=FALSE, reset_index=TRUE) {
 }
 
 
-#' @export
-filter_dataframe_column_by_list <- function(
-    dataframe,
-    colname,
-    items,
-    index_name='index',
-    return_index=FALSE
-) {
-    
-    data <- reset_index(dataframe, index_name=index_name)
-    rownames(data) <- data[, colname]
-    data <- (data[intersect(data[, colname], items),])  # filter data
-    rownames(data) <- data[, index_name]  # optional preserve index for troubleshooting
-    
-    if (return_index==TRUE) {
-        return (data)
-    } else {
-        return (data[, items_in_a_not_b(colnames(data), 'index')])
-    }
-}
-
-
 #' convert a named list into a row in a dataframe
 #'
 #' @export
@@ -153,51 +100,4 @@ stranspose <- function(df, colname=NULL) {
         tdf <- tdf[items_in_a_not_b(rownames(tdf), colname), ]
     }
     return(tdf)
-}
-
-
-#' Special Melt
-#' 
-#' Convert a dataframe from a table to long format
-#' This is an alternative to melt that doesn't throw errors
-#' See: \href{https://stackoverflow.com/questions/28355377/how-to-add-index-of-a-list-item-after-melt-in-r}{Stack Overflow link}
-#' 
-#' @export
-smelt <- function(
-   df,
-   rowname='row',
-   colname='col',
-   valname='val'
-) {
-   melted <- transform(stack(setNames(df, colnames(df))), id=rownames(df))
-   colnames(melted) <- c(valname, colname, rowname)
-   return(rev(melted))
-}
-
-
-#' tidyr returns a tibble object instead of a dataframe
-#' This function returns a dataframe
-#' 
-#' @export
-pivot <- function(df, columns, values) {
-
-    # Warning: Using an external vector in selections was deprecated in tidyselect 1.1.0.
-    # See: http://romainfrancois.blog.free.fr/index.php?post/2009/05/20/Disable-specific-warnings
-    withCallingHandlers({
-        tibble_obj = tidyr::pivot_wider(
-            df,
-            names_from = columns,
-            values_from = values,
-            values_fn = list,
-            names_glue = if (length(values)==1){"{.value}_{.name}"}
-        )
-    }, warning = function(w) {
-        if ( any(grepl("Using an external vector", w)) ) {
-            invokeRestart("muffleWarning")
-        }
-    })
-    
-    dataframe = data.frame(lapply(tibble_obj, unlist))
-    
-    return (dataframe)
 }

@@ -1,0 +1,61 @@
+# library('wrapr')
+source(file.path(wd, 'R', 'replacements.R'))  # fluorophore_replacements, antibody_replacements
+source(file.path(wd, 'R', 'functions', 'df_tools.R'))  # rename_columns
+source(file.path(wd, 'R', 'functions', 'text_tools.R'))  # title_to_snake_case
+source(file.path(wd, 'R', 'functions', 'list_tools.R'))  # multiple_replacement, find_first_match_index
+
+
+## Functions
+## preprocess_instrument_config
+## preprocess_antibody_inventory
+
+
+preprocess_instrument_config <- function(df) {
+
+    # format and rename columns
+    colnames(df) <- unlist(lapply(colnames(df), title_to_snake_case))
+    df <- rename_columns(df, col_to_new_col)
+
+    # standardize fluorophore names
+    df[['fluorophore']] = multiple_replacement(
+        df[['fluorophore']], fluorophore_replacements, func='gsub'
+    )
+
+    # order list
+    df <- df[
+        wrapr::orderv(df[, c('excitation', 'bandpass_filter')], decreasing=TRUE), 
+    ]
+}
+
+
+preprocess_antibody_inventory <- function(df) {
+
+    df <- df[, 1:(find_first_match_index('\\.{3}\\d{2}', colnames(df))-1)]  # filter extra columns
+    colnames(df) <- unlist(lapply(colnames(df), title_to_snake_case))  # column names
+    colnames(df) <- unlist(lapply(colnames(df), function(x) gsub('[.]', '', x)))  # column nmaes
+
+    # remove 'c2 a0', the "no-break space"
+    # see: https://stackoverflow.com/questions/68982813/r-string-encoding-best-practice
+    for (col in colnames(df)) {
+        df[(!is.na(df[[col]]) & (df[[col]] == enc2utf8("\u00a0"))), col] <- NA
+        df[[col]] = unlist(
+            lapply(df[[col]], function(x) gsub(paste0('.*^', enc2utf8("\u00a0"), '+'), '', x))
+        )    
+    }
+
+    # standardize names
+    if ('alternative_name' %in% colnames(df)) {
+        df[['alternative_name']] = multiple_replacement(
+            df[['alternative_name']], antibody_replacements, func='gsub'
+        )
+    }
+    df[['antibody']] = multiple_replacement(df[['antibody']], antibody_replacements, func='gsub')
+    df[['fluorophore']] = multiple_replacement(df[['fluorophore']], fluorophore_replacements, func='gsub')
+    
+    # fill in missing fixable_dyes
+    fixable_dyes <- c("DAPI", "Zombie UV", "Zombie Aqua")
+    mask <- (df[['antibody']] %in% fixable_dyes) & (is.na(df[['fluorophore']]))
+    df[mask, 'fluorophore'] <- df[mask, 'antibody']
+
+    return(df)
+}

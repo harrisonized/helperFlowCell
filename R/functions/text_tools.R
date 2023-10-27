@@ -1,19 +1,6 @@
 ## Functions
-## dotsep_to_snake_case
 ## title_to_snake_case
 ## txt_strip
-
-
-#' Converts "Column.Title" to column_title
-#'
-#' @export
-dotsep_to_snake_case <- function(text) {
-    return(tolower(
-        paste(
-            unlist(strsplit(text, '[.]')), collapse='_')
-        )
-    )
-}
 
 
 #' Converts "Column Title" to column_title
