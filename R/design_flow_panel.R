@@ -1,4 +1,4 @@
-## Assist in designing flow panels
+## Build the design matrix
 
 wd = dirname(this.path::here())  # wd = '~/github/R/helperFlowCell'
 library('readxl')
@@ -41,8 +41,8 @@ option_list = list(
 opt_parser = OptionParser(option_list=option_list)
 opt = parse_args(opt_parser)
 troubleshooting = opt[['troubleshooting']]
-output_dir <- file.path(wd, opt[['output-dir']])
 
+output_dir <- file.path(wd, opt[['output-dir']])
 if (!troubleshooting) {
     troubleshooting_dir = file.path(output_dir, 'troubleshooting')
     if (!dir.exists(file.path(troubleshooting_dir))) {
@@ -171,7 +171,9 @@ design_matrix <- append_dataframe(
     design_matrix, dataframe_row_from_named_list(num_abs_per_channel),
     reset_index=FALSE
 )
-design_matrix <- design_matrix[ , order(unlist(design_matrix['count', ]), decreasing=TRUE)]  # sort columns
+design_matrix <- design_matrix[ ,
+    order(unlist(design_matrix[nrow(design_matrix), ]))
+]
 
 # Move channel_cols to the middle
 id_cols <- c('antibody', 'num_channels_per_ab')

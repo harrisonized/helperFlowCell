@@ -1,6 +1,6 @@
 ## helperFlowCell
 
-This tool is meant to help with designing flow panels if you have a large collection of antibodies. It outputs a succinct table in which each row is an antibody and each column is a distinct channel on your flow instrument.
+This tool helpss with designing flow panels if you have a large collection of antibodies. It outputs a succinct table in which each row is an antibody and each column is a distinct channel on your flow instrument.
 
 ## Installation
 
@@ -15,13 +15,13 @@ install.packages("optparse")
 
 ## Data Requirements
 
-In order to use this repository, you must set up two files:
+Set up the following two files and place it in the `ref` directory.
 
 1. **antibody\_inventory.xlsx**: This file should have at minimum the antibody and fluorophore columns. You should probably also include other identifying information, such as the company and catalog_no, but for the purposes of this repo, that's optional.
 
 2. **instrument\_config.csv**: This file should have the following columns: id, pmt, laser, fluorochromes, where each row is a separate laser/detector combination and the fluorochromes column should contain a comma-separated list of all the fluorophores that laser/detector combo should be able to detect. For the purposes of this repo, it's okay to leave fluorophores out, but do not duplicate a fluorophore, even if it is detected across multiple channels.
 
-At some point, I will provide an example files.
+In the future, I will provide example files.
  
 ## Getting Started
  
