@@ -57,6 +57,7 @@ reset_index <- function(df, index_name='index', drop=FALSE) {
 
 
 #' append df2 to df1
+#' Avoids bind_rows errors: Can't combine `..1$1` <character> and `..2$1` <double>.
 #'
 #' @export
 append_dataframe <- function(df1, df2, infront=FALSE, reset_index=TRUE) {

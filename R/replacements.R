@@ -43,6 +43,7 @@ antibody_replacements <- c(
     '.*^[Nn][Oo]tch' = 'Notch',
     '.*^[Oo]nly' = 'Only',
     '[Rr][Oo][Rr][gγy][yt]' = 'RORgt',
+    '[Ss][Cc][Aa](-|)\\d+' = 'Sca1',
     '.*^[Tt][Cc][Rr]' = 'TCR',
     '[Tt][Cc][Rr][Bb-]\\w*' = 'TCRb',
     '.*^[Tt][Dd][Tt]' = 'TdT',
