@@ -1,3 +1,5 @@
+import::from('stringi', 'stri_replace_all_regex', .character_only=TRUE)
+
 ## Functions
 ## items_in_a_not_b
 ## find_first_match_index
@@ -34,29 +36,32 @@ replace_specific_items <- function(items, replacer) {
 }
 
 
-#' Convenience function to perform multiple replacements on a list
+#' Convenience function to perform multiple replacements on a list or dataframe column
 #' 
 #' Example:
-#' replacement_dict <- c(
+#' replacements <- c(
 #'     '[A-Za-z]' = '',
 #'     '[0-9]+' = ''
 #' )
 #' 
 #' @export
-multiple_replacement <- function(items, replace_dict, func='gsub') {
+multiple_replacement <- function(items, replace_dict) {
 
-    if (func == 'gsub') {
-        replace_func = gsub
-    } else if (func == 'sub') {
-        replace_func = sub
-    } else {
-        return(items)
-    }
+    # for (pattern in names(replace_dict)) {
+    #     replacement = replace_dict[[pattern]]
+    #     items <- sapply(items, function(x) gsub(pattern, replacement, x))
+    # }
 
-    for (pattern in names(replace_dict)) {
-        replacement = replace_dict[[pattern]]
-        items <- unlist( lapply(items, function(x) replace_func(pattern, replacement, x)) )
-    }
+    patterns <- names(replace_dict)
+    replacements <- sapply(unname(replace_dict), function(x) gsub('\\\\', '$', x))
+    
+    items <- sapply(items,
+        function(x) stri_replace_all_regex(
+            x,
+            pattern = patterns,
+            replacement = replacements,
+            vectorize_all = FALSE)
+    )
 
     return (items)
 }

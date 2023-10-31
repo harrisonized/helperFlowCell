@@ -1,9 +1,8 @@
-# library('wrapr')
+import::from('wrapr', 'orderv', .character_only=TRUE)
 source(file.path(wd, 'R', 'replacements.R'))  # fluorophore_replacements, antibody_replacements
 source(file.path(wd, 'R', 'functions', 'df_tools.R'))  # rename_columns
 source(file.path(wd, 'R', 'functions', 'text_tools.R'))  # title_to_snake_case
 source(file.path(wd, 'R', 'functions', 'list_tools.R'))  # multiple_replacement, find_first_match_index
-
 
 ## Functions
 ## preprocess_instrument_config
@@ -18,13 +17,11 @@ preprocess_instrument_config <- function(df) {
 
     # standardize fluorophore names
     df[['fluorophore']] = multiple_replacement(
-        df[['fluorophore']], fluorophore_replacements, func='gsub'
+        df[['fluorophore']], fluorophore_replacements
     )
 
     # order list
-    df <- df[
-        wrapr::orderv(df[, c('excitation', 'bandpass_filter')], decreasing=TRUE), 
-    ]
+    df <- df[orderv(df[, c('excitation', 'bandpass_filter')], decreasing=TRUE), ]
 }
 
 
@@ -46,11 +43,11 @@ preprocess_antibody_inventory <- function(df) {
     # standardize names
     if ('alternative_name' %in% colnames(df)) {
         df[['alternative_name']] = multiple_replacement(
-            df[['alternative_name']], antibody_replacements, func='gsub'
+            df[['alternative_name']], antibody_replacements
         )
     }
-    df[['antibody']] = multiple_replacement(df[['antibody']], antibody_replacements, func='gsub')
-    df[['fluorophore']] = multiple_replacement(df[['fluorophore']], fluorophore_replacements, func='gsub')
+    df[['antibody']] = multiple_replacement(df[['antibody']], antibody_replacements)
+    df[['fluorophore']] = multiple_replacement(df[['fluorophore']], fluorophore_replacements)
     
     # fill in missing fixable_dyes
     fixable_dyes <- c("DAPI", "Zombie UV", "Zombie Aqua")
