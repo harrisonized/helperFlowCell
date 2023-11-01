@@ -16,10 +16,11 @@ source(file.path(
 #' 
 #' @export
 rename_columns <- function(df, columns, inplace=FALSE) {
+    df_name <- deparse(substitute(df))
     colnames(df) <- replace_specific_items(colnames(df), columns)
     if (inplace) {
         # see: https://stackoverflow.com/questions/3969852/update-data-frame-via-function-doesnt-work
-        assign('df', df, envir=.GlobalEnv)
+        assign(df_name, df, envir=.GlobalEnv)
     } else {
         return(df)
     }
@@ -29,13 +30,13 @@ rename_columns <- function(df, columns, inplace=FALSE) {
 #' fill a specific column with na
 #' 
 #' @export
-fillna <- function(df, cols, val=0, var_name='df', inplace=FALSE) {
+fillna <- function(df, cols, val=0, inplace=FALSE) {
+    df_name <- deparse(substitute(df))
     for (col in cols) {
         df[is.na(df[, col]), col] <- val
     }
     if (inplace) {
-        # see: https://stackoverflow.com/questions/3969852/update-data-frame-via-function-doesnt-work
-        assign(var_name, df, envir=.GlobalEnv)
+        assign(df_name, df, envir=.GlobalEnv)
     } else {
         return(df)
     }
