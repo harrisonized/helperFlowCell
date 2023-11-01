@@ -1,4 +1,4 @@
-import::from('wrapr', 'orderv', .character_only=TRUE)
+import::from(wrapr, 'orderv')
 source(file.path(wd, 'R', 'replacements.R'))  # fluorophore_replacements, antibody_replacements
 source(file.path(wd, 'R', 'functions', 'df_tools.R'))  # rename_columns
 source(file.path(wd, 'R', 'functions', 'text_tools.R'))  # title_to_snake_case

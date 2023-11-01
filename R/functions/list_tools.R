@@ -39,7 +39,7 @@ replace_specific_items <- function(items, replacer) {
 #' Convenience function to perform multiple replacements on a list or dataframe column
 #' 
 #' Example:
-#' replacements <- c(
+#' replace_dict <- c(
 #'     '[A-Za-z]' = '',
 #'     '[0-9]+' = ''
 #' )

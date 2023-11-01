@@ -131,7 +131,9 @@ ab_counts <- ab_shortlist[, c('antibody', 'company', 'catalog_no', 'fluorophore'
           by='fluorophore', suffixes=c('', '_'),
           all.x=TRUE, all.y=FALSE, na_matches = 'never') %>% 
     fillna(c('channel_id'), val='other') %>%
-    group_by(antibody, channel_id) %>%
+    # group_by(antibody, channel_id) %>%
+    # group_by(.data[['antibody']], .data[['channel_id']]) %>%
+    group_by(!!!syms(c('antibody', 'channel_id'))) %>%
     summarise(
         num_fluorophores=n_distinct(fluorophore),
         fluorophores = toString(unique(fluorophore)),
