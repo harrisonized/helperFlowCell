@@ -2,6 +2,7 @@
 
 wd = dirname(this.path::here())  # wd = '~/github/R/helperFlowCell'
 library('readxl')
+library("openxlsx")
 library('tidyr')
 suppressMessages(library('dplyr'))
 suppressMessages(library('tibble'))
@@ -224,10 +225,51 @@ design_matrix <- rename_columns(design_matrix, fluorophore_for_channel)
 row.names(design_matrix)[nrow(design_matrix)] <- 'count'
 design_matrix <- reset_index(design_matrix)  # export index information without frameshift
 
+
+# ----------------------------------------------------------------------
+# Build excel file
+
+# note: this is a suboptimal solution
+index_list <- function(items) {
+    out <- seq(1, length(items), by=1)
+    names(out) <- items
+    return(out)
+}
+
+pad = 5
+submatrix <- design_matrix[pad:nrow(design_matrix)-1, pad:ncol(design_matrix)-1]
+submatrix_long <- reshape2::melt(
+    reset_index(submatrix, index_name='row'),
+    id.vars=c('row'),
+    variable.name='colname',
+)
+colnames_to_index <- index_list(colnames(submatrix))
+submatrix_long[['col']] <- multiple_replacement(
+    submatrix_long[['colname']], colnames_to_index
+)
+
+iter <- submatrix_long[(submatrix_long['value'] > 0), c('row', 'col')]
+iter[['row']] <- as.numeric(iter[['row']])
+iter[['col']] <- as.numeric(iter[['col']])
+
+
 # save
 if (!troubleshooting) {
-    filepath = file.path(output_dir, 'design_matrix.csv')
-    write.table(design_matrix, file = filepath, row.names = FALSE, sep=',')
+    filepath = file.path(output_dir, 'design_matrix.xlsx')
+
+    wb <- createWorkbook()
+    addWorksheet(wb, "Sheet 1", gridLines = TRUE)
+    writeData(wb, sheet = 1, design_matrix, rowNames = FALSE)
+
+    # add colors
+    styling_object <- createStyle(fgFill = "yellow")
+    for (row in rownames(iter)) {
+        addStyle(wb,
+            sheet = 1, style = styling_object,
+            rows = iter[row, 'row']+1, cols = iter[row, 'col']+3
+        )
+    }
+    saveWorkbook(wb, filepath, overwrite  = TRUE)
 }
 
 

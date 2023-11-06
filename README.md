@@ -10,6 +10,7 @@ Install the following packages in R:
 install.packages('dplyr')
 install.packages('wrapr')
 install.packages("readxl")
+install.packages("openxlsx")
 install.packages("optparse")
 ```
 

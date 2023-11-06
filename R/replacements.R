@@ -30,6 +30,7 @@ antibody_replacements <- c(
     '[Ss][Hh][Ee][Ee][Pp]' = 'sheep',
 
     # general replacements
+    '7-AAD' = '7AAD',
     '[Bb][Cc][Ll1]-{0,1}' = 'Bcl-',
     '.*^[Cc][Dd]' = 'CD',
     'FoxP3' = 'Foxp3',
@@ -69,6 +70,7 @@ fluorophore_replacements <- c(
     '^ ([A-Za-z]+)' = '\\1',
 
     # general replacements
+    '7-AAD' = '7AAD',
     '(Alexa) {0,1}(Fluor|) {0,1}' = 'AF',
     'A(F|) {0,1}([0-9]+)' = 'AF\\2',
     '[Aa][Pp][Cc]' = 'APC',
