@@ -52,6 +52,7 @@ antibody_replacements <- c(
     'Unlabel{1,2}ed' = 'Unlabeled',
     'Va(lpha|) {0,1}([0-9]+)' = 'Va\\2',
     'Vbeta' = 'Vb',
+    'XCR-1' = 'XCR1',
     
     # custom exact replacements
     '^\\(CXCR4\\)$' = 'CXCR4',

@@ -193,7 +193,7 @@ design_matrix = merge(design_matrix, row_metadata,
 col_metadata <- ab_counts %>%
     group_by(channel_id) %>%
     summarise(all_fluorophores = toString(unique(most_common_fluorophore))) %>%
-    merge(instr_cfg[, c('channel_id', 'bandpass_filter', 'laser', 'excitation')],
+    merge(instr_cfg[, c('channel_id', 'bandpass_filter', 'excitation', 'laser')],
           by='channel_id', suffixes=c('', '_'),
           all.x=TRUE, all.y=FALSE, na_matches = 'never', sort=FALSE)
 design_matrix <- design_matrix %>% append_dataframe(
@@ -220,23 +220,20 @@ nrows <- row_end-row_start+1
 ncols <- col_end-col_start+1
 
 
-# identify positive rows and cols
+wb <- createWorkbook()
+addWorksheet(wb, "Sheet 1", gridLines = TRUE)
+
+
+# add colors
 submatrix_long <- melt(
-    reset_index(
-        design_matrix[row_start:row_end, col_start:col_end],
-        'rowname'
-    ),
-    id.vars=c('rowname'),
-    variable.name='colname',
+    reset_index(design_matrix[row_start:row_end, col_start:col_end], 'rowname'),
+    id.vars=c('rowname'), variable.name='colname'
 )
 submatrix_long[['row']] <- rep(1:nrows, times=ncols, each=1)
 submatrix_long[['col']] <- rep(1:ncols, times=1, each=nrows)
 pos_cells <- submatrix_long[(submatrix_long['value'] > 0), c('row', 'col')]
 
-wb <- createWorkbook()
-addWorksheet(wb, "Sheet 1", gridLines = TRUE)
 
-# add colors
 # design_matrix[(design_matrix ==0)] <- NA
 styling_object <- createStyle(fgFill = "#C3C3C3")  # light gray
 addStyle(
@@ -246,12 +243,18 @@ addStyle(
     rows = pos_cells[['row']]+row_start,
     cols = pos_cells[['col']]+col_start-1
 )
-setColWidths(
-  wb,
-  sheet = 1,
-  cols = seq(col_start, col_end, 1),
-  widths = 5.83,  # 40 pixels
-  ignoreMergedCells = TRUE
+
+
+# set cell dimensions
+setColWidths(wb, sheet = 1,
+    cols = seq(col_start, col_end, 1),
+    widths = 5.83,  # 40 pixels
+    ignoreMergedCells = TRUE
+)
+setRowHeights(
+    wb, sheet = 1,
+    rows = seq(row_start+1, row_end+2, 1),
+    heights = 20.00  # 20 pixels
 )
 
 writeData(wb, sheet = 1, design_matrix, rowNames = FALSE)
@@ -275,7 +278,7 @@ log_close()
 
 if (FALSE) {
 
-    # troubleshot fluorophore naming
+    # troubleshoot fluorophore naming
     filepath = file.path(troubleshooting_dir, 
         paste0('_', tools::file_path_sans_ext(basename(opt[['instrument-config']])), '.csv')
     )
