@@ -82,7 +82,7 @@ fluorophore_replacements <- c(
     '(BU[Vv]) {0,1}([0-9]+)' = 'BUV\\2',
     '(B[Vv]) {0,1}([0-9]+)' = 'BV\\2',
     '([Dd][Ll]|Dy[Ll]ight) {0,1}-{0,1}([0-9]+)' = 'DL\\2',
-    'e[Ff]((l|)uor|) {0,1}([0-9]+)' = 'eFluor \\3',
+    'e[Ff]((l|)uor|) {0,1}([0-9]+)' = 'eF\\3',
     'eVolve {0,1}([0-9]+)' = 'eVolve \\1',
     'Fluos' = 'Annexin-V-FLUOS',
     'FITC-AF488' = 'FITC',  # was previously 'FITC/AF488'
