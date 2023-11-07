@@ -55,23 +55,16 @@ log_print(paste('Script started at:', start_time))
 
 
 # ----------------------------------------------------------------------
-# Instrument Config
+# Configuration files
 
+# Instrument config
 instr_cfg <- read_excel_or_csv(file.path(wd, opt[['instrument-config']]))
 instr_cfg <- preprocess_instrument_config(instr_cfg)
 instr_cfg_long <- separate_rows(instr_cfg, 'fluorophore', sep=', ')
 
-
-# ----------------------------------------------------------------------
-# Antibody Inventory
-
+# Antibody inventory
 ab_inv <- read_excel_or_csv(file.path(wd, opt[['antibody-inventory']]))
 ab_inv <- preprocess_antibody_inventory(ab_inv)
-
-# add fluorophores in this list to your instrument-config file
-unavailable_fluorophores = sort(items_in_a_not_b(
-    unique( ab_inv[['fluorophore']] ), unique( instr_cfg_long[['fluorophore']] )
-))
 
 
 # ----------------------------------------------------------------------
@@ -278,19 +271,39 @@ log_close()
 
 if (FALSE) {
 
+    if (!dir.exists(file.path(troubleshooting_dir))) {
+        dir.create(file.path(troubleshooting_dir), recursive=TRUE)
+    }
+
     # troubleshoot fluorophore naming
     filepath = file.path(troubleshooting_dir, 
         paste0('_', tools::file_path_sans_ext(basename(opt[['instrument-config']])), '.csv')
     )
     write.table(instr_cfg, file = filepath, row.names = FALSE, sep=',')
 
+    # all fluorophores
+    all_fluorophores = sort(unique( ab_inv[['fluorophore']] ))
+    filepath = file.path(troubleshooting_dir, 'all_fluorophores.txt')
+    write.table(all_fluorophores, filepath,
+                row.names = FALSE, col.names = FALSE, quote = FALSE)
+
     # troubleshoot fluorophore naming
+    unavailable_fluorophores = sort(items_in_a_not_b(
+        unique( ab_inv[['fluorophore']] ), unique( instr_cfg_long[['fluorophore']] )
+    ))
     filepath = file.path(troubleshooting_dir, 'unavailable_fluorophores.txt')
     write.table(unavailable_fluorophores, filepath,
+                row.names = FALSE, col.names = FALSE, quote = FALSE)
+
+    # all antibodies
+    all_antibodies = sort(unique( ab_inv[['antibody']] ))
+    filepath = file.path(troubleshooting_dir, 'all_antibodies.txt')
+    write.table(all_antibodies, filepath,
                 row.names = FALSE, col.names = FALSE, quote = FALSE)
 
     # troubleshoot antibody naming
     filepath = file.path(troubleshooting_dir, 'antibodies.txt')
     write.table(sort(unique(ab_inv[['antibody']])), filepath,
                 row.names = FALSE, col.names = FALSE, quote = FALSE)
+
 }
