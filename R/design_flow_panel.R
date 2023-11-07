@@ -5,6 +5,7 @@ library('readxl')
 library("openxlsx")
 library('tidyr')
 suppressMessages(library('dplyr'))
+suppressMessages(library('reshape2'))
 suppressMessages(library('tibble'))
 library('optparse')
 library('logr')
@@ -34,6 +35,10 @@ option_list = list(
     make_option(c("-o", "--output-dir"), default="data/output",
                 metavar="data/output", type="character",
                 help="set the output directory for the data"),
+
+    make_option(c("-n", "--set-na"), default=FALSE, action="store_true",
+                metavar="FALSE", type="logical",
+                help="sets 0 to blank instead of coloring the cells"),
 
     make_option(c("-t", "--troubleshooting"), default=FALSE, action="store_true",
                 metavar="FALSE", type="logical",
@@ -165,6 +170,7 @@ num_channels_per_ab <- select_if(design_matrix, is.numeric) %>%
 design_matrix[['num_channels_per_ab']] <- num_channels_per_ab
 design_matrix <- design_matrix[order(design_matrix[['num_channels_per_ab']]), ]
 
+
 # Sort columns
 num_abs_per_channel <- select_if(design_matrix, is.numeric) %>%
     mutate_at(colnames(select_if(design_matrix, is.numeric)),
@@ -174,8 +180,14 @@ design_matrix <- append_dataframe(
     design_matrix, dataframe_row_from_named_list(num_abs_per_channel),
     reset_index=FALSE
 )
+channel_order <- instr_cfg[
+    order(instr_cfg[['bandpass_filter']], instr_cfg[['excitation']]),
+    'channel_id'
+][[1]]  # order by emission + excitation
 design_matrix <- design_matrix[ ,
-    order(unlist(design_matrix[nrow(design_matrix), ]))
+    c(intersect(channel_order, colnames(design_matrix)),
+      items_in_a_not_b(colnames(design_matrix), channel_order)
+    )
 ]
 
 # Move channel_cols to the middle
@@ -185,7 +197,7 @@ design_matrix <- design_matrix[ , c(id_cols, channel_cols, 'other')]
 
 
 # ----------------------------------------------------------------------
-# Add metadata
+# Postprocessing
 
 # Add comma-separated fluorophore list to each row
 row_metadata <- ab_counts %>%
@@ -200,7 +212,7 @@ design_matrix = merge(design_matrix, row_metadata,
 col_metadata <- ab_counts %>%
     group_by(channel_id) %>%
     summarise(all_fluorophores = toString(unique(most_common_fluorophore))) %>%
-    merge(instr_cfg[, c('channel_id', 'laser', 'pmt')],
+    merge(instr_cfg[, c('channel_id', 'bandpass_filter', 'laser', 'excitation')],
           by='channel_id', suffixes=c('', '_'),
           all.x=TRUE, all.y=FALSE, na_matches = 'never', sort=FALSE)
 design_matrix <- design_matrix %>% append_dataframe(
@@ -208,67 +220,61 @@ design_matrix <- design_matrix %>% append_dataframe(
     infront=TRUE, reset_index=FALSE
 )
 
-
-# ----------------------------------------------------------------------
-# Postprocessing
-
-# Rename columns from channel_id (1, 2, 3, etc.) to representative_fluorophore (AF488, FITC, PE, etc.)
-fluorophore_for_channel <- ab_counts %>%
-    group_by(channel_id) %>%
-    summarise(representative_fluorophore=names(
-        table(most_common_fluorophore)[which.max(table(most_common_fluorophore))]
-    )) %>%
-    deframe()
-design_matrix <- rename_columns(design_matrix, fluorophore_for_channel)
-
 # Rename last row
 row.names(design_matrix)[nrow(design_matrix)] <- 'count'
 design_matrix <- reset_index(design_matrix)  # export index information without frameshift
+# design_matrix[design_matrix==0] <- NA
 
 
 # ----------------------------------------------------------------------
-# Build excel file
+# Build Excel file
 
-# note: this is a suboptimal solution
-index_list <- function(items) {
-    out <- seq(1, length(items), by=1)
-    names(out) <- items
-    return(out)
-}
 
-pad = 5
-submatrix <- design_matrix[pad:nrow(design_matrix)-1, pad:ncol(design_matrix)-1]
-submatrix_long <- reshape2::melt(
-    reset_index(submatrix, index_name='row'),
-    id.vars=c('row'),
+# table properties
+row_start <- 5  # 4 column headers
+row_end <- nrow(design_matrix)-1  # last row is count
+col_start <- 4  # 3 row headers
+col_end <- ncol(design_matrix)-1  # last column is 'fluorophores'
+nrows <- row_end-row_start+1
+ncols <- col_end-col_start+1
+
+
+# identify positive rows and cols
+submatrix_long <- melt(
+    reset_index(
+        design_matrix[row_start:row_end, col_start:col_end],
+        'rowname'
+    ),
+    id.vars=c('rowname'),
     variable.name='colname',
 )
-colnames_to_index <- index_list(colnames(submatrix))
-submatrix_long[['col']] <- multiple_replacement(
-    submatrix_long[['colname']], colnames_to_index
-)
+submatrix_long[['row']] <- rep(1:nrows, times=ncols, each=1)
+submatrix_long[['col']] <- rep(1:ncols, times=1, each=nrows)
+pos_cells <- submatrix_long[(submatrix_long['value'] > 0), c('row', 'col')]
 
-iter <- submatrix_long[(submatrix_long['value'] > 0), c('row', 'col')]
-iter[['row']] <- as.numeric(iter[['row']])
-iter[['col']] <- as.numeric(iter[['col']])
+wb <- createWorkbook()
+addWorksheet(wb, "Sheet 1", gridLines = TRUE)
 
+# add colors
+if (opt[['set-na']]==TRUE) {
+    design_matrix[(design_matrix ==0)] <- NA
+} else {
+    styling_object <- createStyle(fgFill = "#D3D3D3")  # light gray
+    for (row in rownames(pos_cells)) {
+        addStyle(wb,
+            sheet = 1,
+            style = styling_object,
+            rows = pos_cells[row, 'row']+row_start,
+            cols = pos_cells[row, 'col']+col_start-1
+        )
+    }
+}
+
+writeData(wb, sheet = 1, design_matrix, rowNames = FALSE)
 
 # save
 if (!troubleshooting) {
     filepath = file.path(output_dir, 'design_matrix.xlsx')
-
-    wb <- createWorkbook()
-    addWorksheet(wb, "Sheet 1", gridLines = TRUE)
-    writeData(wb, sheet = 1, design_matrix, rowNames = FALSE)
-
-    # add colors
-    styling_object <- createStyle(fgFill = "yellow")
-    for (row in rownames(iter)) {
-        addStyle(wb,
-            sheet = 1, style = styling_object,
-            rows = iter[row, 'row']+1, cols = iter[row, 'col']+3
-        )
-    }
     saveWorkbook(wb, filepath, overwrite  = TRUE)
 }
 
