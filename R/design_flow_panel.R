@@ -36,10 +36,6 @@ option_list = list(
                 metavar="data/output", type="character",
                 help="set the output directory for the data"),
 
-    make_option(c("-n", "--set-na"), default=FALSE, action="store_true",
-                metavar="FALSE", type="logical",
-                help="sets 0 to blank instead of coloring the cells"),
-
     make_option(c("-t", "--troubleshooting"), default=FALSE, action="store_true",
                 metavar="FALSE", type="logical",
                 help="enable if troubleshooting to prevent overwriting your files")
@@ -142,7 +138,7 @@ ab_counts <- ab_shortlist[, c('antibody', 'company', 'catalog_no', 'fluorophore'
     group_by(!!!syms(c('antibody', 'channel_id'))) %>%
     summarise(
         num_fluorophores=n_distinct(fluorophore),
-        fluorophores = toString(unique(fluorophore)),
+        fluorophores = toString(unique(fluorophore)),  # fluorophores not sorted
         most_common_fluorophore=names(table(fluorophore))[which.max(table(fluorophore))],
         .groups='keep'
     )
@@ -180,10 +176,12 @@ design_matrix <- append_dataframe(
     design_matrix, dataframe_row_from_named_list(num_abs_per_channel),
     reset_index=FALSE
 )
+
+# order by excitation, then emission
 channel_order <- instr_cfg[
-    order(instr_cfg[['bandpass_filter']], instr_cfg[['excitation']]),
+    order(instr_cfg[['excitation']], instr_cfg[['bandpass_filter']]),
     'channel_id'
-][[1]]  # order by emission + excitation
+][[1]]
 design_matrix <- design_matrix[ ,
     c(intersect(channel_order, colnames(design_matrix)),
       items_in_a_not_b(colnames(design_matrix), channel_order)
@@ -203,6 +201,7 @@ design_matrix <- design_matrix[ , c(id_cols, channel_cols, 'other')]
 row_metadata <- ab_counts %>%
     group_by(antibody) %>%
     summarise(fluorophores = toString(unique(most_common_fluorophore)))
+design_matrix[['antibody_']] <- design_matrix[['antibody']]
 design_matrix = merge(design_matrix, row_metadata,
     by='antibody', suffixes=c('', '_'),
     all.x=TRUE, all.y=FALSE, na_matches = 'never', sort=FALSE
@@ -234,7 +233,7 @@ design_matrix <- reset_index(design_matrix)  # export index information without 
 row_start <- 5  # 4 column headers
 row_end <- nrow(design_matrix)-1  # last row is count
 col_start <- 4  # 3 row headers
-col_end <- ncol(design_matrix)-1  # last column is 'fluorophores'
+col_end <- ncol(design_matrix)-2  # last columns are 'antibody_' and 'fluorophore'
 nrows <- row_end-row_start+1
 ncols <- col_end-col_start+1
 
@@ -256,21 +255,25 @@ wb <- createWorkbook()
 addWorksheet(wb, "Sheet 1", gridLines = TRUE)
 
 # add colors
-if (opt[['set-na']]==TRUE) {
-    design_matrix[(design_matrix ==0)] <- NA
-} else {
-    styling_object <- createStyle(fgFill = "#D3D3D3")  # light gray
-    for (row in rownames(pos_cells)) {
-        addStyle(wb,
-            sheet = 1,
-            style = styling_object,
-            rows = pos_cells[row, 'row']+row_start,
-            cols = pos_cells[row, 'col']+col_start-1
-        )
-    }
-}
+# design_matrix[(design_matrix ==0)] <- NA
+styling_object <- createStyle(fgFill = "#C3C3C3")  # light gray
+addStyle(
+    wb,
+    sheet = 1,
+    style = styling_object,
+    rows = pos_cells[['row']]+row_start,
+    cols = pos_cells[['col']]+col_start-1
+)
+setColWidths(
+  wb,
+  sheet = 1,
+  cols = seq(col_start, col_end, 1),
+  widths = 5.83,  # 40 pixels
+  ignoreMergedCells = TRUE
+)
 
 writeData(wb, sheet = 1, design_matrix, rowNames = FALSE)
+
 
 # save
 if (!troubleshooting) {
