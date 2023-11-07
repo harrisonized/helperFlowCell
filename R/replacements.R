@@ -105,8 +105,8 @@ fluorophore_replacements <- c(
     'YG([0-9]+)' = 'YG \\1',
 
     # custom exact replacements
-    '^eFluor 506 and eFluor 780 \\(APC-Cy7\\)$' = 'APC-Cy7',
-    '^eFluor 660 \\(APC\\)$' = 'APC',
+    '^eF(luor| |)506 and eF(luor| |)780 \\(APC-Cy7\\)$' = 'APC-Cy7',
+    '^eF(luor| |)660 \\(APC\\)$' = 'APC',
     '^PE-Vio {0,1}([0-9]+) \\(txRed\\)$' = 'PE-Vio \\1',
 
     # possible typos

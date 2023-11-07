@@ -43,14 +43,9 @@ option_list = list(
 opt_parser = OptionParser(option_list=option_list)
 opt = parse_args(opt_parser)
 troubleshooting = opt[['troubleshooting']]
-
 output_dir <- file.path(wd, opt[['output-dir']])
-if (!troubleshooting) {
-    troubleshooting_dir = file.path(output_dir, 'troubleshooting')
-    if (!dir.exists(file.path(troubleshooting_dir))) {
-        dir.create(file.path(troubleshooting_dir), recursive=TRUE)
-    }
-}
+troubleshooting_dir = file.path(output_dir, 'troubleshooting')
+
 
 # Start Log
 start_time = Sys.time()
@@ -66,14 +61,6 @@ instr_cfg <- read_excel_or_csv(file.path(wd, opt[['instrument-config']]))
 instr_cfg <- preprocess_instrument_config(instr_cfg)
 instr_cfg_long <- separate_rows(instr_cfg, 'fluorophore', sep=', ')
 
-# save
-if (!troubleshooting) {
-    filepath = file.path(troubleshooting_dir, 
-        paste0('_', tools::file_path_sans_ext(basename(opt[['instrument-config']])), '.csv')
-    )
-    write.table(instr_cfg, file = filepath, row.names = FALSE, sep=',')
-}
-
 
 # ----------------------------------------------------------------------
 # Antibody Inventory
@@ -85,17 +72,6 @@ ab_inv <- preprocess_antibody_inventory(ab_inv)
 unavailable_fluorophores = sort(items_in_a_not_b(
     unique( ab_inv[['fluorophore']] ), unique( instr_cfg_long[['fluorophore']] )
 ))
-
-# save
-if (!troubleshooting) {
-    filepath = file.path(troubleshooting_dir, 'antibodies.txt')
-    write.table(sort(unique(ab_inv[['antibody']])), filepath,
-                row.names = FALSE, col.names = FALSE, quote = FALSE)
-
-    filepath = file.path(troubleshooting_dir, 'unavailable_fluorophores.txt')
-    write.table(unavailable_fluorophores, filepath,
-                row.names = FALSE, col.names = FALSE, quote = FALSE)
-}
 
 
 # ----------------------------------------------------------------------
@@ -114,6 +90,9 @@ antibodies_not_found = sort(items_in_a_not_b(
 
 # save
 if (!troubleshooting) {
+    if (!dir.exists(file.path(output_dir))) {
+        dir.create(file.path(output_dir), recursive=TRUE)
+    }
     filepath = file.path(output_dir, 
         paste0(tools::file_path_sans_ext(basename(opt[['antibody-inventory']])),
                '-shortlist', '.csv')
@@ -121,6 +100,9 @@ if (!troubleshooting) {
     write.table(ab_shortlist , file = filepath, row.names = FALSE, sep=',')
 
     if (length(antibodies_not_found) > 0) {
+        if (!dir.exists(file.path(troubleshooting_dir))) {
+            dir.create(file.path(troubleshooting_dir), recursive=TRUE)
+        }
         filepath = file.path(troubleshooting_dir, 'antibodies_not_found.txt')
         write.table(antibodies_not_found, filepath,
             row.names = FALSE, col.names = FALSE, quote = FALSE)
@@ -286,3 +268,26 @@ end_time = Sys.time()
 log_print(paste('Script ended at:', Sys.time()))
 log_print(paste("Script completed in:", difftime(end_time, start_time)))
 log_close()
+
+
+# ----------------------------------------------------------------------
+# Troubleshooting only
+
+if (FALSE) {
+
+    # troubleshot fluorophore naming
+    filepath = file.path(troubleshooting_dir, 
+        paste0('_', tools::file_path_sans_ext(basename(opt[['instrument-config']])), '.csv')
+    )
+    write.table(instr_cfg, file = filepath, row.names = FALSE, sep=',')
+
+    # troubleshoot fluorophore naming
+    filepath = file.path(troubleshooting_dir, 'unavailable_fluorophores.txt')
+    write.table(unavailable_fluorophores, filepath,
+                row.names = FALSE, col.names = FALSE, quote = FALSE)
+
+    # troubleshoot antibody naming
+    filepath = file.path(troubleshooting_dir, 'antibodies.txt')
+    write.table(sort(unique(ab_inv[['antibody']])), filepath,
+                row.names = FALSE, col.names = FALSE, quote = FALSE)
+}
