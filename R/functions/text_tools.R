@@ -1,6 +1,7 @@
 ## Functions
 ## title_to_snake_case
 ## txt_strip
+## substr_right
 
 
 #' Converts "Column Title" to column_title
@@ -32,4 +33,12 @@ txt_strip <- function(x, chars=' ') {
         x <- gsub(paste0('+', char, '$'), '', x)
     }
     return(x)
+}
+
+
+#' see: https://stackoverflow.com/questions/7963898/extracting-the-last-n-characters-from-a-string-in-r
+#'
+#' @export
+substr_right <- function(x, n){
+  substr(x, nchar(x)-n+1, nchar(x))
 }

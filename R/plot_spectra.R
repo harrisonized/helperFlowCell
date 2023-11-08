@@ -1,4 +1,5 @@
 ## Plot the spectra for fluorophores used
+## Based on this tutorial: https://bradyajohnston.github.io/posts/2022-09-03-plotting-fluorescence/
 
 wd = dirname(this.path::here())  # wd = '~/github/R/helperFlowCell'
 library('tidyr')
@@ -24,16 +25,16 @@ option_list = list(
                 metavar='ref/antibody_inventory.xlsx', type="character",
                 help="antibody inventory table"),
 
-    make_option(c("-s", "--spectra-file"), default='ref/FPBase_Spectra.csv',
-                metavar='ref/FPBase_Spectra.csv', type="character",
-                help="spectra data downloaded from FPBase"),
+    make_option(c("-c", "--instrument-config"), default='ref/instrument_config.xlsx',
+                metavar='ref/instrument_config.xlsx', type="character",
+                help="instrument configuration file"),
 
-    make_option(c("-o", "--output-dir"), default="data",
-                metavar="data", type="character",
-                help="set the output directory for the data"),
+    make_option(c("-s", "--spectra-file"), default='ref/spectra.csv',
+                metavar='ref/spectra.csv', type="character",
+                help="spectra data, main source is FPBase"),
 
-    make_option(c("-f", "--figures-dir"), default="figures",
-                metavar="figures", type="character",
+    make_option(c("-f", "--figures-dir"), default="figures/output",
+                metavar="figures/output", type="character",
                 help="set the output directory for the figures"),
 
     make_option(c("-t", "--troubleshooting"), default=FALSE, action="store_true",
@@ -43,10 +44,8 @@ option_list = list(
 opt_parser = OptionParser(option_list=option_list)
 opt = parse_args(opt_parser)
 troubleshooting = opt[['troubleshooting']]
-output_dir <- file.path(wd, opt[['output-dir']])
-troubleshooting_dir = file.path(output_dir, 'troubleshooting')
-
-# troubleshooting = TRUE
+figures_dir <- file.path(wd, opt[['figures-dir']])
+troubleshooting_dir = file.path(figures_dir, 'troubleshooting')
 
 # Start Log
 start_time = Sys.time()
@@ -56,27 +55,41 @@ log_print(paste('Script started at:', start_time))
 
 
 # ----------------------------------------------------------------------
-# Spectra file
+# Configuration files
 
-# Read data
+# Instrument config
+instr_cfg <- read_excel_or_csv(file.path(wd, opt[['instrument-config']]))
+instr_cfg <- preprocess_instrument_config(instr_cfg)
+instr_cfg_long <- separate_rows(instr_cfg, 'fluorophore', sep=', ')
+
+
+# Spectra file
 all_spectra <- read_excel_or_csv(file.path(wd, opt[['spectra-file']]))
 
 # preprocess column names
+colnames(all_spectra) = unname(multiple_replacement(
+    colnames(all_spectra), fluorophore_replacements
+))
 cols <- colnames(all_spectra)
-colnames(all_spectra) = unname(multiple_replacement(cols, fluorophore_replacements))
 available_fluorophores = sort(unique(
     gsub( '( EM| EX| AB)', '', cols[2:length(cols)] )
 ))
 
 
 # ----------------------------------------------------------------------
-# Read data
+# Get panel data
 
 panel <- read_excel_or_csv(file.path(wd, opt[['input-file']]))
-fluorophores <- panel['fluorophore']
+panel <- merge(
+    panel,
+    instr_cfg_long[, c('fluorophore', 'laser')],
+    by='fluorophore', suffixes=c('', '_'),
+    all.x=TRUE, all.y=FALSE, na_matches = 'never'
+)
+fluorophores <- panel[['fluorophore']]
 
 unavailable_fluorophores = sort(items_in_a_not_b(
-   unique(panel[['fluorophore']]), available_fluorophores
+   unique(fluorophores), available_fluorophores
 ))
 
 # save
@@ -95,16 +108,59 @@ if (!troubleshooting) {
 # ----------------------------------------------------------------------
 # Plot
 
-spectra_subset <- all_spectra[, c('Wavelength', 'Zombie Aqua EX', 'Zombie Aqua EM')]
+# Subset and reshape spectra
+cols <- colnames(all_spectra)
+spectra <- all_spectra[ ,
+    c('Wavelength', grep(paste0(fluorophores,collapse = " |"), cols, value = TRUE))
+]
+spectra_long <- pivot_longer(
+    spectra, cols=-Wavelength,
+    names_to = "trace_name", values_to = "intensity", values_drop_na=TRUE
+)
+spectra_long[['fluorophore']] <- gsub(' .{2}$', '', spectra_long[['trace_name']])
+spectra_long[['spectrum_type']] <- substr_right(spectra_long[['trace_name']], 2)
+spectra_long <- merge(
+    spectra_long, panel,
+    by='fluorophore', suffixes=c('', '_'),
+    all.x=TRUE, all.y=FALSE, na_matches = 'never'
+)
+spectra_long <- spectra_long[with(spectra_long, order(trace_name, Wavelength)), ]
+spectra_long <- reset_index(spectra_long, drop=TRUE)
 
-fig <- ggplot( pivot_longer(spectra_subset, -Wavelength),
-               aes(Wavelength, value, fill = name, colour = name) ) + 
-    geom_area(alpha = 0.3) + 
-    theme_classic()
+# Plot each laser separately
+for ( laser in unique(panel[['laser']]) ) {
 
-if (!troubleshooting) {
-    ggsave(file.path(wd, opt[['figures-dir']], 'test.png'),
-           height=750, width=1200, dpi=300, units="px", scaling=0.5)
+    log_print(paste0('Plottting... ', laser, '.png'))
+
+    fig <- spectra_long[(spectra_long['laser']==laser), ] %>%
+        ggplot( aes(x = Wavelength, y = intensity, 
+                    fill = fluorophore, group = trace_name) ) + 
+        geom_area(
+            aes(linetype = spectrum_type),
+                position = "identity", 
+                alpha = 0.3,
+                colour = alpha("black", 0.7)
+        ) + 
+        scale_linetype_manual(
+            values = c(
+                "AB" = "dotted", 
+                "EX" = "dotted", 
+                "EM" = "solid"
+            )
+        ) + 
+        ggtitle(paste(laser, 'Laser')) +
+        theme_classic()
+
+    # save
+    if (!troubleshooting) {
+        ggsave(
+            file.path(wd, opt[['figures-dir']],
+                      paste0(laser, '.png')),  # filename
+            plot=fig,
+            height=300, width=1000, dpi=200,
+            units="px", scaling=0.5
+        )
+    }
 }
 
 end_time = Sys.time()
