@@ -1,7 +1,6 @@
 ## Build the design matrix
 
 wd = dirname(this.path::here())  # wd = '~/github/R/helperFlowCell'
-library('readxl')
 library("openxlsx")
 library('tidyr')
 suppressMessages(library('dplyr'))
@@ -20,8 +19,8 @@ source(file.path(wd, 'R', 'functions', 'list_tools.R'))  # items_in_a_not_b
 
 # args
 option_list = list(
-    make_option(c("-i", "--input-file"), default='data/panel.txt',
-                metavar='data/panel.txt', type="character",
+    make_option(c("-i", "--input-file"), default='data/panel.csv',
+                metavar='data/panel.csv', type="character",
                 help="specify the antibodies to use in your flow panel"),
 
     make_option(c("-a", "--antibody-inventory"), default='ref/antibody_inventory.xlsx',
@@ -71,14 +70,13 @@ ab_inv <- preprocess_antibody_inventory(ab_inv)
 # Build design_matrix
 
 # Read data
-panel_list <- read_csv_from_text(file.path(wd, opt[['input-file']]),
-    columns='antibody', encoding='UTF-8')
-ab_shortlist <- merge(panel_list, ab_inv, by='antibody',
+panel <- read_excel_or_csv(file.path(wd, opt[['input-file']]))
+ab_shortlist <- merge(panel['antibody'], ab_inv, by='antibody',
     all.x=FALSE, all.y=FALSE, na_matches = 'never', sort=FALSE)
 ab_shortlist <- ab_shortlist[, colnames(ab_inv)]
 
 antibodies_not_found = sort(items_in_a_not_b(
-    unique( panel_list[['antibody']] ), unique( ab_inv[['antibody']] )
+    unique( panel[['antibody']] ), unique( ab_inv[['antibody']] )
 ))
 
 # save

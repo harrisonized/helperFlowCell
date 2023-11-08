@@ -1,3 +1,6 @@
+library('readxl')
+
+
 ## Functions
 ## read_csv_from_text
 ## read_excel_or_csv
@@ -69,8 +72,7 @@ read_excel_or_csv <- function(filepath) {
     } else if (ext == 'csv') {
         df <- read.csv(filepath, header=TRUE, check.names=FALSE)
     } else {
-        log_print(paste(Sys.time(), 'Please enter a xlsx or csv file.'))
-        stop()
+        stop('Please enter a xlsx or csv file.')
     }
     return(df)
 }
