@@ -45,7 +45,7 @@ opt_parser = OptionParser(option_list=option_list)
 opt = parse_args(opt_parser)
 troubleshooting = opt[['troubleshooting']]
 figures_dir <- file.path(wd, opt[['figures-dir']])
-troubleshooting_dir = file.path(figures_dir, 'troubleshooting')
+troubleshooting_dir = file.path(wd, 'figures/troubleshooting')
 
 # Start Log
 start_time = Sys.time()
@@ -81,7 +81,7 @@ available_fluorophores = sort(unique(
 
 panel <- read_excel_or_csv(file.path(wd, opt[['input-file']]))
 panel <- merge(
-    panel,
+    panel[(panel['fluorophore']!= ""), ],
     instr_cfg_long[, c('fluorophore', 'laser')],
     by='fluorophore', suffixes=c('', '_'),
     all.x=TRUE, all.y=FALSE, na_matches = 'never'
