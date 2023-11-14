@@ -296,7 +296,7 @@ if (FALSE) {
     # all antibodies
     all_antibodies = sort(unique( ab_inv[['antibody']] ))
     filepath = file.path(troubleshooting_dir, 'all_antibodies.txt')
-    write.table(all_antibodies, filepath,
+    write.table(all_antibodies, filepath, na = "",
                 row.names = FALSE, col.names = FALSE, quote = FALSE)
 
     # troubleshoot antibody naming

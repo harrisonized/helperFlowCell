@@ -1,15 +1,21 @@
 # Regexes to standardize antibody and fluorophore names
 
 ## Objects
-## col_to_new_col
+## instr_cfg_colreps
+## ab_inv_colreps
 ## antibody_replacements
 ## fluorophore_replacements
 
 
-col_to_new_col = c(
+instr_cfg_colreps = c(
     'id'='channel_id',
     'fluorochrome_detected'='fluorophore',
     'fluorochrome'='fluorophore'
+)
+
+ab_inv_colreps = c(
+    'fluorophor'='fluorophore',
+    'catalog_nr'='catalog_no'
 )
 
 antibody_replacements <- c(

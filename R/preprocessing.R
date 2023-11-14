@@ -13,7 +13,7 @@ preprocess_instrument_config <- function(df) {
 
     # format and rename columns
     colnames(df) <- unlist(lapply(colnames(df), title_to_snake_case))
-    df <- rename_columns(df, col_to_new_col)
+    df <- rename_columns(df, instr_cfg_colreps)
 
     # standardize fluorophore names
     df[['fluorophore']] = multiple_replacement(
@@ -29,8 +29,9 @@ preprocess_antibody_inventory <- function(df) {
 
     df <- df[, 1:(find_first_match_index('\\.{3}\\d{2}', colnames(df))-1)]  # filter extra columns
     colnames(df) <- unlist(lapply(colnames(df), title_to_snake_case))  # column names
-    colnames(df) <- unlist(lapply(colnames(df), function(x) gsub('[.]', '', x)))  # column nmaes
-
+    colnames(df) <- unlist(lapply(colnames(df), function(x) gsub('[.]', '', x)))  # column names
+    df <- rename_columns(df, ab_inv_colreps)
+    
     # remove 'c2 a0', the "no-break space"
     # see: https://stackoverflow.com/questions/68982813/r-string-encoding-best-practice
     for (col in colnames(df)) {
