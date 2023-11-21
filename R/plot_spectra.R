@@ -76,6 +76,7 @@ instr_cfg[['xmax']] <- instr_cfg[['emission']] + instr_cfg[['range']] / 2
 # Panel data
 
 panel <- read_excel_or_csv(file.path(wd, opt[['input-file']]))
+panel[['fluorophore']] <- multiple_replacement(panel[['fluorophore']], fluorophore_replacements)
 panel <- merge(
     panel[(panel['fluorophore']!= ""), ],
     instr_cfg_long[, c('fluorophore', 'laser')],

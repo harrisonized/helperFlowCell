@@ -118,6 +118,7 @@ fluorophore_replacements <- c(
     'Tx{0,1}Re{0,1}d{0,1}' = 'Texas Red',
     'Vio([0-9]+)' = 'Vio \\1',
     'YG([0-9]+)' = 'YG \\1',
+    '^Zombie Aq$' = 'Zombie Aqua',
 
     # custom exact replacements
     '^eF(luor| |)506 and eF(luor| |)780 \\(APC-Cy7\\)$' = 'APC-Cy7',
