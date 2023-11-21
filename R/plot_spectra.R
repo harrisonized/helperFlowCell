@@ -4,6 +4,7 @@
 wd = dirname(this.path::here())  # wd = '~/github/R/helperFlowCell'
 library('tidyr')
 library('ggplot2')
+library('cowplot')
 library('optparse')
 library('logr')
 source(file.path(wd, 'R', 'replacements.R'))
@@ -36,7 +37,7 @@ option_list = list(
     make_option(c("-f", "--figures-dir"), default="figures/output",
                 metavar="figures/output", type="character",
                 help="set the output directory for the figures"),
-
+    
     make_option(c("-t", "--troubleshooting"), default=FALSE, action="store_true",
                 metavar="FALSE", type="logical",
                 help="enable if troubleshooting to prevent overwriting your files")
@@ -52,6 +53,41 @@ start_time = Sys.time()
 log <- log_open(paste0("plot_spectra-",
     strftime(start_time, format="%Y%m%d_%H%M%S"), '.log'))
 log_print(paste('Script started at:', start_time))
+
+
+# ----------------------------------------------------------------------
+# Script-specific variables and functions
+
+lasers = c('Red', 'Green', 'Blue', 'Violet', 'UV')
+
+#' main plotting function
+plot_spectra_by_each_laser <- function(df, laser) {
+
+    fig <- df[(df['laser']==laser), ] %>%
+        ggplot( aes(x = .data[['Wavelength']], y = .data[['intensity']], 
+                    fill = .data[['fluorophore']], group = .data[['trace_name']]),
+                show.legend = FALSE ) + 
+        geom_area(
+            aes(linetype = .data[['spectrum_type']]),
+            position = "identity", 
+            alpha = 0.3,
+            colour = alpha("black", 0.7)
+        ) + 
+        scale_linetype_manual(
+            values = c(
+                "AB" = "dotted",
+                "EX" = "dotted",
+                "EM" = "solid"),
+            guide = NULL  # disable group as a legend
+        ) +
+        guides(fill = guide_legend(order=1)) +  # fluorophore
+        theme_classic() +
+        theme(legend.box = "horizontal",
+              legend.justification = c(0, 1)) +  # align legend
+        facet_wrap(vars(.data[['laser']]), strip.position="right")
+
+    return(fig)
+}
 
 
 # ----------------------------------------------------------------------
@@ -106,7 +142,7 @@ if (!troubleshooting) {
 
 
 # ----------------------------------------------------------------------
-# Plot
+# Reshape
 
 # Subset and reshape spectra
 cols <- colnames(all_spectra)
@@ -127,40 +163,34 @@ spectra_long <- merge(
 spectra_long <- spectra_long[with(spectra_long, order(trace_name, Wavelength)), ]
 spectra_long <- reset_index(spectra_long, drop=TRUE)
 
-# Plot each laser separately
-for ( laser in unique(panel[['laser']]) ) {
 
-    log_print(paste0('Plottting... ', laser, '.png'))
 
-    fig <- spectra_long[(spectra_long['laser']==laser), ] %>%
-        ggplot( aes(x = Wavelength, y = intensity, 
-                    fill = fluorophore, group = trace_name) ) + 
-        geom_area(
-            aes(linetype = spectrum_type),
-                position = "identity", 
-                alpha = 0.3,
-                colour = alpha("black", 0.7)
-        ) + 
-        scale_linetype_manual(
-            values = c(
-                "AB" = "dotted", 
-                "EX" = "dotted", 
-                "EM" = "solid"
-            )
-        ) + 
-        ggtitle(paste(laser, 'Laser')) +
-        theme_classic()
 
-    # save
-    if (!troubleshooting) {
-        ggsave(
-            file.path(wd, opt[['figures-dir']],
-                      paste0(laser, '.png')),  # filename
-            plot=fig,
-            height=300, width=1000, dpi=200,
-            units="px", scaling=0.5
-        )
-    }
+# ----------------------------------------------------------------------
+# Plot
+
+# select available lasers
+lasers <- Reduce(intersect, list( lasers, unique(panel[['laser']])) ) 
+
+# plot all lasers together
+plots <- lapply(
+    lasers,
+    FUN = function(laser) plot_spectra_by_each_laser(spectra_long, laser)
+)
+
+fig <- plot_grid(
+    plotlist = plots,
+    ncol = 1, nrow = length(lasers),
+    align = 'vh', axis = "bt"
+)  # note: title is not added, because it causes the legend to become misaligned
+
+if (!troubleshooting) {
+    ggsave(
+        file.path(wd, opt[['figures-dir']], 'spectra.png'),  # filename
+        plot=fig,
+        height=1000, width=1200, dpi=200,
+        units="px", scaling=0.5
+    )
 }
 
 end_time = Sys.time()
@@ -188,5 +218,31 @@ if (FALSE) {
     filepath = file.path(troubleshooting_dir, 'all_unavailable_fluorophores.txt')
     write.table(unavailable_fluorophores, filepath,
                 row.names = FALSE, col.names = FALSE, quote = FALSE)   
+
+}
+
+
+# ----------------------------------------------------------------------
+# Code-graveyard
+
+if (FALSE) {
+    
+    # Plot each laser separately
+    for ( laser in unique(panel[['laser']]) ) {
+
+        log_print(paste0('Plottting... ', laser, '.png'))
+        fig <- plot_spectra_by_each_laser(spectra_long, laser)
+        
+        # save
+        if (!troubleshooting) {
+            ggsave(
+                file.path(wd, opt[['figures-dir']],
+                          paste0(laser, '.png')),  # filename
+                plot=fig,
+                height=300, width=1000, dpi=200,
+                units="px", scaling=0.5
+            )
+        }
+    }
 
 }

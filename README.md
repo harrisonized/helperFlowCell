@@ -15,6 +15,7 @@ install.packages('dplyr')
 install.packages('wrapr')
 install.packages("readxl")
 install.packages("openxlsx")
+install.packages('cowplot')
 install.packages("optparse")
 ```
 
