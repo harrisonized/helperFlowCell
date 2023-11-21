@@ -3,14 +3,15 @@
 
 wd = dirname(this.path::here())  # wd = '~/github/R/helperFlowCell'
 library('tidyr')
-library('ggplot2')
 library('cowplot')
 library('optparse')
 library('logr')
-source(file.path(wd, 'R', 'replacements.R'))
-source(file.path(wd, 'R', 'preprocessing.R'))
-source(file.path(wd, 'R', 'functions', 'file_io.R'))  # read_excel_or_csv, read_csv_from_text
-source(file.path(wd, 'R', 'functions', 'list_tools.R'))  # multiple_replacement
+source(file.path(wd, 'R', 'config', 'lasers.R'))
+source(file.path(wd, 'R', 'config', 'replacements.R'))
+source(file.path(wd, 'R', 'functions', 'preprocessing.R'))
+source(file.path(wd, 'R', 'functions', 'plotting.R'))
+source(file.path(wd, 'R', 'utils', 'file_io.R'))  # read_excel_or_csv, read_csv_from_text
+source(file.path(wd, 'R', 'utils', 'list_tools.R'))  # multiple_replacement
 
 
 # ----------------------------------------------------------------------
@@ -46,78 +47,13 @@ opt_parser = OptionParser(option_list=option_list)
 opt = parse_args(opt_parser)
 troubleshooting = opt[['troubleshooting']]
 figures_dir <- file.path(wd, opt[['figures-dir']])
-troubleshooting_dir = file.path(wd, 'figures/troubleshooting')
+troubleshooting_dir = file.path(figures_dir, 'troubleshooting')
 
 # Start Log
 start_time = Sys.time()
 log <- log_open(paste0("plot_spectra-",
     strftime(start_time, format="%Y%m%d_%H%M%S"), '.log'))
 log_print(paste('Script started at:', start_time))
-
-
-# ----------------------------------------------------------------------
-# Script-specific variables and functions
-
-lasers = c('UV', 'Violet', 'Blue', 'Green', 'Red')
-color_for_laser <- setNames(
-    nm=lasers,  # keys
-    object=list('Purple', 'Violet', 'Blue', 'Green', 'Red')  # values
-)
-
-
-#' Msain plotting function
-#' df is a dataframe
-#' detectors is a dataframe
-#' laser is chosen from: c('Red', 'Green', 'Blue', 'Violet', 'UV')
-#'
-plot_spectra_by_each_laser <- function(df, detectors, laser) {
-
-    excitation <- instr_cfg[(instr_cfg['laser']==laser), ][['excitation']][[1]]
-    color <- do.call(switch, c(laser, color_for_laser, "Black"))  # get color, default to "Black"
-
-    fig <- df[(df['laser']==laser), ] %>%
-        # base plot
-        ggplot( aes(x = .data[['Wavelength']], y = .data[['intensity']], 
-                    fill = .data[['fluorophore']], group = .data[['trace_name']]),
-                show.legend = FALSE ) +
-        # plot lasers
-        # note: geom_vline doesn't work well here
-        geom_rect(
-            aes(xmin=excitation-3, xmax=excitation+3, ymin=0, ymax=1),
-            fill=color, alpha=0.8,
-            inherit.aes = FALSE
-        )  +
-        # plot detectors
-        geom_rect(
-            aes(xmin=xmin, xmax=xmax, ymin=0, ymax=1),
-            data = detectors[(detectors['laser']==laser), c('xmin', 'xmax')],
-            fill="#A3A3A3", alpha=0.6,  # gray
-            inherit.aes = FALSE
-        ) +
-        # fill curves
-        geom_area(
-            aes(linetype = .data[['spectrum_type']]),
-            position = "identity", 
-            alpha = 0.3,
-            colour = alpha("black", 0.7)
-        ) + 
-        facet_wrap(vars(.data[['laser']]), strip.position="right") +
-        scale_linetype_manual(
-            values = c(
-                "AB" = "dotted",
-                "EX" = "dotted",
-                "EM" = "solid"),
-            guide = NULL  # disable group as a legend
-        ) +
-        guides(fill = guide_legend(order=1)) +  # fluorophore
-        theme_classic() +
-        theme(legend.box = "horizontal",
-              legend.justification = c(0, 1)) +  # align legend
-        xlim(min(df[['Wavelength']]), max(df[['Wavelength']])) + 
-        ylim(0, 1)
-
-    return(fig)
-}
 
 
 # ----------------------------------------------------------------------
@@ -195,7 +131,7 @@ if (!troubleshooting) {
         if (!dir.exists(file.path(troubleshooting_dir))) {
             dir.create(file.path(troubleshooting_dir), recursive=TRUE)
         }
-        filepath = file.path(troubleshooting_dir, 'unavailable_fluorophores.txt')
+        filepath = file.path(troubleshooting_dir, 'unplotted_fluorophores.txt')
         write.table(unavailable_fluorophores, filepath,
                     row.names = FALSE, col.names = FALSE, quote = FALSE)
     }
@@ -207,19 +143,17 @@ if (!troubleshooting) {
 
 # select available lasers
 lasers <- Reduce(intersect, list( lasers, unique(panel[['laser']])) ) 
-
-# plot all lasers together
-plots <- lapply(
-    lasers,
-    FUN = function(laser) plot_spectra_by_each_laser(spectra_long, instr_cfg, laser)
+plots <- lapply(lasers, FUN = function(laser)
+    plot_spectra_by_each_laser(spectra_long, instr_cfg, laser)
 )
 
-fig <- plot_grid(
-    plotlist = plots,
-    ncol = 1, nrow = length(lasers),
-    align = 'vh', axis = "bt"
-)  # note: title is not added, because it causes the legend to become misaligned
+# plot all lasers together
+# note: title is not added, because it causes the legend to become misaligned
+fig <- plot_grid(plotlist = plots,
+                 ncol = 1, nrow = length(lasers),
+                 align = 'vh', axis = "bt")
 
+# save
 if (!troubleshooting) {
     ggsave(
         file.path(wd, opt[['figures-dir']], 'spectra.png'),  # filename

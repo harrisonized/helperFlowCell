@@ -1,8 +1,8 @@
 import::from(wrapr, 'orderv')
-source(file.path(wd, 'R', 'replacements.R'))  # fluorophore_replacements, antibody_replacements
-source(file.path(wd, 'R', 'functions', 'df_tools.R'))  # rename_columns
-source(file.path(wd, 'R', 'functions', 'text_tools.R'))  # title_to_snake_case
-source(file.path(wd, 'R', 'functions', 'list_tools.R'))  # multiple_replacement, find_first_match_index
+source(file.path(wd, 'R', 'config', 'replacements.R'))  # fluorophore_replacements, antibody_replacements
+source(file.path(wd, 'R', 'utils', 'df_tools.R'))  # rename_columns
+source(file.path(wd, 'R', 'utils', 'text_tools.R'))  # title_to_snake_case
+source(file.path(wd, 'R', 'utils', 'list_tools.R'))  # multiple_replacement, find_first_match_index
 
 ## Functions
 ## preprocess_instrument_config

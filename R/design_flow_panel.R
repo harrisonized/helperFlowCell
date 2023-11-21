@@ -3,15 +3,15 @@
 wd = dirname(this.path::here())  # wd = '~/github/R/helperFlowCell'
 library("openxlsx")
 library('tidyr')
-suppressMessages(library('dplyr'))
-suppressMessages(library('reshape2'))
-suppressMessages(library('tibble'))
+suppressPackageStartupMessages(library('dplyr'))
+suppressPackageStartupMessages(library('reshape2'))
+suppressPackageStartupMessages(library('tibble'))
 library('optparse')
 library('logr')
-source(file.path(wd, 'R', 'preprocessing.R'))
-source(file.path(wd, 'R', 'functions', 'file_io.R'))  # read_excel_or_csv
-source(file.path(wd, 'R', 'functions', 'df_tools.R'))  # rename_columns
-source(file.path(wd, 'R', 'functions', 'list_tools.R'))  # items_in_a_not_b
+source(file.path(wd, 'R', 'functions', 'preprocessing.R'))
+source(file.path(wd, 'R', 'utils', 'file_io.R'))  # read_excel_or_csv
+source(file.path(wd, 'R', 'utils', 'df_tools.R'))  # rename_columns
+source(file.path(wd, 'R', 'utils', 'list_tools.R'))  # items_in_a_not_b
 
 
 # ----------------------------------------------------------------------
