@@ -37,7 +37,7 @@ option_list = list(
     make_option(c("-f", "--figures-dir"), default="figures/output",
                 metavar="figures/output", type="character",
                 help="set the output directory for the figures"),
-    
+
     make_option(c("-t", "--troubleshooting"), default=FALSE, action="store_true",
                 metavar="FALSE", type="logical",
                 help="enable if troubleshooting to prevent overwriting your files")
@@ -84,7 +84,9 @@ plot_spectra_by_each_laser <- function(df, laser) {
         theme_classic() +
         theme(legend.box = "horizontal",
               legend.justification = c(0, 1)) +  # align legend
-        facet_wrap(vars(.data[['laser']]), strip.position="right")
+        facet_wrap(vars(.data[['laser']]), strip.position="right") +
+        xlim(min(df[['Wavelength']]), max(df[['Wavelength']])) + 
+        ylim(0, 1)
 
     return(fig)
 }
