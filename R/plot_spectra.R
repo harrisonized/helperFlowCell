@@ -58,7 +58,12 @@ log_print(paste('Script started at:', start_time))
 # ----------------------------------------------------------------------
 # Script-specific variables and functions
 
-lasers = c('Red', 'Green', 'Blue', 'Violet', 'UV')
+lasers = c('UV', 'Violet', 'Blue', 'Green', 'Red')
+color_for_laser <- setNames(
+    nm=lasers,  # keys
+    object=list('Purple', 'Violet', 'Blue', 'Green', 'Red')  # values
+)
+
 
 #' Msain plotting function
 #' df is a dataframe
@@ -67,15 +72,27 @@ lasers = c('Red', 'Green', 'Blue', 'Violet', 'UV')
 #'
 plot_spectra_by_each_laser <- function(df, detectors, laser) {
 
+    excitation <- instr_cfg[(instr_cfg['laser']==laser), ][['excitation']][[1]]
+    color <- do.call(switch, c(laser, color_for_laser, "Black"))  # get color, default to "Black"
+
     fig <- df[(df['laser']==laser), ] %>%
+        # base plot
         ggplot( aes(x = .data[['Wavelength']], y = .data[['intensity']], 
                     fill = .data[['fluorophore']], group = .data[['trace_name']]),
                 show.legend = FALSE ) +
+        # plot lasers
+        # note: geom_vline doesn't work well here
+        geom_rect(
+            aes(xmin=excitation-3, xmax=excitation+3, ymin=0, ymax=1),
+            fill=color, alpha=0.8, inherit.aes = FALSE
+        )  +
+        # plot detectors
         geom_rect(
             aes(xmin=xmin, xmax=xmax, ymin=0, ymax=1),
             data = detectors[(detectors['laser']==laser), c('xmin', 'xmax')],
             fill="#C3C3C3", alpha=0.6, inherit.aes = FALSE
         ) +
+        # fill curves
         geom_area(
             aes(linetype = .data[['spectrum_type']]),
             position = "identity", 
@@ -111,10 +128,10 @@ instr_cfg_long <- separate_rows(instr_cfg, 'fluorophore', sep=', ')
 
 # detector info
 instr_cfg <- separate(
-    instr_cfg, bandpass_filter, into = c("center", "range"), '/', convert=TRUE
-)[, c('laser', 'center', 'range')]
-instr_cfg[['xmin']] <- instr_cfg[['center']] - instr_cfg[['range']] / 2
-instr_cfg[['xmax']] <- instr_cfg[['center']] + instr_cfg[['range']] / 2
+    instr_cfg, bandpass_filter, into = c("emission", "range"), '/', convert=TRUE
+)
+instr_cfg[['xmin']] <- instr_cfg[['emission']] - instr_cfg[['range']] / 2
+instr_cfg[['xmax']] <- instr_cfg[['emission']] + instr_cfg[['range']] / 2
 
 
 # ----------------------------------------------------------------------
