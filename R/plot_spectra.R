@@ -84,13 +84,15 @@ plot_spectra_by_each_laser <- function(df, detectors, laser) {
         # note: geom_vline doesn't work well here
         geom_rect(
             aes(xmin=excitation-3, xmax=excitation+3, ymin=0, ymax=1),
-            fill=color, alpha=0.8, inherit.aes = FALSE
+            fill=color, alpha=0.8,
+            inherit.aes = FALSE
         )  +
         # plot detectors
         geom_rect(
             aes(xmin=xmin, xmax=xmax, ymin=0, ymax=1),
             data = detectors[(detectors['laser']==laser), c('xmin', 'xmax')],
-            fill="#C3C3C3", alpha=0.6, inherit.aes = FALSE
+            fill="#A3A3A3", alpha=0.6,  # gray
+            inherit.aes = FALSE
         ) +
         # fill curves
         geom_area(
@@ -252,31 +254,5 @@ if (FALSE) {
     filepath = file.path(troubleshooting_dir, 'all_unavailable_fluorophores.txt')
     write.table(unavailable_fluorophores, filepath,
                 row.names = FALSE, col.names = FALSE, quote = FALSE)   
-
-}
-
-
-# ----------------------------------------------------------------------
-# Code-graveyard
-
-if (FALSE) {
-    
-    # Plot each laser separately
-    for ( laser in unique(panel[['laser']]) ) {
-
-        log_print(paste0('Plottting... ', laser, '.png'))
-        fig <- plot_spectra_by_each_laser(spectra_long, laser)
-        
-        # save
-        if (!troubleshooting) {
-            ggsave(
-                file.path(wd, opt[['figures-dir']],
-                          paste0(laser, '.png')),  # filename
-                plot=fig,
-                height=300, width=1000, dpi=200,
-                units="px", scaling=0.5
-            )
-        }
-    }
 
 }
