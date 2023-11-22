@@ -142,6 +142,8 @@ if (!troubleshooting) {
 # ----------------------------------------------------------------------
 # Plot
 
+# TODO: bugfix for when a fluorophore is available in spectra but not in instr_cfg
+
 # select available lasers
 lasers <- Reduce(intersect, list( lasers, unique(panel[['laser']])) ) 
 plots <- lapply(lasers, FUN = function(laser)
