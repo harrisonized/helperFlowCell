@@ -88,7 +88,7 @@ if (!troubleshooting) {
         paste0(tools::file_path_sans_ext(basename(opt[['antibody-inventory']])),
                '-shortlist', '.csv')
     )
-    write.table(ab_shortlist , file = filepath, row.names = FALSE, sep=',')
+    write.table(ab_shortlist, file = filepath, na = "", row.names = FALSE, sep=',')
 
     if (length(antibodies_not_found) > 0) {
         if (!dir.exists(file.path(troubleshooting_dir))) {
@@ -277,7 +277,7 @@ if (FALSE) {
     filepath = file.path(troubleshooting_dir, 
         paste0('_', tools::file_path_sans_ext(basename(opt[['instrument-config']])), '.csv')
     )
-    write.table(instr_cfg, file = filepath, row.names = FALSE, sep=',')
+    write.table(instr_cfg, file = filepath, na = "", row.names = FALSE, sep=',')
 
     # all fluorophores
     all_fluorophores = sort(unique( ab_inv[['fluorophore']] ))
