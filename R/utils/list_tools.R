@@ -2,6 +2,7 @@ import::from('stringi', 'stri_replace_all_regex', .character_only=TRUE)
 
 ## Functions
 ## items_in_a_not_b
+## filter_list_for_match
 ## find_first_match_index
 ## replace_specific_items
 ## multiple_replacement
@@ -12,6 +13,21 @@ import::from('stringi', 'stri_replace_all_regex', .character_only=TRUE)
 #' @export
 items_in_a_not_b <- function(a, b) {
     return((new <- a[which(!a %in% b)]))
+}
+
+
+#' return elements of a list matching a particular substring
+#'
+#' @examples
+#' filter_list_for_match(c("gene_id_pat", "gene_id_mat", "count"), "pat")
+#' 
+#' @export
+filter_list_for_match <- function(items, patterns) {
+    # filter
+    for (i in 1:length(patterns)){
+        items <- lapply(items, grep, pattern=patterns[[i]], value=TRUE)
+    }
+    return (unlist(items[!sapply(items, identical, character(0))]))  # remove character(0)
 }
 
 

@@ -10,7 +10,8 @@ plot_spectra_by_each_laser <- function(spectra, detectors, laser) {
 
     excitation <- detectors[(detectors['laser']==laser), ][['excitation']][[1]]
     laser_color <- do.call(switch, c(laser, color_for_laser, "Black"))  # get color
-    c(xmin, xmax) %<-% c(min(spectra[['Wavelength']]), max(spectra[['Wavelength']]))
+    # c(xmin, xmax) %<-% c(min(spectra[['Wavelength']]), max(spectra[['Wavelength']]))
+    c(xmin, xmax) %<-% c(300, 900)  # standardize this
 
     fig <- spectra[(spectra['laser']==laser), ] %>%
         # base plot

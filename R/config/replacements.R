@@ -115,6 +115,7 @@ fluorophore_replacements <- c(
     '(Ultra-LEAF |)([Pp]urified|[Pp]ure|[Uu]nlabeled)' = 'Purified',
     '(Q[D|d])(ot|) ([0-9]+)' = 'QD\\3',
     'red' = 'Red',
+    'Spark NIR( +|)([0-9]+)' = 'SNIR\\2',
     'Tx{0,1}Re{0,1}d{0,1}' = 'Texas Red',
     'Vio([0-9]+)' = 'Vio \\1',
     'YG([0-9]+)' = 'YG \\1',

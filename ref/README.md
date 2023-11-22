@@ -1,0 +1,1 @@
+Most of the data in spectra.csv were downloaded from [FPBase](https://www.fpbase.org/spectra/). Other data were extracted from [Biolegend's Spectra Analyzer](https://www.biolegend.com/spectraanalyzer) or [FluoroFinder](https://app.fluorofinder.com/dyes/), with Biolegend's data taking precedence.

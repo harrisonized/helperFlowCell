@@ -1,9 +1,14 @@
 library('readxl')
+source(file.path(
+    dirname(dirname(this.path::here())),  # wd
+    'R', 'utils', 'list_tools.R')
+)
 
 
 ## Functions
 ## read_csv_from_text
 ## read_excel_or_csv
+## join_many_csv
 
 
 #' Reads and parses csv embedded in .txt files
@@ -75,4 +80,56 @@ read_excel_or_csv <- function(filepath) {
         stop('Please enter a xlsx or csv file.')
     }
     return(df)
+}
+
+
+#' Read all the csv files from a directory and left join them into a single dataframe
+#' See: https://stackoverflow.com/questions/5319839/read-multiple-csv-files-into-separate-all_data-frames
+#' The paths argument can be a single directory or a list of individual files
+#' index_cols=c('gene_id', 'gene_name', 'chromosome')
+#' value_cols=c('count')
+#' 
+#' @export
+join_many_csv <- function(
+    paths, index_cols, value_cols=NULL,
+    all.x=FALSE, all.y=FALSE, recursive=TRUE
+) {
+
+    # distinguish if paths is a directory or a list of files
+    if (length(paths)==1) {
+        if (dir.exists(paths)) {
+             paths <- list_files(paths, recursive=recursive)
+        }
+    } else if (length(paths[file.exists(paths)]) == 0) {
+        stop(paste("no files found!"))
+    }
+
+    # split into csv and tsv files
+    csv_paths = filter_list_for_match(paths, 'csv')
+    csv_list <- lapply(csv_paths, read.csv, sep=',')
+    tsv_paths = filter_list_for_match(paths, 'tsv')
+    tsv_list <- lapply(tsv_paths, read.csv, sep='\t') 
+    df_list = c(csv_list, tsv_list)
+
+    filenames = c(tools::file_path_sans_ext(basename(paths)))
+    # Warning: column names ‘count.x’, ‘count.y’ are duplicated in the result
+    # See: https://stackoverflow.com/questions/38603668/suppress-any-emission-of-a-particular-warning-message
+    withCallingHandlers({
+        all_data <- Reduce(
+            function(...) merge(..., by=index_cols, all.x=all.x, all.y=all.y),
+            lapply(df_list, "[", c(index_cols, value_cols))
+        )
+    }, warning = function(w) {
+        # print(conditionMessage(w))
+        if (startsWith(conditionMessage(w), "column names")) {
+            invokeRestart( "muffleWarning" )
+        }
+    })
+    
+    # rename columns
+    colnames(all_data) = c(
+        index_cols,  # index_cols
+        as.list(outer(value_cols, filenames, paste, sep='-'))  # suffix value_cols with filename
+    )
+    return(all_data)
 }

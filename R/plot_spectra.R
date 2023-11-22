@@ -188,6 +188,6 @@ if (FALSE) {
     )
     filepath = file.path(troubleshooting_dir, 'all_unavailable_fluorophores.txt')
     write.table(unavailable_fluorophores, filepath,
-                row.names = FALSE, col.names = FALSE, quote = FALSE)   
+                row.names = FALSE, col.names = FALSE, quote = FALSE)
 
 }
