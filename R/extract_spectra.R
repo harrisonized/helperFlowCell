@@ -5,7 +5,8 @@ wd = dirname(this.path::here())  # wd = '~/github/R/helperFlowCell'
 library('rjson')
 library('optparse')
 library('logr')
-source(file.path(wd, 'R', 'utils', 'file_io.R'))  # join_many_csv
+import::from(file.path(wd, 'R', 'utils', 'file_io.R'),
+    'join_many_csv', .character_only=TRUE)
 
 
 # ----------------------------------------------------------------------

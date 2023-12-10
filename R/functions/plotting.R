@@ -1,5 +1,7 @@
-library('zeallot')
-library('ggplot2')
+library(zeallot)
+library(ggplot2)
+import::here(file.path(wd, 'R', 'config', 'lasers.R'),
+    'color_for_laser', .character_only=TRUE)
 
 #' Main plotting function for plot_spectra
 #' spectra is a dataframe

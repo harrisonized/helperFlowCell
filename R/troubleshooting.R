@@ -4,8 +4,17 @@ wd = dirname(this.path::here())  # wd = '~/github/R/helperFlowCell'
 library('tidyr')
 library('optparse')
 library('logr')
-source(file.path(wd, 'R', 'functions', 'preprocessing.R'))
-source(file.path(wd, 'R', 'utils', 'file_io.R'))  # read_excel_or_csv
+
+import::from(file.path(wd, 'R', 'utils', 'list_tools.R'),
+    'multiple_replacement', 'items_in_a_not_b', .character_only=TRUE)
+import::from(file.path(wd, 'R', 'utils', 'file_io.R'),
+    'read_excel_or_csv', .character_only=TRUE)
+
+import::from(file.path(wd, 'R', 'config', 'replacements.R'),
+    'fluorophore_replacements', .character_only=TRUE)
+import::from(file.path(wd, 'R', 'functions', 'preprocessing.R'),
+    'preprocess_instrument_config', 'preprocess_antibody_inventory',
+    .character_only=TRUE)
 
 
 # ----------------------------------------------------------------------

@@ -6,12 +6,25 @@ library('tidyr')
 library('cowplot')
 library('optparse')
 library('logr')
-source(file.path(wd, 'R', 'config', 'lasers.R'))
-source(file.path(wd, 'R', 'config', 'replacements.R'))
-source(file.path(wd, 'R', 'functions', 'preprocessing.R'))
-source(file.path(wd, 'R', 'functions', 'plotting.R'))
-source(file.path(wd, 'R', 'utils', 'file_io.R'))  # read_excel_or_csv, read_csv_from_text
-source(file.path(wd, 'R', 'utils', 'list_tools.R'))  # multiple_replacement
+
+import::from(file.path(wd, 'R', 'utils', 'list_tools.R'),
+    'multiple_replacement', 'items_in_a_not_b', .character_only=TRUE)
+import::from(file.path(wd, 'R', 'utils', 'file_io.R'),
+    'read_excel_or_csv', .character_only=TRUE)
+import::from(file.path(wd, 'R', 'utils', 'df_tools.R'),
+    'reset_index', .character_only=TRUE)
+import::from(file.path(wd, 'R', 'utils', 'text_tools.R'),
+    'substr_right', .character_only=TRUE)
+
+import::from(file.path(wd, 'R', 'config', 'lasers.R'),
+    'lasers', .character_only=TRUE)
+import::from(file.path(wd, 'R', 'config', 'replacements.R'),
+    'fluorophore_replacements', .character_only=TRUE)
+import::from(file.path(wd, 'R', 'functions', 'preprocessing.R'),
+    'preprocess_instrument_config', 'preprocess_antibody_inventory',
+    .character_only=TRUE)
+
+source(file.path(wd, 'R', 'functions', 'plotting.R'))  # plot_spectra_by_each_laser
 
 
 # ----------------------------------------------------------------------

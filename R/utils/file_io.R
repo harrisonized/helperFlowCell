@@ -1,14 +1,27 @@
-library('readxl')
-source(file.path(
-    dirname(dirname(this.path::here())),  # wd
-    'R', 'utils', 'list_tools.R')
-)
-
+import::here(readxl, 'read_excel')
+import::here(file.path(wd, 'R', 'utils', 'list_tools.R'),
+    'filter_list_for_match', .character_only=TRUE)
 
 ## Functions
+## list_files
 ## read_csv_from_text
 ## read_excel_or_csv
 ## join_many_csv
+
+
+#' list all files in all subdirectories with a given extension
+#' 
+#' @export
+list_files <- function(dir_path, ext=NULL, recursive = TRUE) {
+    all_files = list.files(dir_path, recursive = recursive, full.name=TRUE)
+
+    if (!is.null(ext)) {
+        # See: https://stackoverflow.com/questions/7187442/filter-a-vector-of-strings-based-on-string-matching
+        return (all_files[tools::file_ext(all_files)==ext])
+    } else {
+        return (all_files)
+    }
+}
 
 
 #' Reads and parses csv embedded in .txt files

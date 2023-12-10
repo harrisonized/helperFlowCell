@@ -1,7 +1,5 @@
-source(file.path(
-    dirname(dirname(this.path::here())),  # wd
-    'R', 'utils', 'list_tools.R')
-) 
+import::here(file.path(wd, 'R', 'utils', 'list_tools.R'),
+    'items_in_a_not_b', 'replace_specific_items', .character_only=TRUE)
 
 ## Functions
 ## rename_columns

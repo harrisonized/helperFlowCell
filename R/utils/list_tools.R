@@ -1,4 +1,4 @@
-import::from('stringi', 'stri_replace_all_regex', .character_only=TRUE)
+import::here(stringi, 'stri_replace_all_regex')
 
 ## Functions
 ## items_in_a_not_b
