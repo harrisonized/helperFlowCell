@@ -2,11 +2,11 @@
 ## Based on this tutorial: https://bradyajohnston.github.io/posts/2022-09-03-plotting-fluorescence/
 
 wd = dirname(this.path::here())  # wd = '~/github/R/helperFlowCell'
-library('tidyr')
-library('cowplot')
 library('optparse')
 library('logr')
 
+import::from(tidyr, 'separate', 'separate_rows', 'pivot_longer')
+import::from(cowplot, 'plot_grid')
 import::from(file.path(wd, 'R', 'utils', 'list_tools.R'),
     'multiple_replacement', 'items_in_a_not_b', .character_only=TRUE)
 import::from(file.path(wd, 'R', 'utils', 'file_io.R'),

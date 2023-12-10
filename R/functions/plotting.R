@@ -1,5 +1,6 @@
-library(zeallot)
-library(ggplot2)
+library('ggplot2')
+import::here(zeallot, '%<-%')
+import::here(magrittr, '%>%')
 import::here(file.path(wd, 'R', 'config', 'lasers.R'),
     'color_for_laser', .character_only=TRUE)
 
