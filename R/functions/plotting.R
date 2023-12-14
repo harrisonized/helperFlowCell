@@ -4,10 +4,16 @@ import::here(magrittr, '%>%')
 import::here(file.path(wd, 'R', 'config', 'lasers.R'),
     'color_for_laser', .character_only=TRUE)
 
-#' Main plotting function for plot_spectra
-#' spectra is a dataframe
-#' detectors is a dataframe
-#' laser is chosen from: c('Red', 'Green', 'Blue', 'Violet', 'UV')
+
+#' Individual Spill Plots
+#' 
+#' @description Produces a spill plot overlayed with the instrument configuration.
+#' These can be stacked using cowplot to produce a spill plot faceted by laser.
+#' 
+#' @param spectra long-format dataframe of emission/excitation data
+#' @param detectors instrument configuration, requiring a column for bandpass in the format of 'center/width', eg. '530/30'
+#' @param laser choose from c('Red', 'Green', 'Blue', 'Violet', 'UV')
+#' @return Returns a ggplot object
 #'
 plot_spectra_by_each_laser <- function(spectra, detectors, laser) {
 

@@ -5,9 +5,9 @@ library('tidyr')
 library('optparse')
 library('logr')
 
-import::from(file.path(wd, 'R', 'utils', 'list_tools.R'),
+import::from(file.path(wd, 'R', 'tools', 'list_tools.R'),
     'multiple_replacement', 'items_in_a_not_b', .character_only=TRUE)
-import::from(file.path(wd, 'R', 'utils', 'file_io.R'),
+import::from(file.path(wd, 'R', 'tools', 'file_io.R'),
     'read_excel_or_csv', .character_only=TRUE)
 
 import::from(file.path(wd, 'R', 'config', 'replacements.R'),

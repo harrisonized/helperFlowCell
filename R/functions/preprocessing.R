@@ -2,11 +2,11 @@ import::here(wrapr, 'orderv')
 import::here(file.path(wd, 'R', 'config', 'replacements.R'),
     'fluorophore_replacements', 'antibody_replacements', 'instr_cfg_colreps', 'ab_inv_colreps',
     .character_only=TRUE)
-import::here(file.path(wd, 'R', 'utils', 'df_tools.R'),
+import::here(file.path(wd, 'R', 'tools', 'df_tools.R'),
     'rename_columns', .character_only=TRUE)
-import::here(file.path(wd, 'R', 'utils', 'text_tools.R'),
+import::here(file.path(wd, 'R', 'tools', 'text_tools.R'),
     'title_to_snake_case', .character_only=TRUE)
-import::here(file.path(wd, 'R', 'utils', 'list_tools.R'),
+import::here(file.path(wd, 'R', 'tools', 'list_tools.R'),
     'multiple_replacement', 'find_first_match_index', .character_only=TRUE)
 
 ## Functions

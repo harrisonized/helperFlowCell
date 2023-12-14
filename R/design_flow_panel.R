@@ -8,11 +8,11 @@ library('logr')
 import::from(magrittr, '%>%')
 import::from(tidyr, 'separate_rows', 'pivot_wider')
 import::from(reshape2, 'melt')
-import::from(file.path(wd, 'R', 'utils', 'file_io.R'),
+import::from(file.path(wd, 'R', 'tools', 'file_io.R'),
     'read_excel_or_csv', .character_only=TRUE)
-import::from(file.path(wd, 'R', 'utils', 'list_tools.R'),
+import::from(file.path(wd, 'R', 'tools', 'list_tools.R'),
     'items_in_a_not_b', .character_only=TRUE)
-import::from(file.path(wd, 'R', 'utils', 'df_tools.R'),
+import::from(file.path(wd, 'R', 'tools', 'df_tools.R'),
     'rename_columns', 'fillna', 'reset_index',
     'append_dataframe', 'dataframe_row_from_named_list', 'stranspose',
     .character_only=TRUE)

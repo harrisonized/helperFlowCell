@@ -7,13 +7,13 @@ library('logr')
 
 import::from(tidyr, 'separate', 'separate_rows', 'pivot_longer')
 import::from(cowplot, 'plot_grid')
-import::from(file.path(wd, 'R', 'utils', 'list_tools.R'),
+import::from(file.path(wd, 'R', 'tools', 'list_tools.R'),
     'multiple_replacement', 'items_in_a_not_b', .character_only=TRUE)
-import::from(file.path(wd, 'R', 'utils', 'file_io.R'),
+import::from(file.path(wd, 'R', 'tools', 'file_io.R'),
     'read_excel_or_csv', .character_only=TRUE)
-import::from(file.path(wd, 'R', 'utils', 'df_tools.R'),
+import::from(file.path(wd, 'R', 'tools', 'df_tools.R'),
     'reset_index', .character_only=TRUE)
-import::from(file.path(wd, 'R', 'utils', 'text_tools.R'),
+import::from(file.path(wd, 'R', 'tools', 'text_tools.R'),
     'substr_right', .character_only=TRUE)
 
 import::from(file.path(wd, 'R', 'config', 'lasers.R'),
