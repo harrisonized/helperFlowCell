@@ -22,9 +22,13 @@ option_list = list(
                 metavar='ref/Acquisition-defined.csv', type="character",
                 help="specify the directory of json files"),
 
-    make_option(c("-o", "--output-dir"), default="data/output",
-                metavar="data/output", type="character",
+    make_option(c("-o", "--output-dir"), default="data/compensation",
+                metavar="data/compensation", type="character",
                 help="set the output directory for the data"),
+
+    make_option(c("-s", "--sort"), default='data/fluorochrome_order.txt',
+                metavar='fluorochrome_order.csv', type="character",
+                help="csv file containing a list"),
 
     make_option(c("-t", "--troubleshooting"), default=FALSE, action="store_true",
                 metavar="FALSE", type="logical",
@@ -53,6 +57,12 @@ if (!dir.exists(file.path(opt[['output-dir']]))) {
 compensation_matrix <- read.csv(
     file.path(wd, opt[['input']]),
     row.names=1, header=TRUE, check.names=FALSE)
+
+# sort
+if (file.exists(file.path(wd, opt[['sort']]))) {
+    matrix_order <- read.csv(file.path(wd, opt[['sort']]), header=FALSE)[['V1']]
+    compensation_matrix <- compensation_matrix[matrix_order, matrix_order]
+}
 compensation_matrix <- reset_index(compensation_matrix, index_name="- % Fluorochrome")
 value_cols <- items_in_a_not_b(colnames(compensation_matrix), "- % Fluorochrome")
 
@@ -82,7 +92,7 @@ cytometer_settings[["Spectral Overlap"]] <- round(cytometer_settings[["Spectral 
 if (!troubleshooting) {
     write.table(
         cytometer_settings,
-        file = file.path(wd, opt[['output-dir']], paste0('_', basename(opt[['input']]))),
+        file = file.path(wd, opt[['output-dir']], 'cytometer_settings.csv'),
         row.names = FALSE, sep=',',
         na=""
     )
