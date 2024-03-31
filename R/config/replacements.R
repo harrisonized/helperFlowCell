@@ -85,7 +85,7 @@ fluorophore_replacements <- c(
     'APC( |-|)([CcYyVioFfire0-9]+)' = 'APC-\\2',
     '^APC-[Ff]ire( |-|)([0-9]+)' = 'APC-Fire \\2',
     '^APC-[Ff]ire$' = 'APC-Fire 750',
-    '^Atto-' = 'ATTO ',
+    '^(A|a)(T|t)(T|t)(O|o)( |-|)([0-9]+)' = 'ATTO \\6',
     '[Bb][Ii][Oo](tin|)(,|)( |)([A-Za-z]+|)' = 'Biotin',
     'BD Horizon( |)[Bb][Uu][Vv]' = 'BUV',
     '(BU[Vv]) {0,1}([0-9]+)' = 'BUV\\2',

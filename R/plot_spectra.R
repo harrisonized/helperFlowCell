@@ -174,7 +174,7 @@ if (!troubleshooting) {
     ggsave(
         file.path(wd, opt[['figures-dir']], 'spectra.png'),  # filename
         plot=fig,
-        height=1200, width=1200, dpi=200,
+        height=200+200*length(lasers), width=1200, dpi=200,
         units="px", scaling=0.5
     )
 }
