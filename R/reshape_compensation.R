@@ -86,7 +86,7 @@ cytometer_settings <- cytometer_settings[
     c("Fluorochrome", "- % Fluorochrome", "Spectral Overlap")
 ]
 cytometer_settings[["Spectral Overlap"]] <- cytometer_settings[["Spectral Overlap"]]*100
-cytometer_settings[["Spectral Overlap"]] <- round(cytometer_settings[["Spectral Overlap"]], 3)
+cytometer_settings[["Spectral Overlap"]] <- round(cytometer_settings[["Spectral Overlap"]], 2)
 
 # save
 if (!troubleshooting) {
