@@ -55,7 +55,7 @@ troubleshooting_dir = file.path(output_dir, 'troubleshooting')
 
 # Start Log
 start_time = Sys.time()
-log <- log_open(paste0("design_flow_panel-",
+log <- log_open(paste0("build_design_matrix-",
     strftime(start_time, format="%Y%m%d_%H%M%S"), '.log'))
 log_print(paste('Script started at:', start_time))
 
