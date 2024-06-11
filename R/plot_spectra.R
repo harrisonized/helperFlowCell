@@ -133,6 +133,7 @@ spectra_long <- merge(
     all.x=TRUE, all.y=FALSE, na_matches = 'never'
 )
 spectra_long <- spectra_long[with(spectra_long, order(trace_name, Wavelength)), ]
+spectra_long <- spectra_long[(spectra_long[['fluorophore']] %in% fluorophores), ]  # keep relevant fluorophores only
 spectra_long <- reset_index(spectra_long, drop=TRUE)
 
 # fluorophores in panel not found in the spectra file
