@@ -4,6 +4,7 @@ import::here(stringi, 'stri_replace_all_regex')
 ## filter_list_for_match
 ## find_first_match_index
 ## items_in_a_not_b
+## move_list_items_to_front
 ## multiple_replacement
 ## replace_specific_items
 
@@ -61,6 +62,23 @@ find_first_match_index <- function(pattern, items) {
 #' 
 items_in_a_not_b <- function(a, b) {
     return((new <- a[which(!a %in% b)]))
+}
+
+
+#' Rearrange items according to an ordered list
+#' 
+#' @description Front-loads the ordered list, then adds the remaining items
+#' 
+#' @param items list or vector
+#' @param ordered
+#' @return 
+#' 
+#' @examples
+#' move_list_items_to_front(c('a', 'b', 'c', 'd'), c('b', 'c'))
+#' 
+move_list_items_to_front <- function(items, ordered) {
+    return(c(intersect(items, ordered),
+             items_in_a_not_b(items, ordered)))
 }
 
 

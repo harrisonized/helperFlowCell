@@ -10,7 +10,7 @@ import::from(file.path(wd, 'R', 'tools', 'file_io.R'),
 import::from(file.path(wd, 'R', 'tools', 'df_tools.R'),
     'reset_index', .character_only=TRUE)
 import::from(file.path(wd, 'R', 'tools', 'list_tools.R'),
-    'items_in_a_not_b', .character_only=TRUE)
+    'items_in_a_not_b', 'move_list_items_to_front', .character_only=TRUE)
 
 
 # ----------------------------------------------------------------------
@@ -18,7 +18,7 @@ import::from(file.path(wd, 'R', 'tools', 'list_tools.R'),
 
 # args
 option_list = list(
-    make_option(c("-i", "--input"), default='data/Acquisition-defined.csv',
+    make_option(c("-i", "--input"), default='data/sample-files/Acquisition-defined.csv',
                 metavar='ref/Acquisition-defined.csv', type="character",
                 help="specify the directory of json files"),
 
@@ -61,6 +61,7 @@ compensation_matrix <- read.csv(
 # sort
 if (file.exists(file.path(wd, opt[['sort']]))) {
     matrix_order <- read.csv(file.path(wd, opt[['sort']]), header=FALSE)[['V1']]
+    matrix_order <- move_list_items_to_front(colnames(compensation_matrix), matrix_order)
     compensation_matrix <- compensation_matrix[matrix_order, matrix_order]
 }
 compensation_matrix <- reset_index(compensation_matrix, index_name="- % Fluorochrome")
