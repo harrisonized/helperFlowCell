@@ -27,8 +27,9 @@ append_many_csv <- function(dir_path, sep=',', row_names=NULL) {
             header=TRUE, check.names=FALSE
         )
 
-        # remove null columns
-        df <- Filter(function(x) !all(is.na(x)), df)
+        # remove nulls
+        df <- Filter(function(x) !all(is.na(x)), df)  # columns
+        df <- df[rowSums(is.na(df)) != ncol(df), ]  # rows
 
         # repair colnames
         missing_colnames <- which(nchar(colnames(df))==0)
@@ -36,6 +37,11 @@ append_many_csv <- function(dir_path, sep=',', row_names=NULL) {
         if (num_missing > 0) {
             colnames(df)[which(nchar(colnames(df))==0)] <- paste0("X", 1:num_missing)
         }
+
+        # add filename
+        cols <- colnames(df)
+        df[['filename']] <- basename(file)
+        df <- df[, c('filename', cols)]
 
         dfs[[file]] <- df
     }
