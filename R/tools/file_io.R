@@ -1,11 +1,49 @@
+import::here(plyr, 'rbind.fill')
 import::here(readxl, 'read_excel')
 import::here(file.path(wd, 'R', 'tools', 'list_tools.R'),
     'filter_list_for_match', .character_only=TRUE)
 
+
 ## Functions
+## append_many_csv
 ## list_files
 ## join_many_csv
 ## read_excel_or_csv
+
+
+#' Aggregate csv files by appending them rowwise
+#' 
+#' @description
+#' Read all the csv files from a directory and append them into a single dataframe
+#' 
+#' @export
+append_many_csv <- function(dir_path, sep=',', row_names=NULL) {
+    filenames <- list.files(dir_path, full.names=TRUE)
+
+    dfs <- new.env()
+    for (file in filenames) {
+        df <- read.csv(
+            file, sep=sep, row.names=row_names,
+            header=TRUE, check.names=FALSE
+        )
+
+        # remove null columns
+        df <- Filter(function(x) !all(is.na(x)), df)
+
+        # repair colnames
+        missing_colnames <- which(nchar(colnames(df))==0)
+        num_missing <- length(missing_colnames)
+        if (num_missing > 0) {
+            colnames(df)[which(nchar(colnames(df))==0)] <- paste0("X", 1:num_missing)
+        }
+
+        dfs[[file]] <- df
+    }
+    
+    dfs <- as.list(dfs)
+    combined <- do.call(rbind.fill, dfs)
+    return(combined)
+}
 
 
 #' List all files with a specific extension
