@@ -14,14 +14,9 @@ import::here(magrittr, '%>%')
 #'
 #' @description  Thin wrapper around ggplot geom_jitter
 #'
-plot_dots <- function(
-    df,
-    x='cell_type',
-    y='pct_cells',
-    color='treatment_group',  # must be string
-    xlabel='Cell Type',
-    ylabel='Percent of Live Cells',
-    title=NULL
+plot_dots <- function(df,
+    x=NULL, y=NULL, color=NULL,
+    xlabel=NULL, ylabel=NULL, title=NULL
 ) {
 
     fig <- ggplot(
@@ -66,9 +61,9 @@ plot_violin <- function(
 
     if (sort) {
         if (descending) {
-            df <- df[order(-df[['pct_cells']]), ]
+            df <- df[order(df[[group_by]], -df[[y]]), ]
         } else {
-            df <- df[order(df[['pct_cells']]), ]
+            df <- df[order(df[[group_by]], df[[y]]), ]
         }
     }
 

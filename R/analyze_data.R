@@ -6,7 +6,7 @@ library('optparse')
 library('logr')
 import::from(stringr, 'str_extract')
 import::from(tidyr, 'pivot_longer')
-import::here(plyr, 'rbind.fill')
+import::from(plyr, 'rbind.fill')
 import::from(ggplot2, 'ggsave')
 import::from(plotly, 'save_image')
 import::from(htmlwidgets, 'saveWidget')  # brew install pandoc
@@ -88,6 +88,7 @@ for (organ in c('bm', 'pb', 'pc', 'spleen')) {
     populations <- populations_for_organ[[organ]]
     cell_types <- unlist(lapply(strsplit(populations, '/'), function(x) x[length(x)]))
 
+
     # ----------------------------------------------------------------------
     # Select data
 
@@ -120,27 +121,6 @@ for (organ in c('bm', 'pb', 'pc', 'spleen')) {
     df <- rename_columns(df, c('Live Cells'='live_cells'))
     df[['pct_cells']] <- df[['num_cells']] / df[['live_cells']] * 100
 
-    # plot dots
-    fig <- plot_dots(
-        df,
-        x='cell_type', y='pct_cells', color='treatment_group',
-        title=organ
-    )
-
-    # save
-    if (!troubleshooting) {
-        if (!dir.exists( file.path(wd, opt[['figures-dir']], 'cell_proportions') )) {
-            dir.create( file.path(wd, opt[['figures-dir']], 'cell_proportions'), recursive=TRUE)
-        }
-        ggsave(
-            file.path(wd, opt[['figures-dir']], 'cell_proportions',
-                paste0('dot-pct_cells-cell_type-treatment_group-', organ, '.png')),  # filename
-            plot=fig,
-            height=800, width=1200, dpi=200,
-            units="px", scaling=0.5
-        )
-    }
-
     # plot violin
     fig <- plot_violin(
         df,
@@ -151,10 +131,15 @@ for (organ in c('bm', 'pb', 'pc', 'spleen')) {
 
     # export
     if (!troubleshooting) {
+
+        if (!dir.exists( file.path(wd, opt[['figures-dir']], 'cell_proportions') )) {
+            dir.create( file.path(wd, opt[['figures-dir']], 'cell_proportions'), recursive=TRUE)
+        }
+
         # save PNG
         save_image(fig,
             file=file.path(wd, opt[['figures-dir']], 'cell_proportions',
-                paste0('violin-split-pct_cells-cell_type-treatment_group-', organ, '.png')),  # filename
+                paste0('violin-pct_cells-treatment_group-', organ, '.png')),  # filename
             height=500, width=800, scale=3
         )
 
@@ -166,12 +151,12 @@ for (organ in c('bm', 'pb', 'pc', 'spleen')) {
             saveWidget(
                 widget = fig,
                 file=file.path(wd, opt[['figures-dir']], 'cell_proportions', 'html',
-                    paste0('violin-split-pct_cells-cell_type-treatment_group-', organ, '.html')),  # filename
+                    paste0('violin-pct_cells-treatment_group-', organ, '.html')),  # filename
                 selfcontained = TRUE
             )
             unlink(file.path(
                 wd, opt[['figures-dir']], 'cell_proportions', 'html',
-                paste0('violin-split-pct_cells-cell_type-treatment_group-', organ, '_files')
+                paste0('violin-pct_cells-treatment_group-', organ, '_files')
             ), recursive=TRUE)            
         }
     }
@@ -201,28 +186,6 @@ for (organ in c('bm', 'pb', 'pc', 'spleen')) {
         cols=cell_types[2:length(cell_types)])
     df <- rename_columns(df, c('Live Cells'='live_cells'))
 
-    # plot dots
-    fig <- plot_dots(
-        df,
-        x='cell_type', y='pct_cells', color='treatment_group',
-        ylabel='Percent mNeonGreen+',
-        title=organ
-    )
-
-    # save
-    if (!troubleshooting) {
-        if (!dir.exists( file.path(wd, opt[['figures-dir']], 'mneongreen_positivity') )) {
-            dir.create( file.path(wd, opt[['figures-dir']], 'mneongreen_positivity'), recursive=TRUE)
-        }
-        ggsave(
-            file.path(wd, opt[['figures-dir']], 'mneongreen_positivity',
-                paste0('dot-pct_mneongreen_pos-cell_type-treatment_group-', organ, '.png')),  # filename
-            plot=fig,
-            height=800, width=1200, dpi=200,
-            units="px", scaling=0.5
-        )
-    }
-
     # plot violin
     fig <- plot_violin(
         df,
@@ -241,7 +204,7 @@ for (organ in c('bm', 'pb', 'pc', 'spleen')) {
         # save PNG
         save_image(fig,
             file=file.path(wd, opt[['figures-dir']], 'mneongreen_positivity',
-                paste0('violin-split-pct_mneongreen_pos-cell_type-treatment_group-', organ, '.png')),  # filename
+                paste0('violin-pct_mneongreen_pos-treatment_group-', organ, '.png')),  # filename
             height=500, width=800, scale=3
         )
 
@@ -253,12 +216,12 @@ for (organ in c('bm', 'pb', 'pc', 'spleen')) {
             saveWidget(
                 widget = fig,
                 file=file.path(wd, opt[['figures-dir']], 'mneongreen_positivity', 'html',
-                    paste0('violin-split-pct_mneongreen_pos-cell_type-treatment_group-', organ, '.html')),  # filename
+                    paste0('violin-pct_mneongreen_pos-treatment_group-', organ, '.html')),  # filename
                 selfcontained = TRUE
             )
             unlink(file.path(
                 wd, opt[['figures-dir']], 'mneongreen_positivity', 'html',
-                paste0('violin-split-pct_mneongreen_pos-cell_type-treatment_group-', organ, '_files')
+                paste0('violin-pct_mneongreen_pos-treatment_group-', organ, '_files')
             ), recursive=TRUE)            
         }
     }
