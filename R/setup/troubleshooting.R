@@ -1,6 +1,6 @@
 ## troubleshootings files that aid in troubleshooting the data
 
-wd = dirname(this.path::here())  # wd = '~/github/R/helperFlowCell'
+wd = dirname(dirname(this.path::here()))  # wd = '~/github/R/helperFlowCell'
 library('tidyr')
 library('optparse')
 library('logr')

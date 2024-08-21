@@ -1,0 +1,1 @@
+General multi-purpose use functions.

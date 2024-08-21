@@ -1,7 +1,7 @@
 ## Extract spectra from json data downloaded from Biolegend's Spectra Analyzer
 ## See: https://www.biolegend.com/spectraanalyzer
 
-wd = dirname(this.path::here())  # wd = '~/github/R/helperFlowCell'
+wd = dirname(dirname(this.path::here()))  # wd = '~/github/R/helperFlowCell'
 library('rjson')
 library('optparse')
 library('logr')
