@@ -4,9 +4,10 @@ wd = dirname(this.path::here())  # wd = '~/github/R/helperFlowCell'
 suppressPackageStartupMessages(library('dplyr'))
 library('optparse')
 library('logr')
-import::from(magrittr, '%>%')
+# import::from(magrittr, '%>%')
 import::from(stringr, 'str_detect')
 import::from(tidyr, 'pivot_longer')
+import::here(plyr, 'rbind.fill')
 import::from(ggplot2, 'ggsave')
 
 import::from(file.path(wd, 'R', 'functions', 'preprocessing.R'),
@@ -60,18 +61,23 @@ output_dir <- file.path(wd, opt[['output-dir']])
 troubleshooting_dir = file.path(output_dir, 'troubleshooting')
 
 
-# Start Log
-start_time = Sys.time()
-log <- log_open(paste0("analyze_data-",
-    strftime(start_time, format="%Y%m%d_%H%M%S"), '.log'))
-log_print(paste('Script started at:', start_time))
+# # Start Log
+# start_time = Sys.time()
+# log <- log_open(paste0("analyze_data-",
+#     strftime(start_time, format="%Y%m%d_%H%M%S"), '.log'))
+# log_print(paste('Script started at:', start_time))
 
 
 # ----------------------------------------------------------------------
 # Preprocessing
 
 # Read counts data. Note that counts are in a wide format
-counts <- append_many_csv(file.path(wd, opt[['input-dir']]))
+counts_list <- append_many_csv(file.path(wd, opt[['input-dir']]), return_list=TRUE)
+for (i in 1:length(counts_list)) {
+    colnames(counts_list[[i]]) <- sub("^Macrophages \\|", "Cells |", colnames(counts_list[[i]]))
+    colnames(counts_list[[i]]) <- sub("^Macrophages/", "Cells/", colnames(counts_list[[i]]))
+}
+counts <- do.call(rbind.fill, counts_list)
 counts <- preprocess_flowjo_export(counts)
 
 
@@ -91,7 +97,15 @@ for (organ in c('bm', 'pb', 'pc', 'spleen')) {
     colnames(counts_subset) <- lapply(
         strsplit(colnames(counts_subset), '/'), function(x) x[length(x)]
     )  # get name of cell type from last gate
-    
+    counts_subset <- aggregate(counts_subset[, cell_types],
+        by=list(
+            'mouse_id'=counts_subset[['mouse_id']],
+            'organ'=counts_subset[['organ']],
+            'strain'=counts_subset[['strain']],
+            'treatment_group'=counts_subset[['treatment_group']]
+        ),
+        FUN=function(x) sum(x, na.rm=TRUE)
+    )
 
     # reshape
     df <- pivot_longer(counts_subset,
@@ -124,10 +138,10 @@ for (organ in c('bm', 'pb', 'pc', 'spleen')) {
 }
 
 
-end_time = Sys.time()
-log_print(paste('Script ended at:', Sys.time()))
-log_print(paste("Script completed in:", difftime(end_time, start_time)))
-log_close()
+# end_time = Sys.time()
+# log_print(paste('Script ended at:', Sys.time()))
+# log_print(paste("Script completed in:", difftime(end_time, start_time)))
+# log_close()
 
 
 # ----------------------------------------------------------------------

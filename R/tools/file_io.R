@@ -17,7 +17,7 @@ import::here(file.path(wd, 'R', 'tools', 'list_tools.R'),
 #' Read all the csv files from a directory and append them into a single dataframe
 #' 
 #' @export
-append_many_csv <- function(dir_path, sep=',', row_names=NULL) {
+append_many_csv <- function(dir_path, sep=',', row_names=NULL, return_list=FALSE) {
     filenames <- list.files(dir_path, full.names=TRUE)
 
     dfs <- new.env()
@@ -47,8 +47,13 @@ append_many_csv <- function(dir_path, sep=',', row_names=NULL) {
     }
     
     dfs <- as.list(dfs)
-    combined <- do.call(rbind.fill, dfs)
-    return(combined)
+
+    if (return_list) {
+        return(dfs)
+    } else {
+        combined <- do.call(rbind.fill, dfs)
+        return(combined)  
+    }
 }
 
 

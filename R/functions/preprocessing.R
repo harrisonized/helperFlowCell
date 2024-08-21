@@ -53,7 +53,6 @@ preprocess_flowjo_export <- function(df) {
     df <- df[!str_detect(df[['fcs_name']], 'unstained'), ]  # drop unstained cells
     df <- parse_flowjo_metadata(df)
     df <- reset_index(df, drop=TRUE)
-
 }
 
 

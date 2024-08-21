@@ -44,7 +44,8 @@ pc_populations <- c(
     'Cells/Single Cells/Single Cells/Live Cells/CD45+/T cells/CD8+ T cells',
     'Cells/Single Cells/Single Cells/Live Cells/CD45+/Myeloid Cells/Ly6G-/NK cells',
     'Cells/Single Cells/Single Cells/Live Cells/CD45+/Myeloid Cells/Neutrophils',
-    'Cells/Single Cells/Single Cells/Live Cells/CD45+/Myeloid Cells/Ly6G-/NK1.1-/Non-Dendritic Cells/Ly6C-/F4_80-int Macrophages'
+    'Cells/Single Cells/Single Cells/Live Cells/CD45+/CD3-CD19-/Ly6G-Ly6C-/NK1.1-/F4_80-hi Macrophages',
+    'Cells/Single Cells/Single Cells/Live Cells/CD45+/CD3-CD19-/Ly6G-Ly6C-/NK1.1-/F4_80-int Macrophages'
 )
 
 spleen_populations <- c(
