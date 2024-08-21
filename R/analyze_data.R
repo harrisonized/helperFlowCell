@@ -134,7 +134,7 @@ for (organ in c('bm', 'pb', 'pc', 'spleen')) {
         }
         ggsave(
             file.path(wd, opt[['figures-dir']],
-                paste0('pct_cells-cell_type-treatment_group-', organ, '.png')),  # filename
+                paste0('dot-pct_cells-cell_type-treatment_group-', organ, '.png')),  # filename
             plot=fig,
             height=800, width=1200, dpi=200,
             units="px", scaling=0.5
@@ -162,7 +162,7 @@ for (organ in c('bm', 'pb', 'pc', 'spleen')) {
         # save PNG
         save_image(fig,
             file=file.path(wd, opt[['figures-dir']],
-                paste0('pct_cells-cell_type-treatment_group-split-', organ, '.png')),  # filename
+                paste0('violin-split-pct_cells-cell_type-treatment_group-', organ, '.png')),  # filename
             height=500, width=800, scale=3
         )
 
@@ -174,12 +174,12 @@ for (organ in c('bm', 'pb', 'pc', 'spleen')) {
             saveWidget(
                 widget = fig,
                 file=file.path(wd, opt[['figures-dir']], 'html',
-                    paste0('pct_cells-cell_type-treatment_group-split-', organ, '.html')),  # filename
+                    paste0('violin-split-pct_cells-cell_type-treatment_group-', organ, '.html')),  # filename
                 selfcontained = TRUE
             )
             unlink(file.path(
                 wd, opt[['figures-dir']], 'html',
-                paste0('pct_cells-cell_type-treatment_group-split-', organ, '_files')
+                paste0('violin-split-pct_cells-cell_type-treatment_group-', organ, '_files')
             ), recursive=TRUE)            
         }
     }
