@@ -1,12 +1,29 @@
 import::here(stringi, 'stri_replace_all_regex')
 
 ## Functions
+## dict_zip
 ## filter_list_for_match
 ## find_first_match_index
+## interleave
 ## items_in_a_not_b
 ## move_list_items_to_front
 ## multiple_replacement
 ## replace_specific_items
+
+
+#' Dictionary
+#' 
+#' @description Simple dictionary implementation using R environment
+#'
+#' @export
+dict_zip <- function(keys, values) {
+    if (!is.list(values)) {
+        values <- as.list(values)
+    }
+    named_list <- setNames(values, keys)
+    env <- list2env(named_list)
+    return(env)
+}
 
 
 #' Find matches based on substring
@@ -42,6 +59,26 @@ filter_list_for_match <- function(items, patterns) {
 #' 
 find_first_match_index <- function(pattern, items) {
     return (grep(pattern, items)[[1]])
+}
+
+
+#' Interleave
+#' 
+#' @description
+#' 
+#' @param a list or vector
+#' @param b list or vector
+#' @return Returns the interleaved list
+#' 
+#' @references
+#' \href{https://stackoverflow.com/questions/16443260/interleave-lists-in-r}{Stack Overflow}
+#' 
+#' @examples
+#' interleave(c('A', 'B', 'C'), c('a', 'b', 'c'))
+#' 
+interleave <- function(a, b) {
+    idx <- order(c(seq_along(a), seq_along(b)))
+    return(unlist(c(a,b))[idx])
 }
 
 

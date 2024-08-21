@@ -1,3 +1,4 @@
+import::from(stringr, 'str_detect')
 import::here(wrapr, 'orderv')
 import::here(file.path(wd, 'R', 'config', 'replacements.R'),
     'fluorophore_replacements', 'antibody_replacements', 'instr_cfg_colreps', 'ab_inv_colreps',

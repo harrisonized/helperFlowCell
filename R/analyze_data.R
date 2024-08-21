@@ -4,8 +4,7 @@ wd = dirname(this.path::here())  # wd = '~/github/R/helperFlowCell'
 suppressPackageStartupMessages(library('dplyr'))
 library('optparse')
 library('logr')
-# import::from(magrittr, '%>%')
-import::from(stringr, 'str_detect')
+import::from(stringr, 'str_extract')
 import::from(tidyr, 'pivot_longer')
 import::here(plyr, 'rbind.fill')
 import::from(ggplot2, 'ggsave')
@@ -20,7 +19,7 @@ import::from(file.path(wd, 'R', 'tools', 'df_tools.R'),
 import::from(file.path(wd, 'R', 'tools', 'file_io.R'),
     'append_many_csv', .character_only=TRUE)
 import::from(file.path(wd, 'R', 'tools', 'list_tools.R'),
-    'items_in_a_not_b', .character_only=TRUE)
+    'dict_zip', 'interleave', 'items_in_a_not_b', .character_only=TRUE)
 import::from(file.path(wd, 'R', 'tools', 'plotting.R'),
     'plot_dots', 'plot_violin', .character_only=TRUE)
 
@@ -85,22 +84,22 @@ counts <- preprocess_flowjo_export(counts)
 for (organ in c('bm', 'pb', 'pc', 'spleen')) {
     log_print(paste(Sys.time(), 'Processing...', organ))
 
-
-    # ----------------------------------------------------------------------
-    # Data wrangling
-
+    id_cols <- c('mouse_id', 'organ', 'strain', 'treatment_group')
     populations <- populations_for_organ[[organ]]
     cell_types <- unlist(lapply(strsplit(populations, '/'), function(x) x[length(x)]))
 
-    # select data
-    counts_subset <- counts[
-        (counts['organ']==organ),
-        c('mouse_id', 'organ', 'strain', 'treatment_group', populations)
-    ]
+    # ----------------------------------------------------------------------
+    # Select data
+
+    fp_pos_populations <- paste0(populations, "/mNeonGreen+")
+    value_cols <- intersect(interleave(populations, fp_pos_populations), colnames(counts))
+    counts_subset <- counts[(counts['organ']==organ), c(id_cols, value_cols)]
     colnames(counts_subset) <- lapply(
-        strsplit(colnames(counts_subset), '/'), function(x) x[length(x)]
-    )  # get name of cell type from last gate
-    counts_subset <- aggregate(counts_subset[, cell_types],
+        colnames(counts_subset),
+        function(x) str_extract(x, '[ A-Za-z0-9_\\+\\-]*(|/mNeonGreen\\+)$')
+    )  # shorten the gating
+
+    num_cells <- aggregate(counts_subset[, cell_types],
         by=list(
             'mouse_id'=counts_subset[['mouse_id']],
             'organ'=counts_subset[['organ']],
@@ -110,30 +109,31 @@ for (organ in c('bm', 'pb', 'pc', 'spleen')) {
         FUN=function(x) sum(x, na.rm=TRUE)
     )
 
-    # reshape
-    df <- pivot_longer(counts_subset,
+
+    # ----------------------------------------------------------------------
+    # Plot Cell Proportions
+
+    # data wrangling
+    df <- pivot_longer(num_cells,
         names_to = "cell_type", values_to = "num_cells",
         cols=cell_types[2:length(cell_types)])
     df <- rename_columns(df, c('Live Cells'='live_cells'))
     df[['pct_cells']] <- df[['num_cells']] / df[['live_cells']] * 100
 
-
-    # ----------------------------------------------------------------------
-    # Plot single
-
+    # plot dots
     fig <- plot_dots(
         df,
         x='cell_type', y='pct_cells', color='treatment_group',
         title=organ
     )
 
-    # export
+    # save
     if (!troubleshooting) {
-        if (!dir.exists(file.path(wd, opt[['figures-dir']]))) {
-            dir.create(file.path(wd, opt[['figures-dir']]), recursive=TRUE)
+        if (!dir.exists( file.path(wd, opt[['figures-dir']], 'cell_proportions') )) {
+            dir.create( file.path(wd, opt[['figures-dir']], 'cell_proportions'), recursive=TRUE)
         }
         ggsave(
-            file.path(wd, opt[['figures-dir']],
+            file.path(wd, opt[['figures-dir']], 'cell_proportions',
                 paste0('dot-pct_cells-cell_type-treatment_group-', organ, '.png')),  # filename
             plot=fig,
             height=800, width=1200, dpi=200,
@@ -141,10 +141,7 @@ for (organ in c('bm', 'pb', 'pc', 'spleen')) {
         )
     }
 
-
-    # ----------------------------------------------------------------------
-    # Plot split
-
+    # plot violin
     fig <- plot_violin(
         df,
         x='cell_type', y='pct_cells', group_by='treatment_group',
@@ -154,32 +151,114 @@ for (organ in c('bm', 'pb', 'pc', 'spleen')) {
 
     # export
     if (!troubleshooting) {
-        log_print('Saving...')
-        if (!dir.exists(file.path(wd, opt[['figures-dir']]))) {
-            dir.create(file.path(wd, opt[['figures-dir']]), recursive=TRUE)
-        }
-
         # save PNG
         save_image(fig,
-            file=file.path(wd, opt[['figures-dir']],
+            file=file.path(wd, opt[['figures-dir']], 'cell_proportions',
                 paste0('violin-split-pct_cells-cell_type-treatment_group-', organ, '.png')),  # filename
             height=500, width=800, scale=3
         )
 
         # save HTML
         if (opt[['save-html']]) {
-            if (!dir.exists(file.path(wd, opt[['figures-dir']], 'html'))) {
-                dir.create(file.path(wd, opt[['figures-dir']], 'html'), recursive=TRUE)
+            if (!dir.exists( file.path(wd, opt[['figures-dir']], 'cell_proportions', 'html') )) {
+                dir.create( file.path(wd, opt[['figures-dir']], 'cell_proportions', 'html'), recursive=TRUE)
             }
             saveWidget(
                 widget = fig,
-                file=file.path(wd, opt[['figures-dir']], 'html',
+                file=file.path(wd, opt[['figures-dir']], 'cell_proportions', 'html',
                     paste0('violin-split-pct_cells-cell_type-treatment_group-', organ, '.html')),  # filename
                 selfcontained = TRUE
             )
             unlink(file.path(
-                wd, opt[['figures-dir']], 'html',
+                wd, opt[['figures-dir']], 'cell_proportions', 'html',
                 paste0('violin-split-pct_cells-cell_type-treatment_group-', organ, '_files')
+            ), recursive=TRUE)            
+        }
+    }
+
+
+    # ----------------------------------------------------------------------
+    # Plot mNeonGreen positivity
+ 
+    fp_cols <- intersect(colnames(counts_subset), paste0(cell_types, '/mNeonGreen+'))
+    cell_types <- unlist(lapply(strsplit(fp_cols, '/'), function(x) x[[1]]))
+    value_cols <- interleave(cell_types, fp_cols)
+
+    pct_cells <- aggregate(counts_subset[, fp_cols] / counts_subset[, cell_types] * 100,
+        by=list(
+            'mouse_id'=counts_subset[['mouse_id']],
+            'organ'=counts_subset[['organ']],
+            'strain'=counts_subset[['strain']],
+            'treatment_group'=counts_subset[['treatment_group']]
+        ),
+        FUN=function(x) sum(x, na.rm=TRUE)
+    )
+    pct_cells <- rename_columns(pct_cells, unlist(as.list(dict_zip(fp_cols, cell_types))))
+
+    # data wrangling
+    df <- pivot_longer(pct_cells,
+        names_to = "cell_type", values_to = "pct_cells",
+        cols=cell_types[2:length(cell_types)])
+    df <- rename_columns(df, c('Live Cells'='live_cells'))
+
+    # plot dots
+    fig <- plot_dots(
+        df,
+        x='cell_type', y='pct_cells', color='treatment_group',
+        ylabel='Percent mNeonGreen+',
+        title=organ
+    )
+
+    # save
+    if (!troubleshooting) {
+        if (!dir.exists( file.path(wd, opt[['figures-dir']], 'mneongreen_positivity') )) {
+            dir.create( file.path(wd, opt[['figures-dir']], 'mneongreen_positivity'), recursive=TRUE)
+        }
+        ggsave(
+            file.path(wd, opt[['figures-dir']], 'mneongreen_positivity',
+                paste0('dot-pct_mneongreen_pos-cell_type-treatment_group-', organ, '.png')),  # filename
+            plot=fig,
+            height=800, width=1200, dpi=200,
+            units="px", scaling=0.5
+        )
+    }
+
+    # plot violin
+    fig <- plot_violin(
+        df,
+        x='cell_type', y='pct_cells', group_by='treatment_group',
+        ylabel='Percent mNeonGreen+',
+        title=organ
+    )
+
+    # export
+    if (!troubleshooting) {
+        log_print('Saving...')
+        if (!dir.exists( file.path(wd, opt[['figures-dir']], 'mneongreen_positivity') )) {
+            dir.create( file.path(wd, opt[['figures-dir']], 'mneongreen_positivity'), recursive=TRUE)
+        }
+
+        # save PNG
+        save_image(fig,
+            file=file.path(wd, opt[['figures-dir']], 'mneongreen_positivity',
+                paste0('violin-split-pct_mneongreen_pos-cell_type-treatment_group-', organ, '.png')),  # filename
+            height=500, width=800, scale=3
+        )
+
+        # save HTML
+        if (opt[['save-html']]) {
+            if (!dir.exists( file.path(wd, opt[['figures-dir']], 'mneongreen_positivity', 'html') )) {
+                dir.create( file.path(wd, opt[['figures-dir']], 'mneongreen_positivity', 'html'), recursive=TRUE)
+            }
+            saveWidget(
+                widget = fig,
+                file=file.path(wd, opt[['figures-dir']], 'mneongreen_positivity', 'html',
+                    paste0('violin-split-pct_mneongreen_pos-cell_type-treatment_group-', organ, '.html')),  # filename
+                selfcontained = TRUE
+            )
+            unlink(file.path(
+                wd, opt[['figures-dir']], 'mneongreen_positivity', 'html',
+                paste0('violin-split-pct_mneongreen_pos-cell_type-treatment_group-', organ, '_files')
             ), recursive=TRUE)            
         }
     }
