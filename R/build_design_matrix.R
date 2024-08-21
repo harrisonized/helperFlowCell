@@ -13,7 +13,7 @@ import::from(file.path(wd, 'R', 'tools', 'file_io.R'),
 import::from(file.path(wd, 'R', 'tools', 'list_tools.R'),
     'items_in_a_not_b', .character_only=TRUE)
 import::from(file.path(wd, 'R', 'tools', 'df_tools.R'),
-    'rename_columns', 'fillna', 'reset_index',
+    'fillna', 'reset_index',
     'append_dataframe', 'dataframe_row_from_named_list', 'stranspose',
     .character_only=TRUE)
 import::from(file.path(wd, 'R', 'functions', 'preprocessing.R'),
@@ -38,8 +38,8 @@ option_list = list(
                 metavar='ref/instrument_config.xlsx', type="character",
                 help="instrument configuration file"),
 
-    make_option(c("-o", "--output-dir"), default="data/output",
-                metavar="data/output", type="character",
+    make_option(c("-o", "--output-dir"), default="data/design",
+                metavar="data/design", type="character",
                 help="set the output directory for the data"),
 
     make_option(c("-t", "--troubleshooting"), default=FALSE, action="store_true",

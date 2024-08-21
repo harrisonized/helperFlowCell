@@ -48,8 +48,8 @@ option_list = list(
                 metavar='ref/spectra.csv', type="character",
                 help="spectra data, main source is FPBase"),
 
-    make_option(c("-f", "--figures-dir"), default="figures/output",
-                metavar="figures/output", type="character",
+    make_option(c("-f", "--figures-dir"), default="figures/spectra",
+                metavar="figures/spectra", type="character",
                 help="set the output directory for the figures"),
 
     make_option(c("-t", "--troubleshooting"), default=FALSE, action="store_true",

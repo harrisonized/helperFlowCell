@@ -14,12 +14,12 @@ import::from(file.path(wd, 'R', 'tools', 'file_io.R'),
 
 # args
 option_list = list(
-    make_option(c("-i", "--input-dir"), default='ref/raw_spectra_json',
-                metavar='ref/raw_spectra_json', type="character",
+    make_option(c("-i", "--input-dir"), default='data/raw_spectra',
+                metavar='data/raw_spectra', type="character",
                 help="specify the directory of json files"),
 
-    make_option(c("-o", "--output-dir"), default="ref/raw_spectra",
-                metavar="ref/raw_spectra", type="character",
+    make_option(c("-o", "--output-dir"), default="data/raw_spectra/output",
+                metavar="data/raw_spectra/output", type="character",
                 help="set the output directory for the data"),
 
     make_option(c("-t", "--troubleshooting"), default=FALSE, action="store_true",
