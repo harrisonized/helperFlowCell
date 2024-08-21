@@ -5,6 +5,7 @@
 ## pb_populations
 ## pc_populations
 ## spleen_populations
+## populations_for_organ
 
 
 bm_populations <- c(
@@ -59,3 +60,11 @@ spleen_populations <- c(
     'Cells/Single Cells/Single Cells/Live Cells/CD45+/Myeloid Cells/Ly6G-/NK1.1-/Non-Dendritic Cells/Ly6C-/Macrophages',
     'Cells/Single Cells/Single Cells/Live Cells/CD45+/Myeloid Cells/Ly6G-/NK1.1-/Dendritic Cells'
 )  # same as pb
+
+
+populations_for_organ <- list2env(list(
+    'bm'= bm_populations,
+    'pb'= pb_populations,
+    'pc'= pc_populations,
+    'spleen'= spleen_populations
+))

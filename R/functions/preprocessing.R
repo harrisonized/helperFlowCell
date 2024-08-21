@@ -10,26 +10,55 @@ import::here(file.path(wd, 'R', 'tools', 'list_tools.R'),
     'multiple_replacement', 'find_first_match_index', .character_only=TRUE)
 
 ## Functions
-## preprocess_instrument_config
+## parse_flowjo_metadata
+## preprocess_flowjo_export
 ## preprocess_antibody_inventory
+## preprocess_instrument_config
 
 
-preprocess_instrument_config <- function(df) {
+#' Parse metadata saved in the fcs name
+#' 
+#' @description This function is specific to the naming convention of the experiment
+#'
+parse_flowjo_metadata <- function(df) {
 
-    # format and rename columns
-    colnames(df) <- unlist(lapply(colnames(df), title_to_snake_case))
-    df <- rename_columns(df, instr_cfg_colreps)
-
-    # standardize fluorophore names
-    df[['fluorophore']] = multiple_replacement(
-        df[['fluorophore']], fluorophore_replacements
+    df[['metadata']] <- as.character(
+        lapply(strsplit(df[['fcs_name']], '_'),
+        function(x) paste( x[4:length(x)-1], collapse='_' )) 
     )
 
-    # order list
-    df <- df[orderv(df[, c('excitation', 'bandpass_filter')], decreasing=TRUE), ]
+    cols <- c('staining', 'organ', 'mouse_id', 'treatment_group')
+    for (i in 1:length(cols)) {
+        col <- cols[[i]]
+        df[[col]] <- as.character(
+            lapply(strsplit(df[['metadata']], '-'), function(x) x[[i]])
+        )
+    }
+
+    df[['strain']] <- as.character(
+        strsplit(strsplit(df[['mouse_id']], '-')[[1]], '_')[[1]]
+    )
+
+    return(df)
 }
 
 
+#' Preprocess Flowjo Export
+#' 
+preprocess_flowjo_export <- function(df) {
+
+    df <- rename_columns(df, c('X1'='fcs_name'))
+    colnames(df) <- gsub('[[:space:]]\\|[[:space:]]Count', '', colnames(df))  # remove suffix
+    df <- df[!(df[['fcs_name']] %in% c('Mean', 'SD')), ]  # drop summary statistics
+    df <- df[!str_detect(df[['fcs_name']], 'unstained'), ]  # drop unstained cells
+    df <- parse_flowjo_metadata(df)
+    df <- reset_index(df, drop=TRUE)
+
+}
+
+
+#' Preprocess Antibody Inventory
+#'
 preprocess_antibody_inventory <- function(df) {
 
     df <- df[, 1:(find_first_match_index('\\.{3}\\d{2}', colnames(df))-1)]  # filter extra columns
@@ -61,4 +90,22 @@ preprocess_antibody_inventory <- function(df) {
     df[mask, 'fluorophore'] <- df[mask, 'antibody']
 
     return(df)
+}
+
+
+#' Preprocess_instrument_config
+#' 
+preprocess_instrument_config <- function(df) {
+
+    # format and rename columns
+    colnames(df) <- unlist(lapply(colnames(df), title_to_snake_case))
+    df <- rename_columns(df, instr_cfg_colreps)
+
+    # standardize fluorophore names
+    df[['fluorophore']] = multiple_replacement(
+        df[['fluorophore']], fluorophore_replacements
+    )
+
+    # order list
+    df <- df[orderv(df[, c('excitation', 'bandpass_filter')], decreasing=TRUE), ]
 }
