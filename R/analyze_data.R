@@ -60,8 +60,8 @@ troubleshooting_dir = file.path(output_dir, 'troubleshooting')
 
 # Start Log
 start_time = Sys.time()
-log <- log_open(paste0("analyze_data-",
-    strftime(start_time, format="%Y%m%d_%H%M%S"), '.log'))
+# log <- log_open(paste0("analyze_data-",
+#     strftime(start_time, format="%Y%m%d_%H%M%S"), '.log'))
 log_print(paste('Script started at:', start_time))
 
 
@@ -76,6 +76,7 @@ for (i in 1:length(counts_list)) {
 }
 counts <- do.call(rbind.fill, counts_list)
 counts <- preprocess_flowjo_export(counts)
+counts[['group']] <- paste(counts[['strain']], counts[['treatment']], sep='_')
 
 
 # ----------------------------------------------------------------------
@@ -84,7 +85,7 @@ counts <- preprocess_flowjo_export(counts)
 for (organ in c('bm', 'pb', 'pc', 'spleen')) {
     log_print(paste(Sys.time(), 'Processing...', organ))
 
-    id_cols <- c('mouse_id', 'organ', 'strain', 'treatment_group')
+    id_cols <- c('mouse_id', 'organ', 'strain', 'treatment', 'group')
     populations <- populations_for_organ[[organ]]
     cell_types <- unlist(lapply(strsplit(populations, '/'), function(x) x[length(x)]))
 
@@ -105,7 +106,8 @@ for (organ in c('bm', 'pb', 'pc', 'spleen')) {
             'mouse_id'=counts_subset[['mouse_id']],
             'organ'=counts_subset[['organ']],
             'strain'=counts_subset[['strain']],
-            'treatment_group'=counts_subset[['treatment_group']]
+            'treatment'=counts_subset[['treatment']],
+            'group'=counts_subset[['group']]
         ),
         FUN=function(x) sum(x, na.rm=TRUE)
     )
@@ -124,7 +126,7 @@ for (organ in c('bm', 'pb', 'pc', 'spleen')) {
     # plot violin
     fig <- plot_violin(
         df,
-        x='cell_type', y='pct_cells', group_by='treatment_group',
+        x='cell_type', y='pct_cells', group_by='group',
         ylabel='Percent of Live Cells',
         title=organ
     )
@@ -139,7 +141,7 @@ for (organ in c('bm', 'pb', 'pc', 'spleen')) {
         # save PNG
         save_image(fig,
             file=file.path(wd, opt[['figures-dir']], 'cell_proportions',
-                paste0('violin-pct_cells-treatment_group-', organ, '.png')),  # filename
+                paste0('violin-pct_cells-', organ, '.png')),  # filename
             height=500, width=800, scale=3
         )
 
@@ -151,12 +153,12 @@ for (organ in c('bm', 'pb', 'pc', 'spleen')) {
             saveWidget(
                 widget = fig,
                 file=file.path(wd, opt[['figures-dir']], 'cell_proportions', 'html',
-                    paste0('violin-pct_cells-treatment_group-', organ, '.html')),  # filename
+                    paste0('violin-pct_cells-', organ, '.html')),  # filename
                 selfcontained = TRUE
             )
             unlink(file.path(
                 wd, opt[['figures-dir']], 'cell_proportions', 'html',
-                paste0('violin-pct_cells-treatment_group-', organ, '_files')
+                paste0('violin-pct_cells-', organ, '_files')
             ), recursive=TRUE)            
         }
     }
@@ -174,7 +176,8 @@ for (organ in c('bm', 'pb', 'pc', 'spleen')) {
             'mouse_id'=counts_subset[['mouse_id']],
             'organ'=counts_subset[['organ']],
             'strain'=counts_subset[['strain']],
-            'treatment_group'=counts_subset[['treatment_group']]
+            'treatment'=counts_subset[['treatment']],
+            'group'=counts_subset[['group']]
         ),
         FUN=function(x) sum(x, na.rm=TRUE)
     )
@@ -189,7 +192,7 @@ for (organ in c('bm', 'pb', 'pc', 'spleen')) {
     # plot violin
     fig <- plot_violin(
         df,
-        x='cell_type', y='pct_cells', group_by='treatment_group',
+        x='cell_type', y='pct_cells', group_by='group',
         ylabel='Percent mNeonGreen+',
         title=organ
     )
@@ -204,7 +207,7 @@ for (organ in c('bm', 'pb', 'pc', 'spleen')) {
         # save PNG
         save_image(fig,
             file=file.path(wd, opt[['figures-dir']], 'mneongreen_positivity',
-                paste0('violin-pct_mneongreen_pos-treatment_group-', organ, '.png')),  # filename
+                paste0('violin-pct_mneongreen_pos-', organ, '.png')),  # filename
             height=500, width=800, scale=3
         )
 
@@ -216,12 +219,12 @@ for (organ in c('bm', 'pb', 'pc', 'spleen')) {
             saveWidget(
                 widget = fig,
                 file=file.path(wd, opt[['figures-dir']], 'mneongreen_positivity', 'html',
-                    paste0('violin-pct_mneongreen_pos-treatment_group-', organ, '.html')),  # filename
+                    paste0('violin-pct_mneongreen_pos-', organ, '.html')),  # filename
                 selfcontained = TRUE
             )
             unlink(file.path(
                 wd, opt[['figures-dir']], 'mneongreen_positivity', 'html',
-                paste0('violin-pct_mneongreen_pos-treatment_group-', organ, '_files')
+                paste0('violin-pct_mneongreen_pos-', organ, '_files')
             ), recursive=TRUE)            
         }
     }

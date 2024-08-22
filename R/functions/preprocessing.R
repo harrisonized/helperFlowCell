@@ -28,7 +28,7 @@ parse_flowjo_metadata <- function(df) {
         function(x) paste( x[4:length(x)-1], collapse='_' )) 
     )
 
-    cols <- c('staining', 'organ', 'mouse_id', 'treatment_group')
+    cols <- c('staining', 'organ', 'mouse_id', 'treatment')
     for (i in 1:length(cols)) {
         col <- cols[[i]]
         df[[col]] <- as.character(
@@ -36,9 +36,9 @@ parse_flowjo_metadata <- function(df) {
         )
     }
 
-    df[['strain']] <- as.character(
-        strsplit(strsplit(df[['mouse_id']], '-')[[1]], '_')[[1]]
-    )
+    df[['strain']] <- unlist(as.character(
+        lapply(df[['mouse_id']], function(x) strsplit(x, '_')[[1]][[1]])
+    ))
 
     return(df)
 }
