@@ -60,8 +60,8 @@ troubleshooting_dir = file.path(output_dir, 'troubleshooting')
 
 # Start Log
 start_time = Sys.time()
-# log <- log_open(paste0("analyze_data-",
-#     strftime(start_time, format="%Y%m%d_%H%M%S"), '.log'))
+log <- log_open(paste0("analyze_data-",
+    strftime(start_time, format="%Y%m%d_%H%M%S"), '.log'))
 log_print(paste('Script started at:', start_time))
 
 
@@ -69,12 +69,7 @@ log_print(paste('Script started at:', start_time))
 # Preprocessing
 
 # Read counts data. Note that counts are in a wide format
-counts_list <- append_many_csv(file.path(wd, opt[['input-dir']]), return_list=TRUE)
-for (i in 1:length(counts_list)) {
-    colnames(counts_list[[i]]) <- sub("^Macrophages \\|", "Cells |", colnames(counts_list[[i]]))
-    colnames(counts_list[[i]]) <- sub("^Macrophages/", "Cells/", colnames(counts_list[[i]]))
-}
-counts <- do.call(rbind.fill, counts_list)
+counts <- append_many_csv(file.path(wd, opt[['input-dir']]), return_list=FALSE)
 counts <- preprocess_flowjo_export(counts)
 counts[['group']] <- paste(counts[['strain']], counts[['treatment']], sep='_')
 
