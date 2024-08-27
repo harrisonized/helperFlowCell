@@ -1,4 +1,4 @@
-## Analyze data exported from flowjo
+## Compute cell proportions of different organs from flowjo
 
 wd = dirname(this.path::here())  # wd = '~/github/R/helperFlowCell'
 suppressPackageStartupMessages(library('dplyr'))
@@ -35,8 +35,8 @@ import::from(file.path(wd, 'R', 'config', 'flow.R'),
 
 # args
 option_list = list(
-    make_option(c("-i", "--input-dir"), default='data/flow-tables',
-                metavar='data/flow-tables', type="character",
+    make_option(c("-i", "--input-dir"), default='data/flow-data',
+                metavar='data/flow-data', type="character",
                 help="set the input directory, all csv files will be read in"),
 
     make_option(c("-o", "--output-dir"), default="data/analysis",
@@ -137,12 +137,12 @@ for (organ in sort(organs)) {
             if (!dir.exists( file.path(wd, opt[['figures-dir']], 'cell_proportions', 'html') )) {
                 dir.create( file.path(wd, opt[['figures-dir']], 'cell_proportions', 'html'), recursive=TRUE)
             }
-            saveWidget(
+            suppressWarnings(saveWidget(
                 widget = fig,
                 file=file.path(wd, opt[['figures-dir']], 'cell_proportions', 'html',
                     paste0('violin-pct_cells-', organ, '.html')),  # filename
                 selfcontained = TRUE
-            )
+            ))
             unlink(file.path(
                 wd, opt[['figures-dir']], 'cell_proportions', 'html',
                 paste0('violin-pct_cells-', organ, '_files')
