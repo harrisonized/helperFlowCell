@@ -1,9 +1,10 @@
+# import::here(rlang, 'sym')
+import::here(magrittr, '%>%')
+import::here(dplyr, 'group_by', 'summarize')
 import::here(ggplot2,
     'ggplot', 'aes', 'theme', 'labs',
     'geom_jitter', 'element_text')
 import::here(plotly, 'plot_ly', 'add_trace', 'layout')
-import::here(magrittr, '%>%')
-# import::here(rlang, 'sym')
 
 ## Functions
 ## plot_dots
@@ -36,7 +37,7 @@ plot_dots <- function(df,
 #' @description Thin wrapper arounbd Plotly violin plot
 #' 
 plot_violin <- function(
-    df, x, y, group_by, size=NULL,
+    df, x, y, group_by=NULL, size=NULL,
     xlabel=NULL, ylabel=NULL, title=NULL,
     ymin=NULL, ymax=NULL,
     hover_data=c(),
@@ -61,21 +62,31 @@ plot_violin <- function(
 
     if (sort) {
         if (descending) {
-            df <- df[order(df[[group_by]], -df[[y]]), ]
+            x_axis_order <- df %>%
+                group_by(.data[[x]]) %>%
+                summarize(mean = median(.data[[y]])) %>%
+                arrange(-.data[['mean']]) %>%
+                select(.data[[x]])
         } else {
-            df <- df[order(df[[group_by]], df[[y]]), ]
+            x_axis_order <- df %>%
+                group_by(.data[[x]]) %>%
+                summarize(mean = median(.data[[y]])) %>%
+                arrange(.data[['mean']]) %>%
+                select(.data[[x]])
         }
     }
 
     fig <- plot_ly(type = 'violin')
-    for (group in unique(df[[group_by]])) {
+
+    if (is.null(group_by)) {
+        if (sort) {
+            df <- df %>% arrange(match(.data[[x]], unlist(x_axis_order)))
+        }
+
         fig <- fig %>%
             add_trace(
-                x = unlist(df[df[[group_by]] == group, x]),
-                y = unlist(df[df[[group_by]] == group, y]),
-                legendgroup = group,
-                scalegroup = group,
-                name = group,
+                x = df[[x]],
+                y = df[[y]],
                 box = list(visible = TRUE),
                 meanline = list(visible = TRUE),
                 points = 'all',
@@ -83,6 +94,31 @@ plot_violin <- function(
                 pointpos = -1,
                 marker = list(size = 5)
             )
+    } else {
+        for (group in unique(df[[group_by]])) {
+
+            if (sort) {
+                df <- df %>% arrange(
+                    .data[[group_by]],
+                    match(.data[[x]], unlist(x_axis_order))
+                )
+            }
+
+            fig <- fig %>%
+                add_trace(
+                    x = unlist(df[df[[group_by]] == group, x]),
+                    y = unlist(df[df[[group_by]] == group, y]),
+                    legendgroup = group,
+                    scalegroup = group,
+                    name = group,
+                    box = list(visible = TRUE),
+                    meanline = list(visible = TRUE),
+                    points = 'all',
+                    jitter = 0.2,
+                    pointpos = -1,
+                    marker = list(size = 5)
+                )
+        }
     }
 
     fig <- fig %>% layout(
@@ -99,7 +135,7 @@ plot_violin <- function(
         ),
         violinmode = 'group',
         plot_bgcolor = 'rgba(0,0,0,0)',
-        showlegend = TRUE,
+        showlegend = ifelse(is.null(group_by), FALSE, TRUE),
         hovermode = 'closest'
 
     )

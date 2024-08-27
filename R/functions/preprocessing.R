@@ -9,6 +9,8 @@ import::here(file.path(wd, 'R', 'tools', 'text_tools.R'),
     'title_to_snake_case', .character_only=TRUE)
 import::here(file.path(wd, 'R', 'tools', 'list_tools.R'),
     'multiple_replacement', 'find_first_match_index', .character_only=TRUE)
+import::here(file.path(wd, 'R', 'config', 'flow.R'),
+    'flowjo_metadata_cols', .character_only=TRUE)
 
 ## Functions
 ## parse_flowjo_metadata
@@ -21,19 +23,23 @@ import::here(file.path(wd, 'R', 'tools', 'list_tools.R'),
 #' 
 #' @description This function is specific to the naming convention of the experiment
 #'
-parse_flowjo_metadata <- function(df) {
+parse_flowjo_metadata <- function(df, cols=flowjo_metadata_cols) {
 
     df[['metadata']] <- as.character(
         lapply(strsplit(df[['fcs_name']], '_'),
         function(x) paste( x[4:length(x)-1], collapse='_' )) 
     )
 
-    cols <- c('staining', 'organ', 'mouse_id', 'treatment')
     for (i in 1:length(cols)) {
         col <- cols[[i]]
-        df[[col]] <- as.character(
-            lapply(strsplit(df[['metadata']], '-'), function(x) x[[i]])
-        )
+        tryCatch({
+            df[[col]] <- as.character(
+                lapply(strsplit(df[['metadata']], '-'), function(x) x[[i]])
+            )
+        },
+        error = function(condition) {
+            log_print(paste("Column", col, "not in metadata"))
+        })
     }
 
     df[['strain']] <- unlist(as.character(
@@ -52,7 +58,7 @@ preprocess_flowjo_export <- function(df) {
     colnames(df) <- gsub('[[:space:]]\\|[[:space:]]Count', '', colnames(df))  # remove suffix
     df <- df[!(df[['fcs_name']] %in% c('Mean', 'SD')), ]  # drop summary statistics
     df <- df[!str_detect(df[['fcs_name']], 'unstained'), ]  # drop unstained cells
-    df <- parse_flowjo_metadata(df)
+    # df <- parse_flowjo_metadata(df)
     df <- reset_index(df, drop=TRUE)
 }
 

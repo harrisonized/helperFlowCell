@@ -3,10 +3,12 @@
 wd = dirname(this.path::here())  # wd = '~/github/R/helperFlowCell'
 suppressPackageStartupMessages(library('dplyr'))
 library('optparse')
-library('logr')
-import::from(stringr, 'str_extract')
+suppressPackageStartupMessages(library('logr'))
+import::from(magrittr, '%>%')
+import::from(stringr, 'str_detect', 'str_extract')
 import::from(tidyr, 'pivot_longer')
 import::from(plyr, 'rbind.fill')
+import::from(dplyr, 'group_by', 'summarize')
 import::from(ggplot2, 'ggsave')
 import::from(plotly, 'save_image')
 import::from(htmlwidgets, 'saveWidget')  # brew install pandoc
@@ -19,12 +21,14 @@ import::from(file.path(wd, 'R', 'tools', 'df_tools.R'),
 import::from(file.path(wd, 'R', 'tools', 'file_io.R'),
     'append_many_csv', .character_only=TRUE)
 import::from(file.path(wd, 'R', 'tools', 'list_tools.R'),
-    'dict_zip', 'interleave', 'items_in_a_not_b', .character_only=TRUE)
+    'dict_zip', 'interleave', 'items_in_a_not_b', 'multiple_replacement',
+    .character_only=TRUE)
 import::from(file.path(wd, 'R', 'tools', 'plotting.R'),
     'plot_dots', 'plot_violin', .character_only=TRUE)
+import::from(file.path(wd, 'R', 'config', 'flow.R'),
+    'id_cols', 'numerical_cols', 'ignored_cell_types', 'cell_type_replacements',
+    .character_only=TRUE)
 
-import::from(file.path(wd, 'R', 'config', 'populations.R'),
-    'populations_for_organ', .character_only=TRUE)
 
 # ----------------------------------------------------------------------
 # Pre-script settings
@@ -68,61 +72,49 @@ log_print(paste('Script started at:', start_time))
 # ----------------------------------------------------------------------
 # Preprocessing
 
-# Read counts data. Note that counts are in a wide format
-counts <- append_many_csv(file.path(wd, opt[['input-dir']]), return_list=FALSE)
+# Read counts data exported from flowjo
+log_print(paste(Sys.time(), 'Reading data...'))
+counts <- append_many_csv(file.path(wd, opt[['input-dir']]), recursive=TRUE)
 counts <- preprocess_flowjo_export(counts)
-counts[['group']] <- paste(counts[['strain']], counts[['treatment']], sep='_')
+counts <- counts[, colnames(counts)[!str_detect(colnames(counts), 'mNeonGreen')]]  # drop mNeonGreen columns
+counts <- counts[!str_detect(counts[['fcs_name']], '(U|u)nstained'), ]  # drop unstained cells
+
+# Reshape
+df <- pivot_longer(counts,
+    names_to = "gate", values_to = "num_cells",
+    cols=items_in_a_not_b(colnames(counts), c(id_cols, numerical_cols)),
+    values_drop_na = TRUE
+)
+df[['organ']] <- unlist(lapply(strsplit(df[['filename']], '-'), function(x) x[1]))
+df[['cell_type']] <- unlist(lapply(strsplit(df[['gate']], '/'), function(x) x[length(x)]))
+df[['cell_type']] <- multiple_replacement(df[['cell_type']], cell_type_replacements)
+for (ignored_cell_type in ignored_cell_types) {
+    df <- df[!str_detect(df[['cell_type']], ignored_cell_type), ]
+}
+df[['pct_cells']] <- (df[['num_cells']] /
+    df[['Cells/Single Cells/Single Cells/Live Cells']] * 100
+)
+
+# reorder columns
+df <- df[, c(
+    id_cols, 'organ', 'gate', 'cell_type',
+    numerical_cols, 'num_cells', 'pct_cells')
+]
 
 
 # ----------------------------------------------------------------------
-# Plot percentages of each cell type
+# Plot
 
-for (organ in c('bm', 'pb', 'pc', 'spleen')) {
+organs <- sort(unique(df[['organ']]))
+log_print(paste(Sys.time(), 'Groups found...', paste(organs, collapse = ', ')))
+for (organ in sort(organs)) {
     log_print(paste(Sys.time(), 'Processing...', organ))
 
-    id_cols <- c('mouse_id', 'organ', 'strain', 'treatment', 'group')
-    populations <- populations_for_organ[[organ]]
-    cell_types <- unlist(lapply(strsplit(populations, '/'), function(x) x[length(x)]))
-
-
-    # ----------------------------------------------------------------------
-    # Select data
-
-    fp_pos_populations <- paste0(populations, "/mNeonGreen+")
-    value_cols <- intersect(interleave(populations, fp_pos_populations), colnames(counts))
-    counts_subset <- counts[(counts['organ']==organ), c(id_cols, value_cols)]
-    colnames(counts_subset) <- lapply(
-        colnames(counts_subset),
-        function(x) str_extract(x, '[ A-Za-z0-9_\\+\\-]*(|/mNeonGreen\\+)$')
-    )  # shorten the gating
-
-    num_cells <- aggregate(counts_subset[, cell_types],
-        by=list(
-            'mouse_id'=counts_subset[['mouse_id']],
-            'organ'=counts_subset[['organ']],
-            'strain'=counts_subset[['strain']],
-            'treatment'=counts_subset[['treatment']],
-            'group'=counts_subset[['group']]
-        ),
-        FUN=function(x) sum(x, na.rm=TRUE)
-    )
-
-
-    # ----------------------------------------------------------------------
-    # Plot Cell Proportions
-
-    # data wrangling
-    df <- pivot_longer(num_cells,
-        names_to = "cell_type", values_to = "num_cells",
-        cols=cell_types[2:length(cell_types)])
-    df <- rename_columns(df, c('Live Cells'='live_cells'))
-    df[['pct_cells']] <- df[['num_cells']] / df[['live_cells']] * 100
-
-    # plot violin
     fig <- plot_violin(
-        df,
-        x='cell_type', y='pct_cells', group_by='group',
+        df[(df[['organ']]==organ), ],
+        x='cell_type', y='pct_cells', group_by=NULL,
         ylabel='Percent of Live Cells',
+        ymin=0, ymax=100,
         title=organ
     )
 
@@ -134,11 +126,11 @@ for (organ in c('bm', 'pb', 'pc', 'spleen')) {
         }
 
         # save PNG
-        save_image(fig,
+        suppressWarnings(save_image(fig,
             file=file.path(wd, opt[['figures-dir']], 'cell_proportions',
                 paste0('violin-pct_cells-', organ, '.png')),  # filename
             height=500, width=800, scale=3
-        )
+        ))
 
         # save HTML
         if (opt[['save-html']]) {
@@ -158,73 +150,7 @@ for (organ in c('bm', 'pb', 'pc', 'spleen')) {
         }
     }
 
-
-    # ----------------------------------------------------------------------
-    # Plot mNeonGreen positivity
- 
-    fp_cols <- intersect(colnames(counts_subset), paste0(cell_types, '/mNeonGreen+'))
-    cell_types <- unlist(lapply(strsplit(fp_cols, '/'), function(x) x[[1]]))
-    value_cols <- interleave(cell_types, fp_cols)
-
-    pct_cells <- aggregate(counts_subset[, fp_cols] / counts_subset[, cell_types] * 100,
-        by=list(
-            'mouse_id'=counts_subset[['mouse_id']],
-            'organ'=counts_subset[['organ']],
-            'strain'=counts_subset[['strain']],
-            'treatment'=counts_subset[['treatment']],
-            'group'=counts_subset[['group']]
-        ),
-        FUN=function(x) sum(x, na.rm=TRUE)
-    )
-    pct_cells <- rename_columns(pct_cells, unlist(as.list(dict_zip(fp_cols, cell_types))))
-
-    # data wrangling
-    df <- pivot_longer(pct_cells,
-        names_to = "cell_type", values_to = "pct_cells",
-        cols=cell_types[2:length(cell_types)])
-    df <- rename_columns(df, c('Live Cells'='live_cells'))
-
-    # plot violin
-    fig <- plot_violin(
-        df,
-        x='cell_type', y='pct_cells', group_by='group',
-        ylabel='Percent mNeonGreen+',
-        title=organ
-    )
-
-    # export
-    if (!troubleshooting) {
-        log_print('Saving...')
-        if (!dir.exists( file.path(wd, opt[['figures-dir']], 'mneongreen_positivity') )) {
-            dir.create( file.path(wd, opt[['figures-dir']], 'mneongreen_positivity'), recursive=TRUE)
-        }
-
-        # save PNG
-        save_image(fig,
-            file=file.path(wd, opt[['figures-dir']], 'mneongreen_positivity',
-                paste0('violin-pct_mneongreen_pos-', organ, '.png')),  # filename
-            height=500, width=800, scale=3
-        )
-
-        # save HTML
-        if (opt[['save-html']]) {
-            if (!dir.exists( file.path(wd, opt[['figures-dir']], 'mneongreen_positivity', 'html') )) {
-                dir.create( file.path(wd, opt[['figures-dir']], 'mneongreen_positivity', 'html'), recursive=TRUE)
-            }
-            saveWidget(
-                widget = fig,
-                file=file.path(wd, opt[['figures-dir']], 'mneongreen_positivity', 'html',
-                    paste0('violin-pct_mneongreen_pos-', organ, '.html')),  # filename
-                selfcontained = TRUE
-            )
-            unlink(file.path(
-                wd, opt[['figures-dir']], 'mneongreen_positivity', 'html',
-                paste0('violin-pct_mneongreen_pos-', organ, '_files')
-            ), recursive=TRUE)            
-        }
-    }
 }
-
 
 end_time = Sys.time()
 log_print(paste('Script ended at:', Sys.time()))
