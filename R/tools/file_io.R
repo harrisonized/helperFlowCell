@@ -19,7 +19,7 @@ import::here(file.path(wd, 'R', 'tools', 'list_tools.R'),
 #' @export
 append_many_csv <- function(dir_path,
     sep=',', row_names=NULL, recursive=FALSE,
-    return_list=FALSE
+    include_filepath=TRUE, return_list=FALSE
 ) {
     filenames <- list.files(dir_path, recursive=recursive, full.names=TRUE)
 
@@ -42,10 +42,12 @@ append_many_csv <- function(dir_path,
         }
 
         # add filename
-        cols <- colnames(df)
-        df[['filepath']] <- gsub(paste0(normalizePath(dir_path), '/'), '', file)
-        df[['filename']] <- basename(file)
-        df <- df[, c('filepath', 'filename', cols)]
+        if (include_filepath) {
+            cols <- colnames(df)
+            df[['filepath']] <- gsub(paste0(normalizePath(dir_path), '/'), '', file)
+            df[['filename']] <- basename(file)
+            df <- df[, c('filepath', 'filename', cols)]
+        }
 
         dfs[[file]] <- df
     }

@@ -6,6 +6,7 @@
 ## ignored_cell_types
 ## cell_type_replacements
 ## flowjo_metadata_cols
+## unnecessary_mouse_db_cols
 
 
 id_cols <- c('filepath', 'filename', 'fcs_name')
@@ -31,4 +32,10 @@ flowjo_metadata_cols <- c(
     'mouse_id',
     'treatment_group',
     'strain'
+)
+
+
+unnecessary_mouse_db_cols <- c(
+    'system_id', 'rack', 'position', 'alive',
+    'pcr_confirmation', 'color', 'ignore'
 )

@@ -1,4 +1,4 @@
-## Compute cell proportions of different organs from flowjo
+## Compute cell proportions from each organ using exported flowjo data
 
 wd = dirname(this.path::here())  # wd = '~/github/R/helperFlowCell'
 suppressPackageStartupMessages(library('dplyr'))
@@ -27,7 +27,7 @@ import::from(file.path(wd, 'R', 'tools', 'plotting.R'),
     'plot_dots', 'plot_violin', .character_only=TRUE)
 import::from(file.path(wd, 'R', 'config', 'flow.R'),
     'id_cols', 'numerical_cols', 'ignored_cell_types', 'cell_type_replacements',
-    .character_only=TRUE)
+    'unnecessary_mouse_db_cols', .character_only=TRUE)
 
 
 # ----------------------------------------------------------------------
@@ -37,15 +37,23 @@ import::from(file.path(wd, 'R', 'config', 'flow.R'),
 option_list = list(
     make_option(c("-i", "--input-dir"), default='data/flow-data',
                 metavar='data/flow-data', type="character",
-                help="set the input directory, all csv files will be read in"),
+                help="input directory, all csv files will be read in"),
+
+    make_option(c("-m", "--metadata-dir"), default="data/flow-metadata",
+                metavar="data/flow-metadata", type="character",
+                help="metadata directory containing csvs mapping fcs to mouse ids"),
 
     make_option(c("-o", "--output-dir"), default="data/analysis",
                 metavar="data/analysis", type="character",
-                help="set the output directory for the data"),
+                help="output directory for the data"),
 
     make_option(c("-f", "--figures-dir"), default="figures/analysis",
                 metavar="figures/analysis", type="character",
-                help="set the output directory for the figures"),
+                help="output directory for the figures"),
+
+    make_option(c("-r", "--ref-dir"), default='ref/mice',
+                metavar='ref/mice', type="character",
+                help="directory of files containing all the mouse data"),
 
     make_option(c("-s", "--save-html"), default=FALSE, action="store_true",
                 metavar="FALSE", type="logical",
@@ -70,14 +78,23 @@ log_print(paste('Script started at:', start_time))
 
 
 # ----------------------------------------------------------------------
-# Preprocessing
+# Raw Data
+
+log_print(paste(Sys.time(), 'Reading data...'))
+
+# reference files
+mouse_db <- append_many_csv(file.path(wd, opt[['ref-dir']]), recursive=TRUE, include_filepath=FALSE)
+flow_metadata <- append_many_csv(file.path(wd, opt[['metadata-dir']]), recursive=TRUE, include_filepath=FALSE)
 
 # Read counts data exported from flowjo
-log_print(paste(Sys.time(), 'Reading data...'))
 counts <- append_many_csv(file.path(wd, opt[['input-dir']]), recursive=TRUE)
 counts <- preprocess_flowjo_export(counts)
 counts <- counts[, colnames(counts)[!str_detect(colnames(counts), 'mNeonGreen')]]  # drop mNeonGreen columns
 counts <- counts[!str_detect(counts[['fcs_name']], '(U|u)nstained'), ]  # drop unstained cells
+
+
+# ----------------------------------------------------------------------
+# Preprocessing
 
 # Reshape
 df <- pivot_longer(counts,
@@ -85,6 +102,13 @@ df <- pivot_longer(counts,
     cols=items_in_a_not_b(colnames(counts), c(id_cols, numerical_cols)),
     values_drop_na = TRUE
 )
+
+# left join mouse data
+df = merge(df, flow_metadata[, c('fcs_name', 'mouse_id')],
+    by="fcs_name", all.x=FALSE, all.y=FALSE)
+df = merge(df, mouse_db[, items_in_a_not_b(colnames(mouse_db), unnecessary_mouse_db_cols)],
+    by="mouse_id", all.x=TRUE, all.y=FALSE)
+
 df[['organ']] <- unlist(lapply(strsplit(df[['filename']], '-'), function(x) x[1]))
 df[['cell_type']] <- unlist(lapply(strsplit(df[['gate']], '/'), function(x) x[length(x)]))
 df[['cell_type']] <- multiple_replacement(df[['cell_type']], cell_type_replacements)
@@ -94,12 +118,17 @@ for (ignored_cell_type in ignored_cell_types) {
 df[['pct_cells']] <- (df[['num_cells']] /
     df[['Cells/Single Cells/Single Cells/Live Cells']] * 100
 )
+# df <- df[, c(id_cols, 'organ', 'gate', 'cell_type',
+#              numerical_cols, 'num_cells', 'pct_cells')]  # reorder columns
 
-# reorder columns
-df <- df[, c(
-    id_cols, 'organ', 'gate', 'cell_type',
-    numerical_cols, 'num_cells', 'pct_cells')
-]
+# save
+if (!troubleshooting) {
+    if (!dir.exists(file.path(wd, opt[['output-dir']]))) {
+        dir.create(file.path(wd, opt[['output-dir']]), recursive=TRUE)
+    }
+    filepath = file.path(wd, opt[['output-dir']], 'cell_proportions.csv')  # filename
+    write.table(df, file = filepath, row.names = FALSE, sep = ',' )
+}
 
 
 # ----------------------------------------------------------------------
