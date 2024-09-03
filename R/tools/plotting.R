@@ -119,10 +119,10 @@ plot_violin <- function(
             hovertext <- ''
             for (field in c(x, y, hover_data)) {
                 if (!is.null(field)) {
-                    hovertext <- paste0(hovertext, field, "=", df[[field]], "<br>")
+                    hovertext <- paste0(hovertext, field, "=", df[(df[[group_by]] == group), field], "<br>")
                 }
             }
-        
+
             fig <- fig %>%
                 add_trace(
                     base=df,

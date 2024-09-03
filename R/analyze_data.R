@@ -154,7 +154,7 @@ for (organ in sort(organs)) {
 
     fig <- plot_violin(
         df[(df[['organ']]==organ), ],
-        x='cell_type', y='pct_cells', group_by=NULL,
+        x='cell_type', y='pct_cells', group_by='sex',
         ylabel='Percent of Live Cells',
         ymin=0, ymax=100,
         hover_data=c('mouse_id', 'zygosity', 'sex', 'treatment', 'weeks_old'),
