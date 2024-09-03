@@ -90,7 +90,7 @@ flow_metadata <- append_many_csv(file.path(wd, opt[['metadata-dir']]), recursive
 # Read counts data exported from flowjo
 counts <- append_many_csv(file.path(wd, opt[['input-dir']]), recursive=TRUE)
 counts <- preprocess_flowjo_export(counts)
-# counts <- counts[!str_detect(counts[['fcs_name']], '(U|u)nstained'), ]  # drop unstained cells
+counts <- counts[!str_detect(counts[['fcs_name']], '(U|u)nstained'), ]  # drop unstained cells
 
 
 # ----------------------------------------------------------------------
@@ -109,17 +109,19 @@ df[['pct_cells']] <- (df[['num_cells']] /
 )
 
 # join reference files
-df = merge(df, flow_metadata,
+df <- merge(df, flow_metadata,
     by="fcs_name", all.x=FALSE, all.y=FALSE)  # left join
-df = merge(df, mouse_db[, items_in_a_not_b(colnames(mouse_db), mouse_db_ignore)],
+df <- merge(df, mouse_db[, items_in_a_not_b(colnames(mouse_db), mouse_db_ignore)],
     by="mouse_id", all.x=TRUE, all.y=FALSE)  # left join
+df <- df[(df[['is_unstained']]==FALSE), ]  # drop unstained cells
+df[['weeks_old']] <- round(df[['age']]/7, 1)
 
 
 # unpivot mNeonGreen+ num_cells into its own column
 fp_quant <- df[(df[['cell_type']]=='mNeonGreen+'), c(id_cols, 'gate', 'num_cells')]
 fp_quant[['cell_type']] <- unlist(lapply(
     strsplit(fp_quant[['gate']], '/'), function(x) x[length(x)-1]  # second-to-last gate
-))  # extract cell type
+))
 fp_quant <- rename_columns(fp_quant, c('num_cells'='num_mneongreen_pos'))
 df <- df[(df[['cell_type']]!='mNeonGreen+'), ]
 df = merge(df, fp_quant[, c(id_cols, 'cell_type', 'num_mneongreen_pos')],
@@ -127,7 +129,6 @@ df = merge(df, fp_quant[, c(id_cols, 'cell_type', 'num_mneongreen_pos')],
 
 
 # filters
-df <- df[(df[['is_unstained']]==FALSE), ]  # drop unstained cells
 for (cell_type in cell_type_ignore) {
     df <- df[!str_detect(df[['cell_type']], cell_type), ]
 }
@@ -144,9 +145,7 @@ if (!troubleshooting) {
 
 
 # ----------------------------------------------------------------------
-# Plot frequency of cell type per organ
-
-# add the metadata to the hoverdata
+# Plot cell type frequency per organ
 
 organs <- sort(unique(df[['organ']]))
 log_print(paste(Sys.time(), 'Groups found...', paste(organs, collapse = ', ')))
@@ -158,6 +157,7 @@ for (organ in sort(organs)) {
         x='cell_type', y='pct_cells', group_by=NULL,
         ylabel='Percent of Live Cells',
         ymin=0, ymax=100,
+        hover_data=c('mouse_id', 'zygosity', 'sex', 'treatment', 'weeks_old'),
         title=organ
     )
 
@@ -194,14 +194,6 @@ for (organ in sort(organs)) {
     }
 
 }
-
-
-# ----------------------------------------------------------------------
-# Plot frequency of mNeonGreen per cell type per organ
-
-
-
-
 
 
 end_time = Sys.time()

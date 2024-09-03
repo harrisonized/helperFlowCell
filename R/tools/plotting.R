@@ -40,9 +40,9 @@ plot_violin <- function(
     df, x, y, group_by=NULL, size=NULL,
     xlabel=NULL, ylabel=NULL, title=NULL,
     ymin=NULL, ymax=NULL,
-    hover_data=c(),
     yaxis_type='linear',
     color_discrete_map=NULL,
+    hover_data=c(),
     sort=TRUE,
     descending=TRUE
 ) {
@@ -83,8 +83,17 @@ plot_violin <- function(
             df <- df %>% arrange(match(.data[[x]], unlist(x_axis_order)))
         }
 
+        # hoverdata
+        hovertext <- ''
+        for (field in c(x, y, hover_data)) {
+            if (!is.null(field)) {
+                hovertext <- paste0(hovertext, field, "=", df[[field]], "<br>")
+            }
+        }
+
         fig <- fig %>%
             add_trace(
+                base=df,
                 x = df[[x]],
                 y = df[[y]],
                 box = list(visible = TRUE),
@@ -92,7 +101,9 @@ plot_violin <- function(
                 points = 'all',
                 jitter = 0.2,
                 pointpos = -1,
-                marker = list(size = 5)
+                marker = list(size = 5),
+                hoverinfo = 'text',
+                hovertext = hovertext
             )
     } else {
         for (group in unique(df[[group_by]])) {
@@ -104,10 +115,19 @@ plot_violin <- function(
                 )
             }
 
+            # hoverdata
+            hovertext <- ''
+            for (field in c(x, y, hover_data)) {
+                if (!is.null(field)) {
+                    hovertext <- paste0(hovertext, field, "=", df[[field]], "<br>")
+                }
+            }
+        
             fig <- fig %>%
                 add_trace(
-                    x = unlist(df[df[[group_by]] == group, x]),
-                    y = unlist(df[df[[group_by]] == group, y]),
+                    base=df,
+                    x = unlist(df[(df[[group_by]] == group), x]),
+                    y = unlist(df[(df[[group_by]] == group), y]),
                     legendgroup = group,
                     scalegroup = group,
                     name = group,
@@ -116,7 +136,9 @@ plot_violin <- function(
                     points = 'all',
                     jitter = 0.2,
                     pointpos = -1,
-                    marker = list(size = 5)
+                    marker = list(size = 5),
+                    hoverinfo = 'text',
+                    hovertext = hovertext
                 )
         }
     }
