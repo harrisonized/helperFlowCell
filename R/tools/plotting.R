@@ -64,14 +64,14 @@ plot_violin <- function(
         if (descending) {
             x_axis_order <- df %>%
                 group_by(.data[[x]]) %>%
-                summarize(mean = median(.data[[y]])) %>%
-                arrange(-.data[['mean']]) %>%
+                summarize(median = median(.data[[y]], na.rm=TRUE)) %>%
+                arrange(-.data[['median']]) %>%
                 select(.data[[x]])
         } else {
             x_axis_order <- df %>%
                 group_by(.data[[x]]) %>%
-                summarize(mean = median(.data[[y]])) %>%
-                arrange(.data[['mean']]) %>%
+                summarize(median = median(.data[[y]], na.rm=TRUE)) %>%
+                arrange(.data[['median']]) %>%
                 select(.data[[x]])
         }
     }

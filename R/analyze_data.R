@@ -118,14 +118,22 @@ df[['weeks_old']] <- round(df[['age']]/7, 1)
 
 
 # unpivot mNeonGreen+ num_cells into its own column
-fp_quant <- df[(df[['cell_type']]=='mNeonGreen+'), c(id_cols, 'gate', 'num_cells')]
-fp_quant[['cell_type']] <- unlist(lapply(
-    strsplit(fp_quant[['gate']], '/'), function(x) x[length(x)-1]  # second-to-last gate
-))
-fp_quant <- rename_columns(fp_quant, c('num_cells'='num_mneongreen_pos'))
-df <- df[(df[['cell_type']]!='mNeonGreen+'), ]
-df = merge(df, fp_quant[, c(id_cols, 'cell_type', 'num_mneongreen_pos')],
-    by=c(id_cols, 'cell_type'), all.x=TRUE, all.y=FALSE)  # add single column
+if ( any(str_detect(colnames(counts), 'mNeonGreen')) ) {
+
+    # split out mNeonGreen+ rows
+    fp_quant <- df[(df[['cell_type']]=='mNeonGreen+'), c(id_cols, 'gate', 'num_cells')]
+    fp_quant[['cell_type']] <- unlist(lapply(
+        strsplit(fp_quant[['gate']], '/'), function(x) x[length(x)-1]  # second-to-last gate
+    ))
+    fp_quant <- rename_columns(fp_quant, c('num_cells'='num_mneongreen_pos'))
+    
+    df = merge(
+        df[(df[['cell_type']]!='mNeonGreen+'), ],
+        fp_quant[, c(id_cols, 'cell_type', 'num_mneongreen_pos')],
+        by=c(id_cols, 'cell_type'), all.x=TRUE, all.y=FALSE
+    )
+    df[['pct_mneongreen_pos']] <- df[['num_mneongreen_pos']] / df[['num_cells']] * 100
+}
 
 
 # filters
@@ -146,6 +154,8 @@ if (!troubleshooting) {
 
 # ----------------------------------------------------------------------
 # Plot cell type frequency per organ
+
+log_print(paste(Sys.time(), 'Quantifying cell type frequencies...'))
 
 organs <- sort(unique(df[['organ']]))
 log_print(paste(Sys.time(), 'Groups found...', paste(organs, collapse = ', ')))
@@ -192,7 +202,60 @@ for (organ in sort(organs)) {
             ), recursive=TRUE)            
         }
     }
+}
 
+
+# ----------------------------------------------------------------------
+# Plot mNeonGreen positivity per cell type
+
+if ('pct_mneongreen_pos' %in% colnames(df)) {
+    log_print(paste(Sys.time(), 'Quantifying mNeonGreen...'))
+
+    for (organ in sort(organs)) {
+        log_print(paste(Sys.time(), 'Processing...', organ))
+
+        fig <- plot_violin(
+            df[(df[['organ']]==organ), ],
+            x='cell_type', y='pct_mneongreen_pos', group_by='zygosity',
+            ylabel='Percent of Live Cells',
+            ymin=0, ymax=100,
+            hover_data=c('mouse_id', 'zygosity', 'sex', 'treatment', 'weeks_old',
+                         'num_cells', 'num_mneongreen_pos'),
+            title=organ
+        )
+
+        # export
+        if (!troubleshooting) {
+
+            if (!dir.exists( file.path(wd, opt[['figures-dir']], 'mneongreen') )) {
+                dir.create( file.path(wd, opt[['figures-dir']], 'mneongreen'), recursive=TRUE)
+            }
+
+            # save PNG
+            suppressWarnings(save_image(fig,
+                file=file.path(wd, opt[['figures-dir']], 'mneongreen',
+                    paste0('violin-pct_mneongreen_pos-', organ, '.png')),  # filename
+                height=500, width=800, scale=3
+            ))
+
+            # save HTML
+            if (opt[['save-html']]) {
+                if (!dir.exists( file.path(wd, opt[['figures-dir']], 'mneongreen', 'html') )) {
+                    dir.create( file.path(wd, opt[['figures-dir']], 'mneongreen', 'html'), recursive=TRUE)
+                }
+                suppressWarnings(saveWidget(
+                    widget = fig,
+                    file=file.path(wd, opt[['figures-dir']], 'mneongreen', 'html',
+                        paste0('violin-pct_mneongreen_pos-', organ, '.html')),  # filename
+                    selfcontained = TRUE
+                ))
+                unlink(file.path(
+                    wd, opt[['figures-dir']], 'mneongreen', 'html',
+                    paste0('violin-pct_mneongreen_pos-', organ, '_files')
+                ), recursive=TRUE)            
+            }
+        }
+    }
 }
 
 
