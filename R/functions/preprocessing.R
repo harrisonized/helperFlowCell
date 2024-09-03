@@ -9,8 +9,6 @@ import::here(file.path(wd, 'R', 'tools', 'text_tools.R'),
     'title_to_snake_case', .character_only=TRUE)
 import::here(file.path(wd, 'R', 'tools', 'list_tools.R'),
     'multiple_replacement', 'find_first_match_index', .character_only=TRUE)
-import::here(file.path(wd, 'R', 'config', 'flow.R'),
-    'flowjo_metadata_cols', .character_only=TRUE)
 
 ## Functions
 ## parse_flowjo_metadata
@@ -21,9 +19,12 @@ import::here(file.path(wd, 'R', 'config', 'flow.R'),
 
 #' Parse metadata saved in the fcs name
 #' 
-#' @description This function is specific to the naming convention of the experiment
+#' @description This function is specific to the naming convention of the experiment. To be deprecated.
 #'
-parse_flowjo_metadata <- function(df, cols=flowjo_metadata_cols) {
+parse_flowjo_metadata <- function(
+    df,
+    cols=c('organ', 'mouse_id', 'treatment_group', 'strain')
+) {
 
     df[['metadata']] <- as.character(
         lapply(strsplit(df[['fcs_name']], '_'),
@@ -58,7 +59,6 @@ preprocess_flowjo_export <- function(df) {
     colnames(df) <- gsub('[[:space:]]\\|[[:space:]]Count', '', colnames(df))  # remove suffix
     df <- df[!(df[['fcs_name']] %in% c('Mean', 'SD')), ]  # drop summary statistics
     df <- df[!str_detect(df[['fcs_name']], 'unstained'), ]  # drop unstained cells
-    # df <- parse_flowjo_metadata(df)
     df <- reset_index(df, drop=TRUE)
 }
 

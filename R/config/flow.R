@@ -2,40 +2,32 @@
 
 ## Objects
 ## id_cols
-## numerical_cols
-## ignored_cell_types
-## cell_type_replacements
-## flowjo_metadata_cols
-## unnecessary_mouse_db_cols
+## initial_gates
+## cell_type_spell_check
+## cell_type_ignore
+## mouse_db_ignore
 
 
 id_cols <- c('filepath', 'filename', 'fcs_name')
 
-numerical_cols <- c('Count', 'Cells', 'Cells/Single Cells',
+initial_gates <- c('Count', 'Cells', 'Cells/Single Cells',
     'Cells/Single Cells/Single Cells', 'Cells/Single Cells/Single Cells/Live Cells'
 )
 
-ignored_cell_types <- c(
-    'Large Cells', 'Small Cells', 'Myeloid Cells', 'Non-Dendritic Cells', 'Non-Macrophages',
-    'CD3-CD19-', 'Ly6C-Ly6G-', 'F4_80-CD11b-', 'Ly6G-', 'NK1.1-'
-)
-
-cell_type_replacements <- c('B cells'='B Cells',
+cell_type_spell_check <- c(
+    'B cells'='B Cells',
     'NK cells'='NK Cells',
     'Ly6C-lo Monocytes'='Ly6C-int Monocytes'
 )
 
-#' to be deprecated
-#' 
-flowjo_metadata_cols <- c(
-    'organ',
-    'mouse_id',
-    'treatment_group',
-    'strain'
+cell_type_ignore <- c(
+    'Large Cells', 'Small Cells',
+    'CD3-CD19-', 'Ly6C-Ly6G-', 'F4_80-CD11b-', 'Ly6G-', 'NK1.1-',
+    'Myeloid Cells', 'Non-Dendritic Cells', 'Non-Macrophages',
+    'mNeonGreen-'
 )
 
-
-unnecessary_mouse_db_cols <- c(
+mouse_db_ignore <- c(
     'system_id', 'rack', 'position', 'alive',
     'pcr_confirmation', 'color', 'ignore'
 )

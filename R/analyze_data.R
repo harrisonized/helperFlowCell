@@ -26,8 +26,8 @@ import::from(file.path(wd, 'R', 'tools', 'list_tools.R'),
 import::from(file.path(wd, 'R', 'tools', 'plotting.R'),
     'plot_dots', 'plot_violin', .character_only=TRUE)
 import::from(file.path(wd, 'R', 'config', 'flow.R'),
-    'id_cols', 'numerical_cols', 'ignored_cell_types', 'cell_type_replacements',
-    'unnecessary_mouse_db_cols', .character_only=TRUE)
+    'id_cols', 'initial_gates', 'cell_type_spell_check', 'cell_type_ignore',
+    'mouse_db_ignore', .character_only=TRUE)
 
 
 # ----------------------------------------------------------------------
@@ -85,12 +85,12 @@ log_print(paste(Sys.time(), 'Reading data...'))
 # reference files
 mouse_db <- append_many_csv(file.path(wd, opt[['ref-dir']]), recursive=TRUE, include_filepath=FALSE)
 flow_metadata <- append_many_csv(file.path(wd, opt[['metadata-dir']]), recursive=TRUE, include_filepath=FALSE)
+# drop duplicates for mouse_db and flow_metadata
 
 # Read counts data exported from flowjo
 counts <- append_many_csv(file.path(wd, opt[['input-dir']]), recursive=TRUE)
 counts <- preprocess_flowjo_export(counts)
-counts <- counts[, colnames(counts)[!str_detect(colnames(counts), 'mNeonGreen')]]  # drop mNeonGreen columns
-counts <- counts[!str_detect(counts[['fcs_name']], '(U|u)nstained'), ]  # drop unstained cells
+# counts <- counts[!str_detect(counts[['fcs_name']], '(U|u)nstained'), ]  # drop unstained cells
 
 
 # ----------------------------------------------------------------------
@@ -99,27 +99,39 @@ counts <- counts[!str_detect(counts[['fcs_name']], '(U|u)nstained'), ]  # drop u
 # Reshape
 df <- pivot_longer(counts,
     names_to = "gate", values_to = "num_cells",
-    cols=items_in_a_not_b(colnames(counts), c(id_cols, numerical_cols)),
+    cols=items_in_a_not_b(colnames(counts), c(id_cols, initial_gates)),
     values_drop_na = TRUE
 )
-
-# left join mouse data
-df = merge(df, flow_metadata[, c('fcs_name', 'mouse_id')],
-    by="fcs_name", all.x=FALSE, all.y=FALSE)
-df = merge(df, mouse_db[, items_in_a_not_b(colnames(mouse_db), unnecessary_mouse_db_cols)],
-    by="mouse_id", all.x=TRUE, all.y=FALSE)
-
-df[['organ']] <- unlist(lapply(strsplit(df[['filename']], '-'), function(x) x[1]))
 df[['cell_type']] <- unlist(lapply(strsplit(df[['gate']], '/'), function(x) x[length(x)]))
-df[['cell_type']] <- multiple_replacement(df[['cell_type']], cell_type_replacements)
-for (ignored_cell_type in ignored_cell_types) {
-    df <- df[!str_detect(df[['cell_type']], ignored_cell_type), ]
-}
+df[['cell_type']] <- multiple_replacement(df[['cell_type']], cell_type_spell_check)
 df[['pct_cells']] <- (df[['num_cells']] /
     df[['Cells/Single Cells/Single Cells/Live Cells']] * 100
 )
-# df <- df[, c(id_cols, 'organ', 'gate', 'cell_type',
-#              numerical_cols, 'num_cells', 'pct_cells')]  # reorder columns
+
+# join reference files
+df = merge(df, flow_metadata,
+    by="fcs_name", all.x=FALSE, all.y=FALSE)  # left join
+df = merge(df, mouse_db[, items_in_a_not_b(colnames(mouse_db), mouse_db_ignore)],
+    by="mouse_id", all.x=TRUE, all.y=FALSE)  # left join
+
+
+# unpivot mNeonGreen+ num_cells into its own column
+fp_quant <- df[(df[['cell_type']]=='mNeonGreen+'), c(id_cols, 'gate', 'num_cells')]
+fp_quant[['cell_type']] <- unlist(lapply(
+    strsplit(fp_quant[['gate']], '/'), function(x) x[length(x)-1]  # second-to-last gate
+))  # extract cell type
+fp_quant <- rename_columns(fp_quant, c('num_cells'='num_mneongreen_pos'))
+df <- df[(df[['cell_type']]!='mNeonGreen+'), ]
+df = merge(df, fp_quant[, c(id_cols, 'cell_type', 'num_mneongreen_pos')],
+    by=c(id_cols, 'cell_type'), all.x=TRUE, all.y=FALSE)  # add single column
+
+
+# filters
+df <- df[(df[['is_unstained']]==FALSE), ]  # drop unstained cells
+for (cell_type in cell_type_ignore) {
+    df <- df[!str_detect(df[['cell_type']], cell_type), ]
+}
+
 
 # save
 if (!troubleshooting) {
@@ -132,7 +144,9 @@ if (!troubleshooting) {
 
 
 # ----------------------------------------------------------------------
-# Plot
+# Plot frequency of cell type per organ
+
+# add the metadata to the hoverdata
 
 organs <- sort(unique(df[['organ']]))
 log_print(paste(Sys.time(), 'Groups found...', paste(organs, collapse = ', ')))
@@ -180,6 +194,15 @@ for (organ in sort(organs)) {
     }
 
 }
+
+
+# ----------------------------------------------------------------------
+# Plot frequency of mNeonGreen per cell type per organ
+
+
+
+
+
 
 end_time = Sys.time()
 log_print(paste('Script ended at:', Sys.time()))
