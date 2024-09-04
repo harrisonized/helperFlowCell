@@ -8,6 +8,7 @@ import::here(plotly, 'plot_ly', 'add_trace', 'layout')
 
 ## Functions
 ## plot_dots
+## plot_scatter
 ## plot_violin
 
 
@@ -27,6 +28,111 @@ plot_dots <- function(df,
         geom_jitter(aes(colour=.data[[color]])) +
         labs(x=xlabel, y=ylabel, title=title) +
         theme(axis.text.x = element_text(angle = 45, hjust=1))
+
+    return(fig)
+}
+
+
+#' Plot Scatter
+#'
+#' @description Thin wrapper arounbd Plotly scatter plot
+#' 
+plot_scatter <- function(
+    df, x, y, group_by=NULL, size=NULL,
+    xlabel=NULL, ylabel=NULL, title=NULL,
+    xmin=NULL, xmax=NULL,
+    ymin=NULL, ymax=NULL,
+    yaxis_type='linear',
+    color='#1f77b4',
+    color_discrete_map=NULL,
+    hover_data=c()
+) {
+
+    if (is.null(ymin)) {
+        xmin <- min(df[[x]])
+    }
+    if (is.null(ymax)) {
+        xmax <- max(df[[x]])
+    }
+    xrange = c(xmin - (xmax-xmin) * 0.1, xmax + (xmax-xmin) * 0.1)  # add padding
+    if (is.null(ymin)) {
+        ymin <- min(df[[y]])
+    }
+    if (is.null(ymax)) {
+        ymax <- max(df[[y]])
+    }
+    if (yaxis_type=='linear') {
+        yrange = c(ymin - (ymax-ymin) * 0.1, ymax + (ymax-ymin) * 0.1)  # add padding
+    }
+    if (yaxis_type=='log') {
+        yrange = sapply(c(ymin, ymax), function(y) if (y > 0) {log(y, base=10)} else {NULL} )
+    }
+
+    # color
+    if (!is.null(color_discrete_map)) {
+        color_discrete_map <- list2env(as.list(color_discrete_map))
+    }
+
+    fig <- plot_ly(type='scatter', mode='markers')
+
+    if (is.null(group_by)) {
+
+        fig <- fig %>%
+            add_trace(
+                x = df[[x]],
+                y = df[[y]],
+                color=I(color),
+                marker = list(size = 5),
+                hovertext = hovertext
+            )
+    } else {
+        for (group in unique(df[[group_by]])) {
+
+            # hoverdata
+            hovertext <- ''
+            for (field in c(x, y, hover_data)) {
+                if (!is.null(field)) {
+                    hovertext <- paste0(hovertext, field, "=", df[(df[[group_by]] == group), field], "<br>")
+                }
+            }
+            color <- color_discrete_map[[group]]
+            if (!is.null(color)) {
+                color <- I(color)
+            }
+
+            fig <- fig %>%
+                add_trace(
+                    x = unlist(df[(df[[group_by]] == group), x]),
+                    y = unlist(df[(df[[group_by]] == group), y]),
+                    color = color,
+                    legendgroup = group,
+                    name = group,
+                    marker = list(size = 5),
+                    hovertext = hovertext
+                )
+        }
+    }
+
+    fig <- fig %>% layout(
+        title = list(
+            text = title,
+            x = 0.5
+        ),
+        xaxis = list(
+            title_text = xlabel,
+            range = xrange
+        ),
+        yaxis = list(
+            title_text = ylabel,
+            showgrid = TRUE, gridcolor = '#E4EAF2', zeroline = FALSE,
+            range = yrange,
+            type = yaxis_type
+        ),
+        plot_bgcolor = 'rgba(0,0,0,0)',
+        showlegend = ifelse(is.null(group_by), FALSE, TRUE),
+        hovermode = 'closest'
+
+    )
 
     return(fig)
 }

@@ -17,14 +17,14 @@ import::from(file.path(wd, 'R', 'functions', 'preprocessing.R'),
     'preprocess_flowjo_export', .character_only=TRUE)
 
 import::from(file.path(wd, 'R', 'tools', 'df_tools.R'),
-    'rename_columns', 'reset_index', .character_only=TRUE)
+    'rename_columns', .character_only=TRUE)
 import::from(file.path(wd, 'R', 'tools', 'file_io.R'),
     'append_many_csv', .character_only=TRUE)
 import::from(file.path(wd, 'R', 'tools', 'list_tools.R'),
-    'dict_zip', 'interleave', 'items_in_a_not_b', 'multiple_replacement',
+    'items_in_a_not_b', 'multiple_replacement',
     .character_only=TRUE)
 import::from(file.path(wd, 'R', 'tools', 'plotting.R'),
-    'plot_dots', 'plot_violin', .character_only=TRUE)
+    'plot_scatter', 'plot_violin', .character_only=TRUE)
 import::from(file.path(wd, 'R', 'config', 'flow.R'),
     'id_cols', 'initial_gates', 'cell_type_spell_check', 'cell_type_ignore',
     'mouse_db_ignore', .character_only=TRUE)
@@ -184,13 +184,13 @@ for (organ in sort(organs)) {
     # export
     if (!troubleshooting) {
 
-        if (!dir.exists( file.path(wd, opt[['figures-dir']], 'cell_proportions') )) {
-            dir.create( file.path(wd, opt[['figures-dir']], 'cell_proportions'), recursive=TRUE)
+        if (!dir.exists( file.path(wd, opt[['figures-dir']], 'cell_proportions', 'png') )) {
+            dir.create( file.path(wd, opt[['figures-dir']], 'cell_proportions', 'png'), recursive=TRUE)
         }
 
         # save PNG
         suppressWarnings(save_image(fig,
-            file=file.path(wd, opt[['figures-dir']], 'cell_proportions',
+            file=file.path(wd, opt[['figures-dir']], 'cell_proportions', 'png',
                 paste0('violin-pct_cells-', organ, '.png')),  # filename
             height=500, width=800, scale=3
         ))
@@ -242,13 +242,13 @@ if ('pct_mneongreen_pos' %in% colnames(df)) {
             # export
             if (!troubleshooting) {
 
-                if (!dir.exists( file.path(wd, opt[['figures-dir']], 'mneongreen') )) {
-                    dir.create( file.path(wd, opt[['figures-dir']], 'mneongreen'), recursive=TRUE)
+                if (!dir.exists( file.path(wd, opt[['figures-dir']], 'mneongreen', 'png') )) {
+                    dir.create( file.path(wd, opt[['figures-dir']], 'mneongreen', 'png'), recursive=TRUE)
                 }
 
                 # save PNG
                 suppressWarnings(save_image(fig,
-                    file=file.path(wd, opt[['figures-dir']], 'mneongreen',
+                    file=file.path(wd, opt[['figures-dir']], 'mneongreen', 'png',
                         paste0('violin-pct_mneongreen_pos-', organ, '.png')),  # filename
                     height=500, width=800, scale=3
                 ))
@@ -270,6 +270,57 @@ if ('pct_mneongreen_pos' %in% colnames(df)) {
                     ), recursive=TRUE)
                 }
             }
+
+            fig <- plot_scatter(
+                df[((df[['organ']]==organ) & 
+                    (df[['num_cells']]>10) &
+                    (df[['zygosity']]=='heterozygous') &
+                    (df[['cell_type']] %in% c('Ly6C-hi Monocytes', 'Ly6C-int Monocytes', 'Neutrophils'))
+                    ), ],
+                x='weeks_old', y='pct_mneongreen_pos', group_by='cell_type',
+                xlabel='Age (Weeks)', ylabel='Percent mNeonGreen+', title=organ,
+                ymin=0, ymax=100,
+                hover_data=c('mouse_id', 'sex', 'zygosity', 'treatment', 'weeks_old',
+                             'Cells', 'num_cells', 'num_mneongreen_pos', 'fcs_name'),
+                color_discrete_map=c(
+                    'Ly6C-hi Monocytes'='#ff7f0e',  # orange
+                    'Ly6C-int Monocytes'='#2ca02c',  # green
+                    'Neutrophils'='#62c1e5'  # blue
+                )
+            )
+
+            # export
+            if (!troubleshooting) {
+
+                if (!dir.exists( file.path(wd, opt[['figures-dir']], 'mneongreen', 'png') )) {
+                    dir.create( file.path(wd, opt[['figures-dir']], 'mneongreen', 'png'), recursive=TRUE)
+                }
+
+                # save PNG
+                suppressWarnings(save_image(fig,
+                    file=file.path(wd, opt[['figures-dir']], 'mneongreen', 'png',
+                        paste0('scatter-pct_mneongreen_pos-', organ, '.png')),  # filename
+                    height=500, width=800, scale=3
+                ))
+
+                # save HTML
+                if (opt[['save-html']]) {
+                    if (!dir.exists( file.path(wd, opt[['figures-dir']], 'mneongreen', 'html') )) {
+                        dir.create( file.path(wd, opt[['figures-dir']], 'mneongreen', 'html'), recursive=TRUE)
+                    }
+                    suppressWarnings(saveWidget(
+                        widget = fig,
+                        file=file.path(wd, opt[['figures-dir']], 'mneongreen', 'html',
+                            paste0('scatter-pct_mneongreen_pos-', organ, '.html')),  # filename
+                        selfcontained = TRUE
+                    ))
+                    unlink(file.path(
+                        wd, opt[['figures-dir']], 'mneongreen', 'html',
+                        paste0('scatter-pct_mneongreen_pos-', organ, '_files')
+                    ), recursive=TRUE)
+                }
+            }
+
         }
     }
 }
