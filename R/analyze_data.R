@@ -172,7 +172,9 @@ for (organ in sort(organs)) {
         x='cell_type', y='pct_cells', group_by='zygosity',
         ylabel='Percent of Live Cells', title=organ,
         ymin=0, ymax=100,
-        hover_data=c('num_cells', 'mouse_id', 'zygosity', 'sex', 'treatment', 'weeks_old', 'fcs_name'),
+        hover_data=c(
+            'mouse_id', 'sex', 'zygosity', 'treatment', 'weeks_old', 
+            'Cells', 'num_cells', 'fcs_name'),
         color_discrete_map=c(
             'heterozygous'='#2ca02c',  # green
             'wild type'='#62c1e5'  # blue
@@ -229,8 +231,8 @@ if ('pct_mneongreen_pos' %in% colnames(df)) {
                 x='cell_type', y='pct_mneongreen_pos', group_by='zygosity',
                 ylabel='Percent mNeonGreen+', title=organ,
                 ymin=0, ymax=100,
-                hover_data=c('mouse_id', 'zygosity', 'sex', 'treatment', 'weeks_old',
-                             'num_cells', 'num_mneongreen_pos', 'fcs_name'),
+                hover_data=c('mouse_id', 'sex', 'zygosity', 'treatment', 'weeks_old',
+                             'Cells', 'num_cells', 'num_mneongreen_pos', 'fcs_name'),
                 color_discrete_map=c(
                     'heterozygous'='#2ca02c',  # green
                     'wild type'='#62c1e5'  # blue
