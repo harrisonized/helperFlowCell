@@ -41,6 +41,7 @@ plot_violin <- function(
     xlabel=NULL, ylabel=NULL, title=NULL,
     ymin=NULL, ymax=NULL,
     yaxis_type='linear',
+    color='#1f77b4',
     color_discrete_map=NULL,
     hover_data=c(),
     sort=TRUE,
@@ -76,6 +77,11 @@ plot_violin <- function(
         }
     }
 
+    # color
+    if (!is.null(color_discrete_map)) {
+        color_discrete_map <- list2env(as.list(color_discrete_map))
+    }
+
     fig <- plot_ly(type = 'violin')
 
     if (is.null(group_by)) {
@@ -93,16 +99,15 @@ plot_violin <- function(
 
         fig <- fig %>%
             add_trace(
-                base=df,
                 x = df[[x]],
                 y = df[[y]],
+                color=I(color),
                 box = list(visible = TRUE),
                 meanline = list(visible = TRUE),
                 points = 'all',
                 jitter = 0.2,
                 pointpos = -1,
                 marker = list(size = 5),
-                hoverinfo = 'text',
                 hovertext = hovertext
             )
     } else {
@@ -122,12 +127,16 @@ plot_violin <- function(
                     hovertext <- paste0(hovertext, field, "=", df[(df[[group_by]] == group), field], "<br>")
                 }
             }
+            color <- color_discrete_map[[group]]
+            if (!is.null(color)) {
+                color <- I(color)
+            }
 
             fig <- fig %>%
                 add_trace(
-                    base=df,
                     x = unlist(df[(df[[group_by]] == group), x]),
                     y = unlist(df[(df[[group_by]] == group), y]),
+                    color = color,
                     legendgroup = group,
                     scalegroup = group,
                     name = group,
@@ -137,7 +146,6 @@ plot_violin <- function(
                     jitter = 0.2,
                     pointpos = -1,
                     marker = list(size = 5),
-                    hoverinfo = 'text',
                     hovertext = hovertext
                 )
         }

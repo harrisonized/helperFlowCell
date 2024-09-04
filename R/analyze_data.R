@@ -104,9 +104,8 @@ df <- pivot_longer(counts,
 )
 df[['cell_type']] <- unlist(lapply(strsplit(df[['gate']], '/'), function(x) x[length(x)]))
 df[['cell_type']] <- multiple_replacement(df[['cell_type']], cell_type_spell_check)
-df[['pct_cells']] <- (df[['num_cells']] /
-    df[['Cells/Single Cells/Single Cells/Live Cells']] * 100
-)
+df[['pct_cells']] <- round(df[['num_cells']] /
+    df[['Cells/Single Cells/Single Cells/Live Cells']] * 100, 2)
 
 # join reference files
 df <- merge(df, flow_metadata,
@@ -122,17 +121,22 @@ if ( any(str_detect(colnames(counts), 'mNeonGreen')) ) {
 
     # split out mNeonGreen+ rows
     fp_quant <- df[(df[['cell_type']]=='mNeonGreen+'), c(id_cols, 'gate', 'num_cells')]
+
+    # second-to-last gate
+    fp_quant[['gate']] <- unlist(lapply(
+        strsplit(fp_quant[['gate']], '/'), function(x) paste0(x[1:length(x)-1], collapse='/')
+    ))
     fp_quant[['cell_type']] <- unlist(lapply(
-        strsplit(fp_quant[['gate']], '/'), function(x) x[length(x)-1]  # second-to-last gate
+        strsplit(fp_quant[['gate']], '/'), function(x) x[length(x)]
     ))
     fp_quant <- rename_columns(fp_quant, c('num_cells'='num_mneongreen_pos'))
     
     df = merge(
         df[(df[['cell_type']]!='mNeonGreen+'), ],
-        fp_quant[, c(id_cols, 'cell_type', 'num_mneongreen_pos')],
-        by=c(id_cols, 'cell_type'), all.x=TRUE, all.y=FALSE
+        fp_quant[, c(id_cols, 'gate', 'num_mneongreen_pos')],
+        by=c(id_cols, 'gate'), all.x=TRUE, all.y=FALSE
     )
-    df[['pct_mneongreen_pos']] <- df[['num_mneongreen_pos']] / df[['num_cells']] * 100
+    df[['pct_mneongreen_pos']] <- round(df[['num_mneongreen_pos']] / df[['num_cells']] * 100, 2)
 }
 
 
@@ -160,15 +164,19 @@ log_print(paste(Sys.time(), 'Quantifying cell type frequencies...'))
 organs <- sort(unique(df[['organ']]))
 log_print(paste(Sys.time(), 'Groups found...', paste(organs, collapse = ', ')))
 for (organ in sort(organs)) {
+
     log_print(paste(Sys.time(), 'Processing...', organ))
 
     fig <- plot_violin(
-        df[(df[['organ']]==organ), ],
-        x='cell_type', y='pct_cells', group_by='sex',
-        ylabel='Percent of Live Cells',
+        df[(df[['organ']]==organ) & (df[['num_cells']]>10), ],
+        x='cell_type', y='pct_cells', group_by='zygosity',
+        ylabel='Percent of Live Cells', title=organ,
         ymin=0, ymax=100,
-        hover_data=c('mouse_id', 'zygosity', 'sex', 'treatment', 'weeks_old'),
-        title=organ
+        hover_data=c('num_cells', 'mouse_id', 'zygosity', 'sex', 'treatment', 'weeks_old', 'fcs_name'),
+        color_discrete_map=c(
+            'heterozygous'='#2ca02c',  # green
+            'wild type'='#62c1e5'  # blue
+        )
     )
 
     # export
@@ -212,47 +220,53 @@ if ('pct_mneongreen_pos' %in% colnames(df)) {
     log_print(paste(Sys.time(), 'Quantifying mNeonGreen...'))
 
     for (organ in sort(organs)) {
-        log_print(paste(Sys.time(), 'Processing...', organ))
+        if ( !all(is.na(df[(df[['organ']]==organ), 'pct_mneongreen_pos'])) ) {
 
-        fig <- plot_violin(
-            df[(df[['organ']]==organ), ],
-            x='cell_type', y='pct_mneongreen_pos', group_by='zygosity',
-            ylabel='Percent of Live Cells',
-            ymin=0, ymax=100,
-            hover_data=c('mouse_id', 'zygosity', 'sex', 'treatment', 'weeks_old',
-                         'num_cells', 'num_mneongreen_pos'),
-            title=organ
-        )
+            log_print(paste(Sys.time(), 'Processing...', organ))
 
-        # export
-        if (!troubleshooting) {
+            fig <- plot_violin(
+                df[(df[['organ']]==organ) & (df[['num_cells']]>10), ],
+                x='cell_type', y='pct_mneongreen_pos', group_by='zygosity',
+                ylabel='Percent mNeonGreen+', title=organ,
+                ymin=0, ymax=100,
+                hover_data=c('mouse_id', 'zygosity', 'sex', 'treatment', 'weeks_old',
+                             'num_cells', 'num_mneongreen_pos', 'fcs_name'),
+                color_discrete_map=c(
+                    'heterozygous'='#2ca02c',  # green
+                    'wild type'='#62c1e5'  # blue
+                )
+            )
 
-            if (!dir.exists( file.path(wd, opt[['figures-dir']], 'mneongreen') )) {
-                dir.create( file.path(wd, opt[['figures-dir']], 'mneongreen'), recursive=TRUE)
-            }
+            # export
+            if (!troubleshooting) {
 
-            # save PNG
-            suppressWarnings(save_image(fig,
-                file=file.path(wd, opt[['figures-dir']], 'mneongreen',
-                    paste0('violin-pct_mneongreen_pos-', organ, '.png')),  # filename
-                height=500, width=800, scale=3
-            ))
-
-            # save HTML
-            if (opt[['save-html']]) {
-                if (!dir.exists( file.path(wd, opt[['figures-dir']], 'mneongreen', 'html') )) {
-                    dir.create( file.path(wd, opt[['figures-dir']], 'mneongreen', 'html'), recursive=TRUE)
+                if (!dir.exists( file.path(wd, opt[['figures-dir']], 'mneongreen') )) {
+                    dir.create( file.path(wd, opt[['figures-dir']], 'mneongreen'), recursive=TRUE)
                 }
-                suppressWarnings(saveWidget(
-                    widget = fig,
-                    file=file.path(wd, opt[['figures-dir']], 'mneongreen', 'html',
-                        paste0('violin-pct_mneongreen_pos-', organ, '.html')),  # filename
-                    selfcontained = TRUE
+
+                # save PNG
+                suppressWarnings(save_image(fig,
+                    file=file.path(wd, opt[['figures-dir']], 'mneongreen',
+                        paste0('violin-pct_mneongreen_pos-', organ, '.png')),  # filename
+                    height=500, width=800, scale=3
                 ))
-                unlink(file.path(
-                    wd, opt[['figures-dir']], 'mneongreen', 'html',
-                    paste0('violin-pct_mneongreen_pos-', organ, '_files')
-                ), recursive=TRUE)            
+
+                # save HTML
+                if (opt[['save-html']]) {
+                    if (!dir.exists( file.path(wd, opt[['figures-dir']], 'mneongreen', 'html') )) {
+                        dir.create( file.path(wd, opt[['figures-dir']], 'mneongreen', 'html'), recursive=TRUE)
+                    }
+                    suppressWarnings(saveWidget(
+                        widget = fig,
+                        file=file.path(wd, opt[['figures-dir']], 'mneongreen', 'html',
+                            paste0('violin-pct_mneongreen_pos-', organ, '.html')),  # filename
+                        selfcontained = TRUE
+                    ))
+                    unlink(file.path(
+                        wd, opt[['figures-dir']], 'mneongreen', 'html',
+                        paste0('violin-pct_mneongreen_pos-', organ, '_files')
+                    ), recursive=TRUE)
+                }
             }
         }
     }
