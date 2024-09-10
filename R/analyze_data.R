@@ -5,13 +5,8 @@ suppressPackageStartupMessages(library('dplyr'))
 library('optparse')
 suppressPackageStartupMessages(library('logr'))
 import::from(magrittr, '%>%')
-import::from(stringr, 'str_detect', 'str_extract')
+import::from(stringr, 'str_detect')
 import::from(tidyr, 'pivot_longer')
-import::from(plyr, 'rbind.fill')
-import::from(dplyr, 'group_by', 'summarize')
-import::from(ggplot2, 'ggsave')
-import::from(plotly, 'save_image')
-import::from(htmlwidgets, 'saveWidget')  # brew install pandoc
 
 import::from(file.path(wd, 'R', 'functions', 'preprocessing.R'),
     'preprocess_flowjo_export', .character_only=TRUE)
@@ -24,7 +19,7 @@ import::from(file.path(wd, 'R', 'tools', 'list_tools.R'),
     'items_in_a_not_b', 'multiple_replacement',
     .character_only=TRUE)
 import::from(file.path(wd, 'R', 'tools', 'plotting.R'),
-    'plot_scatter', 'plot_violin', .character_only=TRUE)
+    'save_fig', 'plot_scatter', 'plot_violin', .character_only=TRUE)
 import::from(file.path(wd, 'R', 'config', 'flow.R'),
     'id_cols', 'initial_gates', 'cell_type_spell_check', 'cell_type_ignore',
     'mouse_db_ignore', .character_only=TRUE)
@@ -183,34 +178,12 @@ for (organ in sort(organs)) {
 
     # export
     if (!troubleshooting) {
-
-        if (!dir.exists( file.path(wd, opt[['figures-dir']], 'cell_proportions', 'png') )) {
-            dir.create( file.path(wd, opt[['figures-dir']], 'cell_proportions', 'png'), recursive=TRUE)
-        }
-
-        # save PNG
-        suppressWarnings(save_image(fig,
-            file=file.path(wd, opt[['figures-dir']], 'cell_proportions', 'png',
-                paste0('violin-pct_cells-', organ, '.png')),  # filename
-            height=500, width=800, scale=3
-        ))
-
-        # save HTML
-        if (opt[['save-html']]) {
-            if (!dir.exists( file.path(wd, opt[['figures-dir']], 'cell_proportions', 'html') )) {
-                dir.create( file.path(wd, opt[['figures-dir']], 'cell_proportions', 'html'), recursive=TRUE)
-            }
-            suppressWarnings(saveWidget(
-                widget = fig,
-                file=file.path(wd, opt[['figures-dir']], 'cell_proportions', 'html',
-                    paste0('violin-pct_cells-', organ, '.html')),  # filename
-                selfcontained = TRUE
-            ))
-            unlink(file.path(
-                wd, opt[['figures-dir']], 'cell_proportions', 'html',
-                paste0('violin-pct_cells-', organ, '_files')
-            ), recursive=TRUE)            
-        }
+        save_fig(
+            fig=fig,
+            dirpath=file.path(wd, opt[['figures-dir']], 'cell_proportions'),
+            filename=paste0('violin-pct_cells-', organ),
+            save_html=opt[['save-html']]
+        )
     }
 }
 
@@ -241,34 +214,12 @@ if ('pct_mneongreen_pos' %in% colnames(df)) {
 
             # export
             if (!troubleshooting) {
-
-                if (!dir.exists( file.path(wd, opt[['figures-dir']], 'mneongreen', 'png') )) {
-                    dir.create( file.path(wd, opt[['figures-dir']], 'mneongreen', 'png'), recursive=TRUE)
-                }
-
-                # save PNG
-                suppressWarnings(save_image(fig,
-                    file=file.path(wd, opt[['figures-dir']], 'mneongreen', 'png',
-                        paste0('violin-pct_mneongreen_pos-', organ, '.png')),  # filename
-                    height=500, width=800, scale=3
-                ))
-
-                # save HTML
-                if (opt[['save-html']]) {
-                    if (!dir.exists( file.path(wd, opt[['figures-dir']], 'mneongreen', 'html') )) {
-                        dir.create( file.path(wd, opt[['figures-dir']], 'mneongreen', 'html'), recursive=TRUE)
-                    }
-                    suppressWarnings(saveWidget(
-                        widget = fig,
-                        file=file.path(wd, opt[['figures-dir']], 'mneongreen', 'html',
-                            paste0('violin-pct_mneongreen_pos-', organ, '.html')),  # filename
-                        selfcontained = TRUE
-                    ))
-                    unlink(file.path(
-                        wd, opt[['figures-dir']], 'mneongreen', 'html',
-                        paste0('violin-pct_mneongreen_pos-', organ, '_files')
-                    ), recursive=TRUE)
-                }
+                save_fig(
+                    fig=fig,
+                    dirpath=file.path(wd, opt[['figures-dir']], 'mneongreen'),
+                    filename=paste0('violin-pct_mneongreen_pos-', organ),
+                    save_html=opt[['save-html']]
+                )
             }
 
             fig <- plot_scatter(
@@ -291,36 +242,13 @@ if ('pct_mneongreen_pos' %in% colnames(df)) {
 
             # export
             if (!troubleshooting) {
-
-                if (!dir.exists( file.path(wd, opt[['figures-dir']], 'mneongreen', 'png') )) {
-                    dir.create( file.path(wd, opt[['figures-dir']], 'mneongreen', 'png'), recursive=TRUE)
-                }
-
-                # save PNG
-                suppressWarnings(save_image(fig,
-                    file=file.path(wd, opt[['figures-dir']], 'mneongreen', 'png',
-                        paste0('scatter-pct_mneongreen_pos-', organ, '.png')),  # filename
-                    height=500, width=800, scale=3
-                ))
-
-                # save HTML
-                if (opt[['save-html']]) {
-                    if (!dir.exists( file.path(wd, opt[['figures-dir']], 'mneongreen', 'html') )) {
-                        dir.create( file.path(wd, opt[['figures-dir']], 'mneongreen', 'html'), recursive=TRUE)
-                    }
-                    suppressWarnings(saveWidget(
-                        widget = fig,
-                        file=file.path(wd, opt[['figures-dir']], 'mneongreen', 'html',
-                            paste0('scatter-pct_mneongreen_pos-', organ, '.html')),  # filename
-                        selfcontained = TRUE
-                    ))
-                    unlink(file.path(
-                        wd, opt[['figures-dir']], 'mneongreen', 'html',
-                        paste0('scatter-pct_mneongreen_pos-', organ, '_files')
-                    ), recursive=TRUE)
-                }
+                save_fig(
+                    fig=fig,
+                    dirpath=file.path(wd, opt[['figures-dir']], 'mneongreen'),
+                    filename=paste0('scatter-pct_mneongreen_pos-', organ),
+                    save_html=opt[['save-html']]
+                )
             }
-
         }
     }
 }

@@ -4,12 +4,48 @@ import::here(dplyr, 'group_by', 'summarize')
 import::here(ggplot2,
     'ggplot', 'aes', 'theme', 'labs',
     'geom_jitter', 'element_text')
-import::here(plotly, 'plot_ly', 'add_trace', 'layout')
+import::here(plotly, 'plot_ly', 'add_trace', 'layout', 'save_image')
+import::here(htmlwidgets, 'saveWidget')  # brew install pandoc
 
 ## Functions
+## save_fig
 ## plot_dots
 ## plot_scatter
 ## plot_violin
+
+
+save_fig <- function(fig,
+    dirpath='figures',
+    filename='fig',
+    height=500, width=800, scale=3,
+    save_html=FALSE
+) {
+
+    if (!dir.exists( file.path(dirpath, 'png') )) {
+        dir.create( file.path(dirpath, 'png'), recursive=TRUE)
+    }
+
+    suppressWarnings(save_image(fig,
+        file=file.path(file.path(dirpath, 'png'), paste0(filename, '.png')), 
+        height=height, width=width, scale=scale
+    ))
+
+    # save HTML
+    if (opt[['save-html']]) {
+        if (!dir.exists( file.path(dirpath, 'html') )) {
+            dir.create( file.path(dirpath, 'html'), recursive=TRUE)
+        }
+        suppressWarnings(saveWidget(
+            widget = fig,
+            file=file.path(file.path(dirpath, 'html'), paste0(filename, '.html')),
+            selfcontained = TRUE
+        ))
+        unlink(
+            file.path(file.path(dirpath, 'html'), paste0(filename, '_files')),
+            recursive=TRUE
+        )            
+    }
+}
 
 
 #' Plot Dots
