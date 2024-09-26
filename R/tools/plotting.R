@@ -14,6 +14,9 @@ import::here(htmlwidgets, 'saveWidget')  # brew install pandoc
 ## plot_violin
 
 
+#' Save Figure
+#'
+#' @export
 save_fig <- function(fig,
     dirpath='figures',
     filename='fig',
