@@ -3,7 +3,7 @@
 
 wd = dirname(this.path::here())  # wd = '~/github/R/helperFlowCell'
 library('optparse')
-library('logr')
+suppressPackageStartupMessages(library('logr'))
 
 import::from(tidyr, 'separate', 'separate_rows', 'pivot_longer')
 import::from(cowplot, 'plot_grid')
@@ -172,6 +172,10 @@ fig <- plot_grid(plotlist = plots,
 
 # save
 if (!troubleshooting) {
+    if (!dir.exists(file.path(wd, opt[['figures-dir']]))) {
+        dir.create(file.path(wd, opt[['figures-dir']]), recursive=TRUE)
+    }
+
     ggsave(
         file.path(wd, opt[['figures-dir']], 'spectra.png'),  # filename
         plot=fig,

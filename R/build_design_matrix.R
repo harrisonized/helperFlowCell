@@ -4,7 +4,7 @@ wd = dirname(this.path::here())  # wd = '~/github/R/helperFlowCell'
 suppressPackageStartupMessages(library('dplyr'))
 library("openxlsx")
 library('optparse')
-library('logr')
+suppressPackageStartupMessages(library('logr'))
 import::from(magrittr, '%>%')
 import::from(tidyr, 'separate_rows', 'pivot_wider')
 import::from(reshape2, 'melt')
@@ -26,8 +26,8 @@ import::from(file.path(wd, 'R', 'functions', 'preprocessing.R'),
 
 # args
 option_list = list(
-    make_option(c("-i", "--input-file"), default='data/panel.csv',
-                metavar='data/panel.csv', type="character",
+    make_option(c("-i", "--input-file"), default='data/design/panel.csv',
+                metavar='data/design/panel.csv', type="character",
                 help="specify the antibodies to use in your flow panel"),
 
     make_option(c("-a", "--antibody-inventory"), default='ref/antibody_inventory.xlsx',
