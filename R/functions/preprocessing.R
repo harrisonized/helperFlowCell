@@ -12,6 +12,7 @@ import::here(file.path(wd, 'R', 'tools', 'list_tools.R'),
     'multiple_replacement', 'find_first_match_index', .character_only=TRUE)
 
 ## Functions
+## compensation_csv_to_mtx
 ## parse_flowjo_metadata
 ## preprocess_flowjo_export
 ## preprocess_antibody_inventory
@@ -20,7 +21,7 @@ import::here(file.path(wd, 'R', 'tools', 'list_tools.R'),
 
 #' Constructs a mtx file for the compensation matrix for Flowjo import
 #' 
-compensation_csv_to_mtx <- function(cytometer_settings, channels) {
+compensation_csv_to_mtx <- function(cytometer_settings, channels, name='test') {
 
     xml <- xmlOutputDOM("gating:gatingML")
 
@@ -29,7 +30,7 @@ compensation_csv_to_mtx <- function(cytometer_settings, channels) {
         attrs=list(spectral="0",
             weightOptAlgorithmType="OLS",
             prefix="Comp-",
-            name="test",
+            name=name,
             editable="1",
             color="#00ccff",
             version="FlowJo-10.10.0",

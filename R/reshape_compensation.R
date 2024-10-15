@@ -69,7 +69,7 @@ compensation_matrix <- read.csv(
 # sort
 if (file.exists(file.path(wd, opt[['sort']]))) {
     matrix_order <- read.csv(file.path(wd, opt[['sort']]), header=FALSE)[['V1']]
-    matrix_order <- move_list_items_to_front(colnames(compensation_matrix), matrix_order)
+    matrix_order <- move_list_items_to_front(matrix_order, colnames(compensation_matrix))
     compensation_matrix <- compensation_matrix[matrix_order, matrix_order]
 }
 compensation_matrix <- reset_index(compensation_matrix, index_name="- % Fluorochrome")
@@ -90,15 +90,14 @@ withCallingHandlers({
 })
 
 
-xml <- compensation_csv_to_mtx(cytometer_settings, channels)
+# xml
+filename <- basename(tools::file_path_sans_ext(opt[['input']]))
+xml <- compensation_csv_to_mtx(cytometer_settings, channels, name=filename)
 if (!troubleshooting) {
 
     invisible(saveXML(xml,
         prefix='<?xml version="1.0" encoding="UTF-8"?>\n',
-        file = file.path(
-            wd, opt[['output-dir']],
-            paste0(basename(tools::file_path_sans_ext(opt[['input']])), '.mtx')
-        )
+        file = file.path(wd, opt[['output-dir']], paste0(filename, '.mtx'))
     ))  # cat() to view
 }
 
