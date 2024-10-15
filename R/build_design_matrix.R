@@ -157,10 +157,12 @@ design_matrix <- append_dataframe(
     reset_index=FALSE
 )
 
-# order by excitation, then emission
+# order by emission, then decreasing by excitation
 channel_order <- instr_cfg[
-    order(instr_cfg[['excitation']], instr_cfg[['bandpass_filter']]),
-    'channel_id'
+    order(instr_cfg[['bandpass_filter']], instr_cfg[['excitation']],
+        decreasing = c(FALSE, TRUE),
+        method = "radix"
+    ), 'channel_id'
 ][[1]]
 design_matrix <- design_matrix[ ,
     c(intersect(channel_order, colnames(design_matrix)),

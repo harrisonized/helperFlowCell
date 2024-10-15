@@ -1,5 +1,4 @@
 import::here(stringr, 'str_detect')
-import::here(wrapr, 'orderv')
 import::here(XML, 'xmlOutputDOM')
 import::here(file.path(wd, 'R', 'config', 'replacements.R'),
     'fluorophore_replacements', 'antibody_replacements', 'instr_cfg_colreps', 'ab_inv_colreps',
@@ -186,6 +185,11 @@ preprocess_instrument_config <- function(df) {
         df[['fluorophore']], fluorophore_replacements
     )
 
+    return(df)
+
     # order list
-    df <- df[orderv(df[, c('excitation', 'bandpass_filter')], decreasing=TRUE), ]
+    df <- df[order(
+        df[['bandpass_filter']], df[['excitation']],
+        decreasing = c(FALSE, TRUE),
+        method = "radix"), ]
 }
