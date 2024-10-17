@@ -124,7 +124,7 @@ cytometer_settings_t[mask,'Spectral Overlap'] <- -cytometer_settings_t[mask,'Spe
 # save
 if (!troubleshooting) {
     write.table(
-        round(t(unname(sapply(cytometer_settings_t[['Spectral Overlap']], function(x) max(-1, x)))), 2),
+        round(t(cytometer_settings_t[['Spectral Overlap']]), 2),
         file = file.path(wd, opt[['output-dir']], 'cytometer_settings.txt'),
         row.names=FALSE, col.names=FALSE, sep=','
     )
