@@ -3,7 +3,7 @@
 wd = dirname(this.path::here())  # wd = '~/github/R/helperFlowCell'
 library('optparse')
 suppressPackageStartupMessages(library('logr'))
-import::from(tidyr, 'pivot_longer')
+import::from(tidyr, 'pivot_longer', 'pivot_wider')
 import::from(XML, 'saveXML')
 
 import::from(file.path(wd, 'R', 'functions', 'preprocessing.R'),
@@ -90,16 +90,49 @@ withCallingHandlers({
 })
 
 
-# xml
+# ----------------------------------------------------------------------
+# XML file
+
 filename <- basename(tools::file_path_sans_ext(opt[['input']]))
 xml <- compensation_csv_to_mtx(cytometer_settings, channels, name=filename)
-if (!troubleshooting) {
 
+# save
+if (!troubleshooting) {
     invisible(saveXML(xml,
         prefix='<?xml version="1.0" encoding="UTF-8"?>\n',
         file = file.path(wd, opt[['output-dir']], paste0(filename, '.mtx'))
     ))  # cat() to view
 }
+
+
+# ----------------------------------------------------------------------
+# Export comma-separated object for compensation.csv
+# Note: This is meant to be used in FACSDiva using Experiment > Import Cytometer Settings
+# However, there's a bug that prevents this from working correctly, not sure why
+
+# re-sort to match the table format, which is just one long comma-separated string
+compensation_matrix_t <- pivot_wider(cytometer_settings, names_from='- % Fluorochrome', values_from='Spectral Overlap')
+cytometer_settings_t <- as.data.frame(pivot_longer(
+    compensation_matrix_t,
+    cols=channels,
+    names_to = "- % Fluorochrome",
+    values_to = "Spectral Overlap"
+))
+mask <- (cytometer_settings_t[['- % Fluorochrome']] != cytometer_settings_t[['Fluorochrome']])
+cytometer_settings_t[mask,'Spectral Overlap'] <- -cytometer_settings_t[mask,'Spectral Overlap']  # other than the diagonals, the values are negative
+
+# save
+if (!troubleshooting) {
+    write.table(
+        round(t(unname(sapply(cytometer_settings_t[['Spectral Overlap']], function(x) max(-1, x)))), 2),
+        file = file.path(wd, opt[['output-dir']], 'cytometer_settings.txt'),
+        row.names=FALSE, col.names=FALSE, sep=','
+    )
+}
+
+
+# ----------------------------------------------------------------------
+# Export table for manual entry
 
 # save
 if (!troubleshooting) {
@@ -114,7 +147,7 @@ if (!troubleshooting) {
 
     write.table(
         cytometer_settings,
-        file = file.path(wd, opt[['output-dir']], 'cytometer_settings.csv'),
+        file = file.path(wd, opt[['output-dir']], 'compensation_tab.csv'),
         row.names = FALSE, sep=',',
         na=""
     )
