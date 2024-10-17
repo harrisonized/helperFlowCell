@@ -120,7 +120,7 @@ compensation_matrix <- solve(as.matrix(spillover_matrix))  # take matrix inverse
 # save
 if (!troubleshooting) {
     write.table(
-        t(as.vector(compensation_matrix)),  # flattened
+        t(round(as.vector(compensation_matrix), 8)),  # flattened
         file = file.path(wd, opt[['output-dir']], 'compensation_matrix.txt'),
         row.names=FALSE, col.names=FALSE, sep=','
     )
