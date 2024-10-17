@@ -11,83 +11,11 @@ import::here(file.path(wd, 'R', 'tools', 'list_tools.R'),
     'multiple_replacement', 'find_first_match_index', .character_only=TRUE)
 
 ## Functions
-## compensation_csv_to_mtx
 ## parse_flowjo_metadata
 ## preprocess_flowjo_export
 ## preprocess_antibody_inventory
 ## preprocess_instrument_config
-
-
-#' Constructs a mtx file for the compensation matrix for Flowjo import
-#' 
-compensation_csv_to_mtx <- function(cytometer_settings, channels, name='test') {
-
-    xml <- xmlOutputDOM("gating:gatingML")
-
-    # <transforms:spilloverMatrix>
-    xml$addTag("transforms:spilloverMatrix",
-        attrs=list(spectral="0",
-            weightOptAlgorithmType="OLS",
-            prefix="Comp-",
-            name=name,
-            editable="1",
-            color="#00ccff",
-            version="FlowJo-10.10.0",
-            status="FINALIZED",
-            'transforms:id'="",
-            suffix=""
-        ),
-        close=FALSE
-    )
-
-        # <data-type:parameters>
-        xml$addTag("data-type:parameters", close=FALSE)
-        for (channel in channels) {
-            channel_name <- strsplit(channel, ' :: ')[[1]][1]
-            xml$addTag("data-type:parameter",
-                attrs = list(
-                    'data-type:name'=channel_name,
-                    userProvidedCompInfix=paste0('Comp-', channel_name))
-            )
-        }
-        xml$closeTag()
-
-        # build table
-        for (channel in channels) {
-
-            channel_name <- strsplit(channel, ' :: ')[[1]][1]
-            spillover_table <- cytometer_settings[
-                (cytometer_settings[['- % Fluorochrome']]==channel),
-                c('Fluorochrome', 'Spectral Overlap')]
-            spillover_table[['Fluorochrome']] <- unname(sapply(
-                spillover_table[['Fluorochrome']],
-                function(x) strsplit(x, ' :: ')[[1]][1]
-            ))
-            spillover_table <- rename_columns(spillover_table, c(
-                'Fluorochrome'='data-type:parameter',
-                'Spectral Overlap'='transforms:value'
-            ))
-
-            # <transforms:spillover >
-            xml$addTag(
-                "transforms:spillover",
-                attrs = list(
-                    'data-type:parameter'=channel_name,
-                    userProvidedCompInfix=paste0('Comp-', channel_name)),
-                close=FALSE
-            )
-
-            # <transforms:coefficient >
-            for (row in row.names(spillover_table)) {
-                xml$addTag("transforms:coefficient", attrs = spillover_table[row,])
-            }
-
-            xml$closeTag()
-        }
-
-    xml$closeTag()
-    return(xml)
-}
+## spillover_to_xml
 
 
 #' Parse metadata saved in the fcs name
@@ -192,4 +120,78 @@ preprocess_instrument_config <- function(df) {
         df[['bandpass_filter']], df[['excitation']],
         decreasing = c(FALSE, TRUE),
         method = "radix"), ]
+}
+
+
+#' Constructs a mtx file for the compensation matrix for Flowjo import 
+#' Make sure to include the diagonal 1 values
+#' 
+spillover_to_xml <- function(spillover_table, channels, name='test') {
+
+    xml <- xmlOutputDOM("gating:gatingML")
+
+    # <transforms:spilloverMatrix>
+    xml$addTag("transforms:spilloverMatrix",
+        attrs=list(spectral="0",
+            weightOptAlgorithmType="OLS",
+            prefix="Comp-",
+            name=name,
+            editable="1",
+            color="#00ccff",
+            version="FlowJo-10.10.0",
+            status="FINALIZED",
+            'transforms:id'="",
+            suffix=""
+        ),
+        close=FALSE
+    )
+
+        # <data-type:parameters>
+        xml$addTag("data-type:parameters", close=FALSE)
+        for (channel in channels) {
+            channel_name <- strsplit(channel, ' :: ')[[1]][1]
+            xml$addTag("data-type:parameter",
+                attrs = list(
+                    'data-type:name'=channel_name,
+                    userProvidedCompInfix=paste0('Comp-', channel_name))
+            )
+        }
+        xml$closeTag()
+
+        # build table
+        for (channel in channels) {
+
+            # subset by channel
+            spillover_subtable <- spillover_table[
+                (spillover_table[['- % Fluorochrome']]==channel),
+                c('Fluorochrome', 'Spectral Overlap')]
+            spillover_subtable[['Fluorochrome']] <- unname(sapply(
+                spillover_subtable[['Fluorochrome']],
+                function(x) strsplit(x, ' :: ')[[1]][1]
+            ))
+            spillover_subtable <- rename_columns(spillover_subtable, c(
+                'Fluorochrome'='data-type:parameter',
+                'Spectral Overlap'='transforms:value'
+            ))
+
+            # <transforms:spillover >
+            channel_name <- strsplit(channel, ' :: ')[[1]][1]
+            xml$addTag(
+                "transforms:spillover",
+                attrs = list(
+                    'data-type:parameter'=channel_name,
+                    userProvidedCompInfix=paste0('Comp-', channel_name)),
+                close=FALSE
+            )
+
+            # <transforms:coefficient >
+            for (row in row.names(spillover_subtable)) {
+                xml$addTag("transforms:coefficient", attrs = spillover_subtable[row,])
+            }
+
+            xml$closeTag()
+        }
+
+    xml$closeTag()
+    return(xml)
 }

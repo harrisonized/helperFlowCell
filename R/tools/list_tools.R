@@ -6,6 +6,7 @@ import::here(stringi, 'stri_replace_all_regex')
 ## find_first_match_index
 ## interleave
 ## items_in_a_not_b
+## list2matrix
 ## move_list_items_to_front
 ## multiple_replacement
 ## replace_specific_items
@@ -99,6 +100,29 @@ interleave <- function(a, b) {
 #' 
 items_in_a_not_b <- function(a, b) {
     return((new <- a[which(!a %in% b)]))
+}
+
+
+#' Rearrange a list into a matrix
+#' 
+#' @description Thin wrapper around matrix, inserts NA
+#' 
+#' @param z list or vector
+#' @param ncol
+#' @param byrow
+#' @param fill
+#' @return 
+#' 
+#' @examples
+#' list2matrix(c('a', 'b', 'c', 'd', 'e'), ncol=3 fill=NA)
+#' 
+list2matrix <- function(z, ncol=2, byrow=TRUE, fill=NA) {
+    remain <- length(z) %% ncol
+    if (remain > 0) {
+        z <- c(z, rep(fill, ncol-remain))
+    }
+    mtx <- matrix(z, ncol = ncol, byrow = byrow)
+    return(mtx)
 }
 
 

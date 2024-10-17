@@ -5,15 +5,16 @@ library('optparse')
 suppressPackageStartupMessages(library('logr'))
 import::from(tidyr, 'pivot_longer', 'pivot_wider')
 import::from(XML, 'saveXML')
+import::from(matlib, 'inv')
 
 import::from(file.path(wd, 'R', 'functions', 'preprocessing.R'),
-    'compensation_csv_to_mtx', .character_only=TRUE)
+    'spillover_to_xml', .character_only=TRUE)
 import::from(file.path(wd, 'R', 'tools', 'file_io.R'),
     'join_many_csv', .character_only=TRUE)
 import::from(file.path(wd, 'R', 'tools', 'df_tools.R'),
     'rename_columns', 'reset_index', .character_only=TRUE)
 import::from(file.path(wd, 'R', 'tools', 'list_tools.R'),
-    'items_in_a_not_b', 'move_list_items_to_front', .character_only=TRUE)
+    'items_in_a_not_b', 'list2matrix', 'move_list_items_to_front', .character_only=TRUE)
 
 
 # ----------------------------------------------------------------------
@@ -54,31 +55,25 @@ if (!dir.exists(file.path(opt[['output-dir']]))) {
 
 
 # ----------------------------------------------------------------------
-# Main
+# Preprocessing
 
-# read data
-compensation_matrix <- read.csv(
+spillover_matrix <- read.csv(
     file.path(wd, opt[['input']]),
     row.names=1, header=TRUE, check.names=FALSE
 )
-
-
-# ----------------------------------------------------------------------
-# Pivot
+channels <- row.names(spillover_matrix)
 
 # sort
 if (file.exists(file.path(wd, opt[['sort']]))) {
     matrix_order <- read.csv(file.path(wd, opt[['sort']]), header=FALSE)[['V1']]
-    matrix_order <- move_list_items_to_front(matrix_order, colnames(compensation_matrix))
-    compensation_matrix <- compensation_matrix[matrix_order, matrix_order]
+    matrix_order <- move_list_items_to_front(matrix_order, colnames(spillover_matrix))
+    spillover_matrix <- spillover_matrix[matrix_order, matrix_order]
 }
-compensation_matrix <- reset_index(compensation_matrix, index_name="- % Fluorochrome")
-channels <- items_in_a_not_b(colnames(compensation_matrix), "- % Fluorochrome")
 
 # pivot
 withCallingHandlers({
-    cytometer_settings <- as.data.frame(pivot_longer(
-        compensation_matrix,
+    spillover_table <- as.data.frame(pivot_longer(
+        reset_index(spillover_matrix, index_name="- % Fluorochrome"),
         cols=channels,
         names_to = "Fluorochrome",
         values_to = "Spectral Overlap"
@@ -91,66 +86,59 @@ withCallingHandlers({
 
 
 # ----------------------------------------------------------------------
-# XML file
-
-filename <- basename(tools::file_path_sans_ext(opt[['input']]))
-xml <- compensation_csv_to_mtx(cytometer_settings, channels, name=filename)
+# Export Spillover Table
 
 # save
 if (!troubleshooting) {
-    invisible(saveXML(xml,
-        prefix='<?xml version="1.0" encoding="UTF-8"?>\n',
-        file = file.path(wd, opt[['output-dir']], paste0(filename, '.mtx'))
-    ))  # cat() to view
+
+    # cleanup
+    diva_spillover <- spillover_table[
+        (spillover_table[["Fluorochrome"]] != spillover_table[["- % Fluorochrome"]]),
+        c("Fluorochrome", "- % Fluorochrome", "Spectral Overlap")
+    ]
+    diva_spillover[["Spectral Overlap"]] <- diva_spillover[["Spectral Overlap"]]*100
+    diva_spillover[["Spectral Overlap"]] <- round(diva_spillover[["Spectral Overlap"]], 2)
+
+    write.table(
+        diva_spillover,
+        file = file.path(wd, opt[['output-dir']], 'spillover_table.csv'),
+        row.names = FALSE, sep=',',
+        na=""
+    )
 }
 
-
 # ----------------------------------------------------------------------
-# Export comma-separated object for compensation.csv
-# Note: This is meant to be used in FACSDiva using Experiment > Import Cytometer Settings
-# However, there's a bug that prevents this from working correctly, not sure why
+# Compensation Matrix
+# "The compensation matrix is the inverse of the spillover matrix." - Data File Standard for FCS3.1
+# Use this to import compensation matrix directly into FACSDiva
+# Experiment > [Import Cytometer Settings] 
 
-# re-sort to match the table format, which is just one long comma-separated string
-compensation_matrix_t <- pivot_wider(cytometer_settings, names_from='- % Fluorochrome', values_from='Spectral Overlap')
-cytometer_settings_t <- as.data.frame(pivot_longer(
-    compensation_matrix_t,
-    cols=channels,
-    names_to = "- % Fluorochrome",
-    values_to = "Spectral Overlap"
-))
-mask <- (cytometer_settings_t[['- % Fluorochrome']] != cytometer_settings_t[['Fluorochrome']])
-cytometer_settings_t[mask,'Spectral Overlap'] <- -cytometer_settings_t[mask,'Spectral Overlap']  # other than the diagonals, the values are negative
+
+compensation_matrix <- inv(as.matrix(spillover_matrix))
 
 # save
 if (!troubleshooting) {
     write.table(
-        round(t(cytometer_settings_t[['Spectral Overlap']]), 2),
-        file = file.path(wd, opt[['output-dir']], 'cytometer_settings.txt'),
+        t(as.vector(compensation_matrix)),  # flattened
+        file = file.path(wd, opt[['output-dir']], 'compensation_matrix.txt'),
         row.names=FALSE, col.names=FALSE, sep=','
     )
 }
 
 
 # ----------------------------------------------------------------------
-# Export table for manual entry
+# XML file
+# Use this to copy directly into Flowjo workspace files
+
+filename <- basename(tools::file_path_sans_ext(opt[['input']]))
+spillover_xml <- spillover_to_xml(spillover_table, channels, name=filename)
 
 # save
 if (!troubleshooting) {
-
-    # cleanup
-    cytometer_settings <- cytometer_settings[
-        (cytometer_settings[["Fluorochrome"]] != cytometer_settings[["- % Fluorochrome"]]),
-        c("Fluorochrome", "- % Fluorochrome", "Spectral Overlap")
-    ]
-    cytometer_settings[["Spectral Overlap"]] <- cytometer_settings[["Spectral Overlap"]]*100
-    cytometer_settings[["Spectral Overlap"]] <- round(cytometer_settings[["Spectral Overlap"]], 2)
-
-    write.table(
-        cytometer_settings,
-        file = file.path(wd, opt[['output-dir']], 'compensation_tab.csv'),
-        row.names = FALSE, sep=',',
-        na=""
-    )
+    invisible(saveXML(spillover_xml,
+        prefix='<?xml version="1.0" encoding="UTF-8"?>\n',
+        file = file.path(wd, opt[['output-dir']], paste0(filename, '.mtx'))
+    ))  # cat() to view
 }
 
 
