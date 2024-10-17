@@ -5,7 +5,6 @@ library('optparse')
 suppressPackageStartupMessages(library('logr'))
 import::from(tidyr, 'pivot_longer', 'pivot_wider')
 import::from(XML, 'saveXML')
-import::from(matlib, 'inv')
 
 import::from(file.path(wd, 'R', 'functions', 'preprocessing.R'),
     'spillover_to_xml', .character_only=TRUE)
@@ -114,7 +113,7 @@ if (!troubleshooting) {
 # Experiment > [Import Cytometer Settings] 
 
 
-compensation_matrix <- inv(as.matrix(spillover_matrix))
+compensation_matrix <- solve(as.matrix(spillover_matrix))  # take matrix inverse
 
 # save
 if (!troubleshooting) {
