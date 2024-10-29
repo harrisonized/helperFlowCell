@@ -65,9 +65,10 @@ channels <- row.names(spillover_matrix)
 # sort
 if (file.exists(file.path(wd, opt[['sort']]))) {
     log_print(paste('fluorochrome_order file found', Sys.time()))
-    matrix_order <- read.csv(file.path(wd, opt[['sort']]), header=FALSE)[['V1']]
-    matrix_order <- move_list_items_to_front(matrix_order, colnames(spillover_matrix))
-    spillover_matrix <- spillover_matrix[matrix_order, matrix_order]
+    fluorochrome_order <- read.csv(file.path(wd, opt[['sort']]), header=FALSE)[['V1']]
+    fluorochrome_order <- intersect(fluorochrome_order, colnames(spillover_matrix))
+    fluorochrome_order <- move_list_items_to_front(fluorochrome_order, colnames(spillover_matrix))
+    spillover_matrix <- spillover_matrix[fluorochrome_order, fluorochrome_order]
     channels <- row.names(spillover_matrix)
 }
 
