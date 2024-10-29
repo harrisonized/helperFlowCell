@@ -54,10 +54,6 @@ option_list = list(
                 metavar="FALSE", type="logical",
                 help="save html files in addition to PNG"),
 
-    make_option(c("-g", "--group-by"), default='group',
-                metavar='group', type="character",
-                help="determine the group"),
-
     make_option(c("-t", "--troubleshooting"), default=FALSE, action="store_true",
                 metavar="FALSE", type="logical",
                 help="enable if troubleshooting to prevent overwriting your files")
@@ -115,6 +111,30 @@ df <- df[(df[['is_unstained']]==FALSE), ]  # drop unstained cells
 df[['weeks_old']] <- round(df[['age']]/7, 1)
 
 
+# unpivot mNeonGreen+ num_cells into its own column
+if ( any(str_detect(colnames(counts), 'mNeonGreen')) ) {
+
+    # split out mNeonGreen+ rows
+    fp_quant <- df[(df[['cell_type']]=='mNeonGreen+'), c(id_cols, 'gate', 'num_cells')]
+
+    # second-to-last gate
+    fp_quant[['gate']] <- unlist(lapply(
+        strsplit(fp_quant[['gate']], '/'), function(x) paste0(x[1:length(x)-1], collapse='/')
+    ))
+    fp_quant[['cell_type']] <- unlist(lapply(
+        strsplit(fp_quant[['gate']], '/'), function(x) x[length(x)]
+    ))
+    fp_quant <- rename_columns(fp_quant, c('num_cells'='num_mneongreen_pos'))
+    
+    df = merge(
+        df[(df[['cell_type']]!='mNeonGreen+'), ],
+        fp_quant[, c(id_cols, 'gate', 'num_mneongreen_pos')],
+        by=c(id_cols, 'gate'), all.x=TRUE, all.y=FALSE
+    )
+    df[['pct_mneongreen_pos']] <- round(df[['num_mneongreen_pos']] / df[['num_cells']] * 100, 2)
+}
+
+
 # filters
 for (cell_type in cell_type_ignore) {
     df <- df[!str_detect(df[['cell_type']], cell_type), ]
@@ -144,16 +164,16 @@ for (organ in sort(organs)) {
 
     fig <- plot_violin(
         df[(df[['organ']]==organ) & (df[['num_cells']]>10), ],
-        x='cell_type', y='pct_cells', group_by=opt[['group-by']],
+        x='cell_type', y='pct_cells', group_by='zygosity',
         ylabel='Percent of Live Cells', title=organ,
         ymin=0, ymax=100,
         hover_data=c(
-            'mouse_id', 'sex', opt[['group-by']], 'treatment', 'weeks_old', 
-            'Cells', 'num_cells', 'fcs_name')
-        # color_discrete_map=c(
-        #     'heterozygous'='#2ca02c',  # green
-        #     'wild type'='#62c1e5'  # blue
-        # )
+            'mouse_id', 'sex', 'zygosity', 'treatment', 'weeks_old', 
+            'Cells', 'num_cells', 'fcs_name'),
+        color_discrete_map=c(
+            'heterozygous'='#2ca02c',  # green
+            'wild type'='#62c1e5'  # blue
+        )
     )
 
     # export
@@ -164,6 +184,72 @@ for (organ in sort(organs)) {
             filename=paste0('violin-pct_cells-', organ),
             save_html=opt[['save-html']]
         )
+    }
+}
+
+
+# ----------------------------------------------------------------------
+# Plot mNeonGreen positivity per cell type
+
+if ('pct_mneongreen_pos' %in% colnames(df)) {
+    log_print(paste(Sys.time(), 'Quantifying mNeonGreen...'))
+
+    for (organ in sort(organs)) {
+        if ( !all(is.na(df[(df[['organ']]==organ), 'pct_mneongreen_pos'])) ) {
+
+            log_print(paste(Sys.time(), 'Processing...', organ))
+
+            fig <- plot_violin(
+                df[(df[['organ']]==organ) & (df[['num_cells']]>10), ],
+                x='cell_type', y='pct_mneongreen_pos', group_by='zygosity',
+                ylabel='Percent mNeonGreen+', title=organ,
+                ymin=0, ymax=100,
+                hover_data=c('mouse_id', 'sex', 'zygosity', 'treatment', 'weeks_old',
+                             'Cells', 'num_cells', 'num_mneongreen_pos', 'fcs_name'),
+                color_discrete_map=c(
+                    'heterozygous'='#2ca02c',  # green
+                    'wild type'='#62c1e5'  # blue
+                )
+            )
+
+            # export
+            if (!troubleshooting) {
+                save_fig(
+                    fig=fig,
+                    dirpath=file.path(wd, opt[['figures-dir']], 'mneongreen'),
+                    filename=paste0('violin-pct_mneongreen_pos-', organ),
+                    save_html=opt[['save-html']]
+                )
+            }
+
+            fig <- plot_scatter(
+                df[((df[['organ']]==organ) & 
+                    (df[['num_cells']]>10) &
+                    (df[['zygosity']]=='heterozygous') &
+                    (df[['cell_type']] %in% c('Ly6C-hi Monocytes', 'Ly6C-int Monocytes', 'Neutrophils'))
+                    ), ],
+                x='weeks_old', y='pct_mneongreen_pos', group_by='cell_type',
+                xlabel='Age (Weeks)', ylabel='Percent mNeonGreen+', title=organ,
+                ymin=0, ymax=100,
+                hover_data=c('mouse_id', 'sex', 'zygosity', 'treatment', 'weeks_old',
+                             'Cells', 'num_cells', 'num_mneongreen_pos', 'fcs_name'),
+                color_discrete_map=c(
+                    'Ly6C-hi Monocytes'='#ff7f0e',  # orange
+                    'Ly6C-int Monocytes'='#2ca02c',  # green
+                    'Neutrophils'='#62c1e5'  # blue
+                )
+            )
+
+            # export
+            if (!troubleshooting) {
+                save_fig(
+                    fig=fig,
+                    dirpath=file.path(wd, opt[['figures-dir']], 'mneongreen'),
+                    filename=paste0('scatter-pct_mneongreen_pos-', organ),
+                    save_html=opt[['save-html']]
+                )
+            }
+        }
     }
 }
 
