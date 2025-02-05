@@ -1,0 +1,18 @@
+BUV396-A :: CD19
+BV421-A :: F4_80
+BUV496-A :: NK1_1
+BV510-A :: CD11c
+Alexa Fluor 488-A :: CD90
+BUV563-A :: MHCII
+PE-A :: CD62L
+PE-Alexa 610-A :: CD184
+BV605-A :: Ly6G
+7-AAD-A :: LD
+Alexa Fluor 647-A :: CD11b
+BV650-A :: CD86
+PerCP-Cy5-5-A :: CD45
+Alexa 700-PE-A :: CD3
+BV711-A :: CD117
+APC-Cy7-A :: CD44
+PE-Cy7-A :: CD115
+BV785-A :: Ly6C
