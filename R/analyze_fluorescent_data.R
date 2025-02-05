@@ -191,6 +191,14 @@ for (organ in sort(organs)) {
 # ----------------------------------------------------------------------
 # Plot mNeonGreen positivity per cell type
 
+# sort
+df <- df[order(sapply(df[['zygosity']],
+    function(x) which(x == c('wild type', 'heterozygous', 'homozygous', 'hemizygous')))),
+]
+# df <- df[order(sapply(df[['zygosity']],
+#     function(x) which(x == c('wild type', 'het-untreated', 'het-PBS', 'het-TGA')))),
+# ]
+
 if ('pct_mneongreen_pos' %in% colnames(df)) {
     log_print(paste(Sys.time(), 'Quantifying mNeonGreen...'))
 
@@ -204,6 +212,7 @@ if ('pct_mneongreen_pos' %in% colnames(df)) {
                 x='cell_type', y='pct_mneongreen_pos', group_by='zygosity',
                 ylabel='Percent mNeonGreen+', title=organ,
                 ymin=0, ymax=100,
+                xaxis_angle=-90,
                 hover_data=c('mouse_id', 'sex', 'zygosity', 'treatment', 'weeks_old',
                              'Cells', 'num_cells', 'num_mneongreen_pos', 'fcs_name'),
                 color_discrete_map=c(
@@ -244,6 +253,7 @@ if ('pct_mneongreen_pos' %in% colnames(df)) {
             if (!troubleshooting) {
                 save_fig(
                     fig=fig,
+                    height=1000, width=1600, scale=3,
                     dirpath=file.path(wd, opt[['figures-dir']], 'mneongreen'),
                     filename=paste0('scatter-pct_mneongreen_pos-', organ),
                     save_html=opt[['save-html']]

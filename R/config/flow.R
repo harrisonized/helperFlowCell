@@ -25,7 +25,8 @@ cell_type_ignore <- c(
     'CD3-CD19-', 'Ly6C-Ly6G-', 'F4_80-CD11b-', 'Ly6G-', 'NK1.1-',
     'Myeloid Cells', 'Non-Dendritic Cells', 'Non-Macrophages',
     'mNeonGreen-',
-    'CD19-CD3-', 'CD19-CD90-', 'CD11b+', 'CD117-'
+    'CD19-CD3-', 'CD19-CD90-', 'CD11b+', 'CD117-',
+    'CD4+ T cells', 'CD8+ T cells'
 )
 
 mouse_db_ignore <- c(

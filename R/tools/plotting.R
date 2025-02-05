@@ -185,6 +185,7 @@ plot_violin <- function(
     df, x, y, group_by=NULL, size=NULL,
     xlabel=NULL, ylabel=NULL, title=NULL,
     ymin=NULL, ymax=NULL,
+    xaxis_angle=45,
     yaxis_type='linear',
     color='#1f77b4',
     color_discrete_map=NULL,
@@ -301,7 +302,7 @@ plot_violin <- function(
             text = title,
             x = 0.5
         ),
-        xaxis = list(title_text = xlabel),
+        xaxis = list(title_text = xlabel, tickangle=xaxis_angle),
         yaxis = list(
             title_text = ylabel,
             showgrid = TRUE, gridcolor = '#E4EAF2', zeroline = FALSE,
