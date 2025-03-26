@@ -48,7 +48,7 @@ option_list = list(
 
     make_option(c("-g", "--group-by"), default='group_by',
                 metavar='group_by', type="character",
-                help="determine the group"),
+                help="enter a column or comma-separated list of columns, no spaces"),
 
     make_option(c("-p", "--png-only"), default=FALSE, action="store_true",
                 metavar="FALSE", type="logical",
@@ -72,6 +72,9 @@ troubleshooting = opt[['troubleshooting']]
 output_dir <- file.path(wd, opt[['output-dir']])
 troubleshooting_dir = file.path(output_dir, 'troubleshooting')
 
+# args
+group_by <- unlist(strsplit(opt[['group-by']], ','))
+
 
 # Start Log
 start_time = Sys.time()
@@ -85,21 +88,25 @@ log_print(paste('Script started at:', start_time))
 
 log_print(paste(Sys.time(), 'Reading data...'))
 
+# Read counts data exported from flowjo
+counts <- append_many_csv(file.path(wd, opt[['input-dir']]), recursive=TRUE)
+if (is.null(counts)) {
+    msg <- paste("No counts data found. Please check", opt[['input-dir']], '...')
+    stop(msg)
+}
+counts <- preprocess_flowjo_export(counts)
+counts <- counts[!str_detect(counts[['fcs_name']], '(U|u)nstained'), ]  # drop unstained cells
+
 # reference files
 mouse_db <- append_many_csv(file.path(wd, opt[['ref-dir']]), recursive=TRUE, include_filepath=FALSE)
 flow_metadata <- append_many_csv(file.path(wd, opt[['metadata-dir']]), recursive=TRUE, include_filepath=FALSE)
-# drop duplicates for mouse_db and flow_metadata
 
-# Read counts data exported from flowjo
-counts <- append_many_csv(file.path(wd, opt[['input-dir']]), recursive=TRUE)
-counts <- preprocess_flowjo_export(counts)
-counts <- counts[!str_detect(counts[['fcs_name']], '(U|u)nstained'), ]  # drop unstained cells
 
 
 # ----------------------------------------------------------------------
 # Preprocessing
 
-# Reshape
+# Reshape so each row is a gate in each sample
 df <- pivot_longer(counts,
     names_to = "gate", values_to = "num_cells",
     cols=items_in_a_not_b(colnames(counts), c(id_cols, initial_gates)),
@@ -109,30 +116,37 @@ df[['cell_type']] <- unlist(lapply(strsplit(df[['gate']], '/'), function(x) x[le
 df[['cell_type']] <- multiple_replacement(df[['cell_type']], cell_type_spell_check)
 df[['pct_cells']] <- round(df[['num_cells']] /
     df[['Cells/Single Cells/Single Cells/Live Cells']] * 100, 2)
-
-# join reference files
-df <- merge(df, flow_metadata,
-    by="fcs_name", all.x=FALSE, all.y=FALSE)  # left join
-df <- merge(df, mouse_db[, items_in_a_not_b(colnames(mouse_db), mouse_db_ignore)],
-    by="mouse_id", all.x=TRUE, all.y=FALSE)  # left join
-df <- df[(df[['is_unstained']]==FALSE), ]  # drop unstained cells
-df[['weeks_old']] <- round(df[['age']]/7, 1)
-
-
-# filters
+# filter ignored cell types
 for (cell_type in c(cell_type_ignore, 'mNeonGreen+')) {
     df <- df[!str_detect(df[['cell_type']], cell_type), ]
 }
 
 
-# save
-if (!troubleshooting) {
-    if (!dir.exists(file.path(wd, opt[['output-dir']], 'data'))) {
-        dir.create(file.path(wd, opt[['output-dir']], 'data'), recursive=TRUE)
-    }
-    filepath = file.path(wd, opt[['output-dir']], 'data', 'cell_proportions.csv')
-    write.table(df, file = filepath, row.names = FALSE, sep = ',' )
+# inner join flow metadata
+df <- merge(df, flow_metadata,
+    by="fcs_name", all.x=FALSE, all.y=FALSE, suffixes=c('', '_'))
+df <- df[(df[['is_unstained']]==FALSE), ]  # drop unstained cells
+if (length(group_by) > 1) {
+    df[['group_by']] <- apply( df[ , group_by ] , 1 , paste , collapse = ", " )
+} else {
+    df[['group_by']] <- df[[group_by]]
 }
+
+
+# left join mouse data
+df <- merge(df, mouse_db[, items_in_a_not_b(colnames(mouse_db), mouse_db_ignore)],
+    by="mouse_id", all.x=TRUE, all.y=FALSE, suffixes=c('', '_'))
+df[['weeks_old']] <- round(df[['age']]/7, 1)
+
+
+# # save
+# if (!troubleshooting) {
+#     if (!dir.exists(file.path(wd, opt[['output-dir']], 'data'))) {
+#         dir.create(file.path(wd, opt[['output-dir']], 'data'), recursive=TRUE)
+#     }
+#     filepath = file.path(wd, opt[['output-dir']], 'data', 'cell_proportions.csv')
+#     write.table(df, file = filepath, row.names = FALSE, sep = ',' )
+# }
 
 
 # ----------------------------------------------------------------------
@@ -152,11 +166,11 @@ for (organ in sort(organs)) {
 
     fig <- plot_violin(
         df[(df[['organ']]==organ) & (df[['num_cells']]>10), ],
-        x='cell_type', y='pct_cells', group_by=opt[['group-by']],
+        x='cell_type', y='pct_cells', group_by='group_by',
         ylabel='Percent of Live Cells', title=organ,
         ymin=0, ymax=100,
         hover_data=unique(c(
-            'mouse_id', 'sex', opt[['group-by']], 'treatment', 'weeks_old', 
+            'mouse_id', 'group_by', group_by, 'sex', 'treatment', 'weeks_old', 
             'Cells', 'num_cells', 'fcs_name'))
         # color_discrete_map=c(
         #     'heterozygous'='#2ca02c',  # green
@@ -168,8 +182,8 @@ for (organ in sort(organs)) {
         save_fig(
             fig=fig,
             height=opt[['height']], width=opt[['width']],
-            dirpath=file.path(wd, opt[['output-dir']], 'figures', 'cell_proportions', opt[['group-by']]),
-            filename=paste('violin-pct_cells', organ, opt[['group-by']], sep='-'),
+            dirpath=file.path(wd, opt[['output-dir']], 'figures', 'cell_proportions'),
+            filename=paste('violin-pct_cells', organ, gsub(',', '_', opt[['group-by']]), sep='-'),
             save_html=!opt[['png-only']]
         )
     }
@@ -180,10 +194,10 @@ for (organ in sort(organs)) {
 
     tmp <- sort_for_graphpad(
         df[(df[['organ']]==organ) & (df[['num_cells']]>10),
-        c('cell_type', opt[['group-by']], 'mouse_id', 'pct_cells',
+        c('cell_type', 'group_by', 'mouse_id', 'pct_cells',
           'Cells/Single Cells/Single Cells/Live Cells', 'num_cells',
           'organ', 'sex', 'zygosity', 'treatment', 'weeks_old', 'fcs_name')],
-        group_by=opt[['group-by']]
+        group_by='group_by'
     )
 
     if (!troubleshooting) {
@@ -192,7 +206,7 @@ for (organ in sort(organs)) {
         }
         filepath = file.path(
             wd, opt[['output-dir']], 'data', 'graphpad',
-            paste0(organ, '-', opt[['group-by']], '.csv')
+            paste0(organ, '-', gsub(',', '_', opt[['group-by']]), '.csv')
         )
         write.table(tmp, file = filepath, row.names = FALSE, sep = ',')
     }
