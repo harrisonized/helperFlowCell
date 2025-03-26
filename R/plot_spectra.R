@@ -32,8 +32,8 @@ source(file.path(wd, 'R', 'functions', 'plotting.R'))  # plot_spectra_by_each_la
 
 # args
 option_list = list(
-    make_option(c("-i", "--input-file"), default='data/panel.csv',
-                metavar='data/panel.csv', type="character",
+    make_option(c("-i", "--input-file"), default='data/design/panel.csv',
+                metavar='data/design/panel.csv', type="character",
                 help="specify the fluorophores to use in your flow panel"),
 
     make_option(c("-a", "--antibody-inventory"), default='ref/antibody_inventory.xlsx',

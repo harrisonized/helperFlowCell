@@ -15,6 +15,7 @@ import::here(file.path(wd, 'R', 'tools', 'list_tools.R'),
 ## preprocess_flowjo_export
 ## preprocess_antibody_inventory
 ## preprocess_instrument_config
+## sort_for_graphpad
 ## spillover_to_xml
 
 
@@ -120,6 +121,31 @@ preprocess_instrument_config <- function(df) {
         df[['bandpass_filter']], df[['excitation']],
         decreasing = c(FALSE, TRUE),
         method = "radix"), ]
+}
+
+
+#' Sort rows to be in the same order as the violin plot
+#' for easy copy-paste into Graphpad
+#' 
+sort_for_graphpad <- function(
+    df,
+    x='cell_type',
+    y='pct_cells',
+    group_by='group_by'
+) {
+
+    x_axis_order <- df %>%
+        group_by(.data[['cell_type']]) %>%
+        summarize(median = median(.data[['pct_cells']], na.rm=TRUE)) %>%
+        arrange(-.data[['median']]) %>%
+        select(.data[['cell_type']])
+
+    sorted <- df %>% arrange(
+        match(.data[['cell_type']], unlist(x_axis_order)),
+        .data[[group_by]]
+    )
+
+    return(sorted)
 }
 
 

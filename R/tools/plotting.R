@@ -34,7 +34,7 @@ save_fig <- function(fig,
     ))
 
     # save HTML
-    if (opt[['save-html']]) {
+    if (save_html) {
         if (!dir.exists( file.path(dirpath, 'html') )) {
             dir.create( file.path(dirpath, 'html'), recursive=TRUE)
         }

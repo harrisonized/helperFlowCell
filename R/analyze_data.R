@@ -9,7 +9,7 @@ import::from(stringr, 'str_detect')
 import::from(tidyr, 'pivot_longer')
 
 import::from(file.path(wd, 'R', 'functions', 'preprocessing.R'),
-    'preprocess_flowjo_export', .character_only=TRUE)
+    'preprocess_flowjo_export', 'sort_for_graphpad', .character_only=TRUE)
 
 import::from(file.path(wd, 'R', 'tools', 'df_tools.R'),
     'rename_columns', .character_only=TRUE)
@@ -38,25 +38,29 @@ option_list = list(
                 metavar="data/flow-metadata", type="character",
                 help="metadata directory containing csvs mapping fcs to mouse ids"),
 
-    make_option(c("-o", "--output-dir"), default="data/analysis",
-                metavar="data/analysis", type="character",
+    make_option(c("-o", "--output-dir"), default="output",
+                metavar="output", type="character",
                 help="output directory for the data"),
 
-    make_option(c("-f", "--figures-dir"), default="figures/analysis",
-                metavar="figures/analysis", type="character",
-                help="output directory for the figures"),
-
-    make_option(c("-r", "--ref-dir"), default='ref/mice',
-                metavar='ref/mice', type="character",
+    make_option(c("-r", "--ref-dir"), default='data/mice',
+                metavar='data/mice', type="character",
                 help="directory of files containing all the mouse data"),
 
-    make_option(c("-s", "--save-html"), default=FALSE, action="store_true",
-                metavar="FALSE", type="logical",
-                help="save html files in addition to PNG"),
-
-    make_option(c("-g", "--group-by"), default='group',
-                metavar='group', type="character",
+    make_option(c("-g", "--group-by"), default='group_by',
+                metavar='group_by', type="character",
                 help="determine the group"),
+
+    make_option(c("-p", "--png-only"), default=FALSE, action="store_true",
+                metavar="FALSE", type="logical",
+                help="only save png and not HTML, useful for setting png height/width"),
+
+    make_option(c("-l", "--height"), default=500,
+                metavar="500", type="integer",
+                help="height in px"),
+
+    make_option(c("-w", "--width"), default=800,
+                metavar="800", type="integer",
+                help="width in px, max width is 200000"),
 
     make_option(c("-t", "--troubleshooting"), default=FALSE, action="store_true",
                 metavar="FALSE", type="logical",
@@ -116,17 +120,17 @@ df[['weeks_old']] <- round(df[['age']]/7, 1)
 
 
 # filters
-for (cell_type in cell_type_ignore) {
+for (cell_type in c(cell_type_ignore, 'mNeonGreen+')) {
     df <- df[!str_detect(df[['cell_type']], cell_type), ]
 }
 
 
 # save
 if (!troubleshooting) {
-    if (!dir.exists(file.path(wd, opt[['output-dir']]))) {
-        dir.create(file.path(wd, opt[['output-dir']]), recursive=TRUE)
+    if (!dir.exists(file.path(wd, opt[['output-dir']], 'data'))) {
+        dir.create(file.path(wd, opt[['output-dir']], 'data'), recursive=TRUE)
     }
-    filepath = file.path(wd, opt[['output-dir']], 'cell_proportions.csv')  # filename
+    filepath = file.path(wd, opt[['output-dir']], 'data', 'cell_proportions.csv')
     write.table(df, file = filepath, row.names = FALSE, sep = ',' )
 }
 
@@ -142,29 +146,57 @@ for (organ in sort(organs)) {
 
     log_print(paste(Sys.time(), 'Processing...', organ))
 
+
+    # ----------------------------------------------------------------------
+    # Plot
+
     fig <- plot_violin(
         df[(df[['organ']]==organ) & (df[['num_cells']]>10), ],
         x='cell_type', y='pct_cells', group_by=opt[['group-by']],
         ylabel='Percent of Live Cells', title=organ,
         ymin=0, ymax=100,
-        hover_data=c(
+        hover_data=unique(c(
             'mouse_id', 'sex', opt[['group-by']], 'treatment', 'weeks_old', 
-            'Cells', 'num_cells', 'fcs_name')
+            'Cells', 'num_cells', 'fcs_name'))
         # color_discrete_map=c(
         #     'heterozygous'='#2ca02c',  # green
         #     'wild type'='#62c1e5'  # blue
         # )
     )
 
-    # export
     if (!troubleshooting) {
         save_fig(
             fig=fig,
-            dirpath=file.path(wd, opt[['figures-dir']], 'cell_proportions'),
-            filename=paste0('violin-pct_cells-', organ),
-            save_html=opt[['save-html']]
+            height=opt[['height']], width=opt[['width']],
+            dirpath=file.path(wd, opt[['output-dir']], 'figures', 'cell_proportions', opt[['group-by']]),
+            filename=paste('violin-pct_cells', organ, opt[['group-by']], sep='-'),
+            save_html=!opt[['png-only']]
         )
     }
+
+
+    # ----------------------------------------------------------------------
+    # Data
+
+    tmp <- sort_for_graphpad(
+        df[(df[['organ']]==organ) & (df[['num_cells']]>10),
+        c('cell_type', opt[['group-by']], 'mouse_id', 'pct_cells',
+          'Cells/Single Cells/Single Cells/Live Cells', 'num_cells',
+          'organ', 'sex', 'zygosity', 'treatment', 'weeks_old', 'fcs_name')],
+        group_by=opt[['group-by']]
+    )
+
+    if (!troubleshooting) {
+        if (!dir.exists(file.path(wd, opt[['output-dir']], 'data', 'graphpad'))) {
+            dir.create(file.path(wd, opt[['output-dir']], 'data', 'graphpad'), recursive=TRUE)
+        }
+        filepath = file.path(
+            wd, opt[['output-dir']], 'data', 'graphpad',
+            paste0(organ, '-', opt[['group-by']], '.csv')
+        )
+        write.table(tmp, file = filepath, row.names = FALSE, sep = ',')
+    }
+
 }
 
 
