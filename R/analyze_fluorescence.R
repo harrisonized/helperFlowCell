@@ -46,9 +46,13 @@ option_list = list(
                 metavar='data/mice', type="character",
                 help="directory of files containing all the mouse data"),
 
-    make_option(c("-g", "--group-by"), default='treatment',
-                metavar='treatment', type="character",
-                help="enter a column or comma-separated list of columns, no spaces"),
+    make_option(c("-g", "--group-by"), default='zygosity',
+                metavar='zygosity', type="character",
+                help="Ex: zygosity, genotype, ..."),
+
+    make_option(c("-f", "--fluorescence"), default='mNeonGreen',
+                metavar='mNeonGreen', type="character",
+                help="Ex: mNeonGreen, GFP, YFP, ..."),
 
     make_option(c("-p", "--png-only"), default=FALSE, action="store_true",
                 metavar="FALSE", type="logical",
@@ -73,7 +77,8 @@ output_dir <- file.path(wd, opt[['output-dir']])
 troubleshooting_dir = file.path(output_dir, 'troubleshooting')
 
 # args
-group_by <- unlist(strsplit(opt[['group-by']], ','))
+fp_pos <- paste0(opt[['fluorescence']],'+')
+num_fp_pos <- paste0('num_', tolower(opt[['fluorescence']]),'_pos')
 
 
 # Start Log
@@ -125,11 +130,6 @@ for (cell_type in c(cell_type_ignore)) {
 df <- merge(df, flow_metadata,
     by="fcs_name", all.x=FALSE, all.y=FALSE, suffixes=c('', '_'))
 df <- df[(df[['is_unstained']]==FALSE), ]  # drop unstained cells
-if (length(group_by) > 1) {
-    df[['group_by']] <- apply( df[ , group_by ] , 1 , paste , collapse = ", " )
-} else {
-    df[['group_by']] <- df[[group_by]]
-}
 
 
 # left join mouse data
@@ -139,10 +139,13 @@ df[['weeks_old']] <- round(df[['age']]/7, 1)
 
 
 # unpivot mNeonGreen+ num_cells into its own column
-if ( any(str_detect(colnames(counts), 'mNeonGreen')) ) {
+if ( any(str_detect(colnames(counts), opt[['fluorescence']])) ) {
 
     # split out mNeonGreen+ rows
-    fp_quant <- df[(df[['cell_type']]=='mNeonGreen+'), c(id_cols, 'gate', 'num_cells')]
+    fp_quant <- df[
+        (df[['cell_type']]==fp_pos),
+        c(id_cols, 'gate', 'num_cells')
+    ]
 
     # second-to-last gate
     fp_quant[['gate']] <- unlist(lapply(
@@ -151,14 +154,14 @@ if ( any(str_detect(colnames(counts), 'mNeonGreen')) ) {
     fp_quant[['cell_type']] <- unlist(lapply(
         strsplit(fp_quant[['gate']], '/'), function(x) x[length(x)]
     ))
-    fp_quant <- rename_columns(fp_quant, c('num_cells'='num_mneongreen_pos'))
+    fp_quant <- rename_columns(fp_quant, c('num_cells'=num_fp_pos))
     
     df = merge(
-        df[(df[['cell_type']]!='mNeonGreen+'), ],
-        fp_quant[, c(id_cols, 'gate', 'num_mneongreen_pos')],
+        df[(df[['cell_type']]!=fp_pos), ],
+        fp_quant[, c(id_cols, 'gate', num_fp_pos)],
         by=c(id_cols, 'gate'), all.x=TRUE, all.y=FALSE
     )
-    df[['pct_mneongreen_pos']] <- round(df[['num_mneongreen_pos']] / df[['num_cells']] * 100, 2)
+    df[[num_fp_pos]] <- round(df[[num_fp_pos]] / df[['num_cells']] * 100, 2)
 }
 
 
@@ -169,59 +172,32 @@ log_print(paste(Sys.time(), 'Quantifying mNeonGreen...'))
 
 organs <- sort(unique(df[['organ']]))
 for (organ in sort(organs)) {
-    if ( !all(is.na(df[(df[['organ']]==organ), 'pct_mneongreen_pos'])) ) {
+    if ( !all(is.na(df[(df[['organ']]==organ), num_fp_pos])) ) {
 
         log_print(paste(Sys.time(), 'Processing...', organ))
 
         fig <- plot_violin(
             df[(df[['organ']]==organ) & (df[['num_cells']]>10), ],
-            x='cell_type', y='pct_mneongreen_pos', group_by='zygosity',
-            ylabel='Percent mNeonGreen+', title=organ,
+            x='cell_type', y=num_fp_pos, group_by=opt[['group-by']],
+            ylabel=paste('Percent', fp_pos), title=organ,
             ymin=0, ymax=100,
             xaxis_angle=-90,
-            hover_data=c('mouse_id', 'sex', 'zygosity', 'treatment', 'weeks_old',
-                         'Cells', 'num_cells', 'num_mneongreen_pos', 'fcs_name'),
-            color_discrete_map=c(
-                'heterozygous'='#2ca02c',  # green
-                'wild type'='#62c1e5'  # blue
+            hover_data=unique(
+                c('mouse_id', 'sex', opt[['group-by']], 'treatment', 'weeks_old',
+                  'Cells', 'num_cells', num_fp_pos, 'fcs_name')
             )
+            # color_discrete_map=c(
+            #     'heterozygous'='#2ca02c',  # green
+            #     'wild type'='#62c1e5'  # blue
+            # )
         )
 
         # export
         if (!troubleshooting) {
             save_fig(
                 fig=fig,
-                dirpath=file.path(wd, opt[['output-dir']], 'figures', 'mneongreen'),
-                filename=paste0('violin-pct_mneongreen_pos-', organ),
-                save_html=!opt[['png-only']]
-            )
-        }
-
-        fig <- plot_scatter(
-            df[((df[['organ']]==organ) & 
-                (df[['num_cells']]>10) &
-                (df[['zygosity']]=='heterozygous') &
-                (df[['cell_type']] %in% c('Ly6C-hi Monocytes', 'Ly6C-int Monocytes', 'Neutrophils'))
-                ), ],
-            x='weeks_old', y='pct_mneongreen_pos', group_by='cell_type',
-            xlabel='Age (Weeks)', ylabel='Percent mNeonGreen+', title=organ,
-            ymin=0, ymax=100,
-            hover_data=c('mouse_id', 'sex', 'zygosity', 'treatment', 'weeks_old',
-                         'Cells', 'num_cells', 'num_mneongreen_pos', 'fcs_name'),
-            color_discrete_map=c(
-                'Ly6C-hi Monocytes'='#ff7f0e',  # orange
-                'Ly6C-int Monocytes'='#2ca02c',  # green
-                'Neutrophils'='#62c1e5'  # blue
-            )
-        )
-
-        # export
-        if (!troubleshooting) {
-            save_fig(
-                fig=fig,
-                height=1000, width=1600, scale=3,
-                dirpath=file.path(wd, opt[['output-dir']], 'figures', 'mneongreen'),
-                filename=paste0('scatter-pct_mneongreen_pos-', organ),
+                dirpath=file.path(wd, opt[['output-dir']], 'figures', tolower(opt[['fluorescence']])),
+                filename=paste0('violin-pct_', tolower(opt[['fluorescence']]), '_pos-', organ),
                 save_html=!opt[['png-only']]
             )
         }
@@ -233,3 +209,40 @@ end_time = Sys.time()
 log_print(paste('Script ended at:', Sys.time()))
 log_print(paste("Script completed in:", difftime(end_time, start_time)))
 log_close()
+
+
+
+# ----------------------------------------------------------------------
+# Code Graveyard
+
+if (FALSE) {
+
+    fig <- plot_scatter(
+        df[((df[['organ']]==organ) & 
+            (df[['num_cells']]>10) &
+            (df[['zygosity']]=='heterozygous') &
+            (df[['cell_type']] %in% c('Ly6C-hi Monocytes', 'Ly6C-int Monocytes', 'Neutrophils'))
+            ), ],
+        x='weeks_old', y='pct_mneongreen_pos', group_by='cell_type',
+        xlabel='Age (Weeks)', ylabel='Percent mNeonGreen+', title=organ,
+        ymin=0, ymax=100,
+        hover_data=c('mouse_id', 'sex', 'zygosity', 'treatment', 'weeks_old',
+                     'Cells', 'num_cells', 'num_mneongreen_pos', 'fcs_name'),
+        color_discrete_map=c(
+            'Ly6C-hi Monocytes'='#ff7f0e',  # orange
+            'Ly6C-int Monocytes'='#2ca02c',  # green
+            'Neutrophils'='#62c1e5'  # blue
+        )
+    )
+
+    # export
+    if (!troubleshooting) {
+        save_fig(
+            fig=fig,
+            height=1000, width=1600, scale=3,
+            dirpath=file.path(wd, opt[['output-dir']], 'figures', 'mneongreen'),
+            filename=paste0('scatter-pct_mneongreen_pos-', organ),
+            save_html=!opt[['png-only']]
+        )
+    }
+}
