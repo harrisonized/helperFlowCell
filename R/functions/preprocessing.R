@@ -126,23 +126,25 @@ preprocess_instrument_config <- function(df) {
 
 #' Sort rows to be in the same order as the violin plot
 #' for easy copy-paste into Graphpad
+#' sort cell_type by decreasing order of percent cells
+#' then sort any other groups
 #' 
 sort_for_graphpad <- function(
     df,
     x='cell_type',
     y='pct_cells',
-    groupby='groupby'
+    groups=c('groupby')  # enter a collection of groups
 ) {
 
     x_axis_order <- df %>%
-        group_by(.data[['cell_type']]) %>%
-        summarize(median = median(.data[['pct_cells']], na.rm=TRUE)) %>%
+        group_by(.data[[x]]) %>%
+        summarize(median = median(.data[[y]], na.rm=TRUE)) %>%
         arrange(-.data[['median']]) %>%
-        select(.data[['cell_type']])
+        select(.data[[x]])
 
     sorted <- df %>% arrange(
-        match(.data[['cell_type']], unlist(x_axis_order)),
-        .data[[groupby]]
+        match(.data[[x]], unlist(x_axis_order)),
+        !!! rlang::syms(groups)
     )
 
     return(sorted)
