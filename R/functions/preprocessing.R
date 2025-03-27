@@ -131,7 +131,7 @@ sort_for_graphpad <- function(
     df,
     x='cell_type',
     y='pct_cells',
-    group_by='group_by'
+    groupby='groupby'
 ) {
 
     x_axis_order <- df %>%
@@ -142,7 +142,7 @@ sort_for_graphpad <- function(
 
     sorted <- df %>% arrange(
         match(.data[['cell_type']], unlist(x_axis_order)),
-        .data[[group_by]]
+        .data[[groupby]]
     )
 
     return(sorted)

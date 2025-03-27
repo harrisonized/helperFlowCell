@@ -1,4 +1,4 @@
-## Compute cell proportions from each organ using exported flowjo data
+## Graphs percentage of live cells of each cell population
 
 wd = dirname(this.path::here())  # wd = '~/github/R/helperFlowCell'
 suppressPackageStartupMessages(library('dplyr'))
@@ -73,12 +73,12 @@ output_dir <- file.path(wd, opt[['output-dir']])
 troubleshooting_dir = file.path(output_dir, 'troubleshooting')
 
 # args
-group_by <- unlist(strsplit(opt[['group-by']], ','))
+groupby <- unlist(strsplit(opt[['group-by']], ','))
 
 
 # Start Log
 start_time = Sys.time()
-log <- log_open(paste0("analyze_data-",
+log <- log_open(paste0("analyze_populations-",
     strftime(start_time, format="%Y%m%d_%H%M%S"), '.log'))
 log_print(paste('Script started at:', start_time))
 
@@ -125,10 +125,10 @@ for (cell_type in c(cell_type_ignore, 'mNeonGreen+')) {
 df <- merge(df, flow_metadata,
     by="fcs_name", all.x=FALSE, all.y=FALSE, suffixes=c('', '_'))
 df <- df[(df[['is_unstained']]==FALSE), ]  # drop unstained cells
-if (length(group_by) > 1) {
-    df[['group_by']] <- apply( df[ , group_by ] , 1 , paste , collapse = ", " )
+if (length(groupby) > 1) {
+    df[['groupby']] <- apply( df[ , groupby ] , 1 , paste , collapse = ", " )
 } else {
-    df[['group_by']] <- df[[group_by]]
+    df[['groupby']] <- df[[groupby]]
 }
 
 
@@ -165,11 +165,11 @@ for (organ in sort(organs)) {
 
     fig <- plot_violin(
         df[(df[['organ']]==organ) & (df[['num_cells']]>10), ],
-        x='cell_type', y='pct_cells', group_by='group_by',
+        x='cell_type', y='pct_cells', group_by='groupby',
         ylabel='Percent of Live Cells', title=organ,
         ymin=0, ymax=100,
         hover_data=unique(c(
-            'mouse_id', 'group_by', group_by, 'sex', 'treatment', 'weeks_old', 
+            'mouse_id', 'groupby', groupby, 'sex', 'treatment', 'weeks_old', 
             'Cells', 'num_cells', 'fcs_name'))
         # color_discrete_map=c(
         #     'heterozygous'='#2ca02c',  # green
@@ -193,10 +193,10 @@ for (organ in sort(organs)) {
 
     tmp <- sort_for_graphpad(
         df[(df[['organ']]==organ) & (df[['num_cells']]>10),
-        c('cell_type', 'group_by', group_by, 'mouse_id', 'pct_cells',
+        c('cell_type', 'groupby', groupby, 'mouse_id', 'pct_cells',
           'Cells/Single Cells/Single Cells/Live Cells', 'num_cells',
           'organ', 'sex', 'treatment', 'weeks_old', 'fcs_name')],
-        group_by='group_by'
+        groupby='groupby'
     )
 
     if (!troubleshooting) {
