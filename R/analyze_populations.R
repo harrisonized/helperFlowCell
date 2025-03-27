@@ -58,8 +58,8 @@ option_list = list(
                 metavar="500", type="integer",
                 help="height in px"),
 
-    make_option(c("-w", "--width"), default=800,
-                metavar="800", type="integer",
+    make_option(c("-w", "--width"), default=2000,
+                metavar="2000", type="integer",
                 help="width in px, max width is 200000"),
 
     make_option(c("-t", "--troubleshooting"), default=FALSE, action="store_true",
@@ -114,7 +114,7 @@ df <- pivot_longer(counts,
 df[['cell_type']] <- unlist(lapply(strsplit(df[['gate']], '/'), function(x) x[length(x)]))
 df[['cell_type']] <- multiple_replacement(df[['cell_type']], cell_type_spell_check)
 df[['pct_cells']] <- round(df[['num_cells']] /
-    df[['Cells/Single Cells/Single Cells/Live Cells']] * 100, 2)
+    df[['Cells/Single Cells/Single Cells/Live Cells']] * 100, 4)
 # filter ignored cell types
 for (cell_type in c(cell_type_ignore, 'mNeonGreen+')) {
     df <- df[!str_detect(df[['cell_type']], cell_type), ]
@@ -143,7 +143,7 @@ df[['weeks_old']] <- round(df[['age']]/7, 1)
 #     if (!dir.exists(file.path(wd, opt[['output-dir']], 'data'))) {
 #         dir.create(file.path(wd, opt[['output-dir']], 'data'), recursive=TRUE)
 #     }
-#     filepath = file.path(wd, opt[['output-dir']], 'data', 'cell_proportions.csv')
+#     filepath = file.path(wd, opt[['output-dir']], 'data', 'populations.csv')
 #     write.table(df, file = filepath, row.names = FALSE, sep = ',' )
 # }
 
@@ -181,7 +181,7 @@ for (organ in sort(organs)) {
         save_fig(
             fig=fig,
             height=opt[['height']], width=opt[['width']],
-            dirpath=file.path(wd, opt[['output-dir']], 'figures', 'cell_proportions'),
+            dirpath=file.path(wd, opt[['output-dir']], 'figures', 'populations'),
             filename=paste('violin-pct_cells', organ, gsub(',', '_', opt[['group-by']]), sep='-'),
             save_html=!opt[['png-only']]
         )
@@ -196,15 +196,15 @@ for (organ in sort(organs)) {
         c('cell_type', 'groupby', groupby, 'mouse_id', 'pct_cells',
           'Cells/Single Cells/Single Cells/Live Cells', 'num_cells',
           'organ', 'sex', 'treatment', 'weeks_old', 'fcs_name')],
-        groupby='groupby'
+        groups=c('groupby')
     )
 
     if (!troubleshooting) {
-        if (!dir.exists(file.path(wd, opt[['output-dir']], 'data', 'graphpad'))) {
-            dir.create(file.path(wd, opt[['output-dir']], 'data', 'graphpad'), recursive=TRUE)
+        dirpath <- file.path(wd, opt[['output-dir']], 'data', 'populations')
+        if (!dir.exists(dirpath)) {
+            dir.create(dirpath, recursive=TRUE)
         }
-        filepath = file.path(
-            wd, opt[['output-dir']], 'data', 'graphpad',
+        filepath = file.path(dirpath,
             paste0(organ, '-', gsub(',', '_', opt[['group-by']]), '.csv')
         )
         write.table(tmp, file = filepath, row.names = FALSE, sep = ',')

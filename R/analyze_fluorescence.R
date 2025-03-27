@@ -9,7 +9,7 @@ import::from(stringr, 'str_detect')
 import::from(tidyr, 'pivot_longer')
 
 import::from(file.path(wd, 'R', 'functions', 'preprocessing.R'),
-    'preprocess_flowjo_export', .character_only=TRUE)
+    'preprocess_flowjo_export', 'sort_for_graphpad', .character_only=TRUE)
 
 import::from(file.path(wd, 'R', 'tools', 'df_tools.R'),
     'rename_columns', .character_only=TRUE)
@@ -19,7 +19,7 @@ import::from(file.path(wd, 'R', 'tools', 'list_tools.R'),
     'items_in_a_not_b', 'multiple_replacement',
     .character_only=TRUE)
 import::from(file.path(wd, 'R', 'tools', 'plotting.R'),
-    'save_fig', 'plot_scatter', 'plot_violin', .character_only=TRUE)
+    'save_fig', 'plot_violin', .character_only=TRUE)
 import::from(file.path(wd, 'R', 'config', 'flow.R'),
     'id_cols', 'initial_gates', 'cell_type_spell_check', 'cell_type_ignore',
     'mouse_db_ignore', .character_only=TRUE)
@@ -62,8 +62,8 @@ option_list = list(
                 metavar="500", type="integer",
                 help="height in px"),
 
-    make_option(c("-w", "--width"), default=800,
-                metavar="800", type="integer",
+    make_option(c("-w", "--width"), default=2000,
+                metavar="2000", type="integer",
                 help="width in px, max width is 200000"),
 
     make_option(c("-t", "--troubleshooting"), default=FALSE, action="store_true",
@@ -79,6 +79,7 @@ troubleshooting_dir = file.path(output_dir, 'troubleshooting')
 # args
 fp_pos <- paste0(opt[['fluorescence']],'+')
 num_fp_pos <- paste0('num_', tolower(opt[['fluorescence']]),'_pos')
+pct_fp_pos <- paste0('pct_', tolower(opt[['fluorescence']]),'_pos')
 
 
 # Start Log
@@ -119,7 +120,7 @@ df <- pivot_longer(counts,
 df[['cell_type']] <- unlist(lapply(strsplit(df[['gate']], '/'), function(x) x[length(x)]))
 df[['cell_type']] <- multiple_replacement(df[['cell_type']], cell_type_spell_check)
 df[['pct_cells']] <- round(df[['num_cells']] /
-    df[['Cells/Single Cells/Single Cells/Live Cells']] * 100, 2)
+    df[['Cells/Single Cells/Single Cells/Live Cells']] * 100, 4)
 # filter ignored cell types
 for (cell_type in c(cell_type_ignore)) {
     df <- df[!str_detect(df[['cell_type']], cell_type), ]
@@ -161,7 +162,7 @@ if ( any(str_detect(colnames(counts), opt[['fluorescence']])) ) {
         fp_quant[, c(id_cols, 'gate', num_fp_pos)],
         by=c(id_cols, 'gate'), all.x=TRUE, all.y=FALSE
     )
-    df[[num_fp_pos]] <- round(df[[num_fp_pos]] / df[['num_cells']] * 100, 2)
+    df[[pct_fp_pos]] <- round(df[[num_fp_pos]] / df[['num_cells']] * 100, 4)
 }
 
 
@@ -176,9 +177,13 @@ for (organ in sort(organs)) {
 
         log_print(paste(Sys.time(), 'Processing...', organ))
 
+
+        # ----------------------------------------------------------------------
+        # Plot
+
         fig <- plot_violin(
-            df[(df[['organ']]==organ) & (df[['num_cells']]>10), ],
-            x='cell_type', y=num_fp_pos, group_by=opt[['group-by']],
+            df[(df[['organ']]==organ), ],
+            x='cell_type', y=pct_fp_pos, group_by=opt[['group-by']],
             ylabel=paste('Percent', fp_pos), title=organ,
             ymin=0, ymax=100,
             xaxis_angle=-90,
@@ -201,6 +206,33 @@ for (organ in sort(organs)) {
                 save_html=!opt[['png-only']]
             )
         }
+
+
+        # ----------------------------------------------------------------------
+        # Data
+
+        tmp <- sort_for_graphpad(
+            df[(df[['organ']]==organ) & (!is.na(df[[pct_fp_pos]])),
+                unique(
+                    c('cell_type', opt[['group-by']], 'zygosity', 'sex', 'treatment',
+                      'mouse_id', pct_fp_pos, num_fp_pos, 'num_cells', 'pct_cells',
+                      'organ', 'sex', 'treatment', 'weeks_old', 'fcs_name')
+                )
+            ],
+            groups=c('zygosity', 'sex', 'treatment')
+        )
+
+        if (!troubleshooting) {
+            dirpath <- file.path(wd, opt[['output-dir']], 'data', tolower(opt[['fluorescence']]))
+            if (!dir.exists(dirpath)) {
+                dir.create(dirpath, recursive=TRUE)
+            }
+            filepath = file.path(dirpath,
+                paste0(organ, '-', gsub(',', '_', opt[['group-by']]), '.csv')
+            )
+            write.table(tmp, file = filepath, row.names = FALSE, sep = ',')
+        }
+
     }
 }
 
@@ -209,40 +241,3 @@ end_time = Sys.time()
 log_print(paste('Script ended at:', Sys.time()))
 log_print(paste("Script completed in:", difftime(end_time, start_time)))
 log_close()
-
-
-
-# ----------------------------------------------------------------------
-# Code Graveyard
-
-if (FALSE) {
-
-    fig <- plot_scatter(
-        df[((df[['organ']]==organ) & 
-            (df[['num_cells']]>10) &
-            (df[['zygosity']]=='heterozygous') &
-            (df[['cell_type']] %in% c('Ly6C-hi Monocytes', 'Ly6C-int Monocytes', 'Neutrophils'))
-            ), ],
-        x='weeks_old', y='pct_mneongreen_pos', group_by='cell_type',
-        xlabel='Age (Weeks)', ylabel='Percent mNeonGreen+', title=organ,
-        ymin=0, ymax=100,
-        hover_data=c('mouse_id', 'sex', 'zygosity', 'treatment', 'weeks_old',
-                     'Cells', 'num_cells', 'num_mneongreen_pos', 'fcs_name'),
-        color_discrete_map=c(
-            'Ly6C-hi Monocytes'='#ff7f0e',  # orange
-            'Ly6C-int Monocytes'='#2ca02c',  # green
-            'Neutrophils'='#62c1e5'  # blue
-        )
-    )
-
-    # export
-    if (!troubleshooting) {
-        save_fig(
-            fig=fig,
-            height=1000, width=1600, scale=3,
-            dirpath=file.path(wd, opt[['output-dir']], 'figures', 'mneongreen'),
-            filename=paste0('scatter-pct_mneongreen_pos-', organ),
-            save_html=!opt[['png-only']]
-        )
-    }
-}
