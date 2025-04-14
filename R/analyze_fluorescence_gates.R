@@ -84,7 +84,7 @@ pct_fp_pos <- paste0('pct_', tolower(opt[['fluorescence']]),'_pos')
 
 # Start Log
 start_time = Sys.time()
-log <- log_open(paste0("analyze_fluorescence-",
+log <- log_open(paste0("analyze_fluorescence_gates-",
     strftime(start_time, format="%Y%m%d_%H%M%S"), '.log'))
 log_print(paste('Script started at:', start_time))
 
