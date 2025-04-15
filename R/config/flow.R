@@ -16,8 +16,8 @@ initial_gates <- c('Count', 'Cells', 'Cells/Single Cells',
 
 cell_type_spell_check <- c(
     'B cells'='B Cells',
-    'NK cells'='NK Cells',
-    'Ly6C-lo Monocytes'='Ly6C-int Monocytes'
+    'NK cells'='NK Cells'
+    # 'Ly6C-lo Monocytes'='Ly6C-int Monocytes'
 )
 
 cell_type_ignore <- c(

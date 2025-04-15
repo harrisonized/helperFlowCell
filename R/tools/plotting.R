@@ -185,6 +185,7 @@ plot_violin <- function(
     df, x, y, group_by=NULL, size=NULL,
     xlabel=NULL, ylabel=NULL, title=NULL,
     ymin=NULL, ymax=NULL,
+    legend_order=NULL,
     xaxis_angle=45,
     yaxis_type='linear',
     color='#1f77b4',
@@ -230,6 +231,10 @@ plot_violin <- function(
 
     fig <- plot_ly(type = 'violin')
 
+
+    # ----------------------------------------------------------------------
+    # No groups
+    
     if (is.null(group_by)) {
         if (sort) {
             df <- df %>% arrange(match(.data[[x]], unlist(x_axis_order)))
@@ -256,47 +261,55 @@ plot_violin <- function(
                 marker = list(size = 5),
                 hovertext = hovertext
             )
-    } else {
-        for (group in unique(df[[group_by]])) {
 
-            if (sort) {
-                df <- df %>% arrange(
-                    .data[[group_by]],
-                    match(.data[[x]], unlist(x_axis_order))
-                )
-            }
-
-            # hoverdata
-            hovertext <- ''
-            for (field in c(x, y, hover_data)) {
-                if (!is.null(field)) {
-                    hovertext <- paste0(hovertext, field, "=", df[(df[[group_by]] == group), field], "<br>")
-                }
-            }
-            color <- color_discrete_map[[group]]
-            if (!is.null(color)) {
-                color <- I(color)
-            }
-
-            fig <- fig %>%
-                add_trace(
-                    x = unlist(df[(df[[group_by]] == group), x]),
-                    y = unlist(df[(df[[group_by]] == group), y]),
-                    color = color,
-                    legendgroup = group,
-                    scalegroup = group,
-                    name = group,
-                    box = list(visible = TRUE),
-                    meanline = list(visible = TRUE),
-                    points = 'all',
-                    jitter = 0.2,
-                    pointpos = -1,
-                    marker = list(size = 5),
-                    hovertext = hovertext
-                )
-        }
+        return(fig)
     }
 
+
+    # ----------------------------------------------------------------------
+    # Group by
+
+    if (is.null(legend_order)) {
+        legend_order <- sort(unique(df[[group_by]]))
+    }
+    for (group in legend_order) {
+
+        if (sort) {
+            df <- df %>% arrange(
+                match(.data[[x]], unlist(x_axis_order))
+            )
+        }
+
+        # hoverdata
+        hovertext <- ''
+        for (field in c(x, y, hover_data)) {
+            if (!is.null(field)) {
+                hovertext <- paste0(hovertext, field, "=", df[(df[[group_by]] == group), field], "<br>")
+            }
+        }
+        color <- color_discrete_map[[group]]
+        if (!is.null(color)) {
+            color <- I(color)
+        }
+
+        fig <- fig %>%
+            add_trace(
+                x = unlist(df[(df[[group_by]] == group), x]),
+                y = unlist(df[(df[[group_by]] == group), y]),
+                color = color,
+                legendgroup = group,
+                scalegroup = group,
+                name = group,
+                box = list(visible = TRUE),
+                meanline = list(visible = TRUE),
+                points = 'all',
+                jitter = 0.2,
+                pointpos = -1,
+                marker = list(size = 5),
+                hovertext = hovertext
+            )
+    }
+    
     fig <- fig %>% layout(
         title = list(
             text = title,
