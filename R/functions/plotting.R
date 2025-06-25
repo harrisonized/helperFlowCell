@@ -1,8 +1,15 @@
-library('ggplot2')
 import::here(zeallot, '%<-%')
 import::here(magrittr, '%>%')
+import::here(superb, 'showSignificance')
+import::here(ggplot2,
+    'ggplot', 'aes', 'aes_string', 'geom_boxplot', 'geom_jitter',
+    'scale_fill_brewer')
 import::here(file.path(wd, 'R', 'config', 'lasers.R'),
     'color_for_laser', .character_only=TRUE)
+
+## Functions
+## plot_spectra_by_each_laser
+## plot_violin_with_significance
 
 
 #' Individual Spill Plots
@@ -92,12 +99,12 @@ plot_violin_with_significance <- function(df, pval_tbl, x='groupby', y='pct_cell
         scale_fill_brewer(palette="Dark2") +
 
         # need a loop for arbitrary numbers
-        showSignificance( c(1.1,1.9), low_ht, -0.05, round(pval_tbl[['pval_1v2']], 4)) +
-        showSignificance( c(2.1,2.9), low_ht, -0.05, round(pval_tbl[['pval_2v3']], 4)) +
-        showSignificance( c(3.1,3.9), low_ht, -0.05, round(pval_tbl[['pval_3v4']], 4)) +
-        showSignificance( c(1.1,2.9), med_ht, -0.05, round(pval_tbl[['pval_1v3']], 4)) +
-        showSignificance( c(2.1,3.9), hi_ht, -0.05, round(pval_tbl[['pval_2v4']], 4)) +
-        showSignificance( c(1.1,3.9), hihi_ht, -0.05, round(pval_tbl[['pval_1v4']], 4))
+        showSignificance( c(1.1,1.9), low_ht, -0, round(pval_tbl[['pval_1v2']], 4)) +
+        showSignificance( c(2.1,2.9), low_ht, -0, round(pval_tbl[['pval_2v3']], 4)) +
+        showSignificance( c(3.1,3.9), low_ht, -0, round(pval_tbl[['pval_3v4']], 4)) +
+        showSignificance( c(1.1,2.9), med_ht, -0, round(pval_tbl[['pval_1v3']], 4)) +
+        showSignificance( c(2.1,3.9), hi_ht, -0, round(pval_tbl[['pval_2v4']], 4)) +
+        showSignificance( c(1.1,3.9), hihi_ht, -0, round(pval_tbl[['pval_1v4']], 4))
 
     return(fig)
 }

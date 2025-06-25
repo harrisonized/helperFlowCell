@@ -4,10 +4,12 @@ wd = dirname(this.path::here())  # wd = '~/github/R/helperFlowCell'
 suppressPackageStartupMessages(library('dplyr'))
 library('optparse')
 suppressPackageStartupMessages(library('logr'))
+import::from(progress, 'progress_bar')
 import::from(jsonlite, 'toJSON')
 import::from(magrittr, '%>%')
 import::from(stringr, 'str_detect')
 import::from(tidyr, 'pivot_longer', 'pivot_wider')
+import::here(ggplot2, 'ggsave')
 
 import::from(file.path(wd, 'R', 'functions', 'preprocessing.R'),
     'preprocess_flowjo_export', 'sort_for_graphpad', .character_only=TRUE)
@@ -155,7 +157,56 @@ df[['weeks_old']] <- round(df[['age']]/7, 1)
 
 
 # ----------------------------------------------------------------------
-# Plot cell type frequency per organ
+# Compute statistics
+
+log_print(paste(Sys.time(), 'Computing statistics...'))
+
+# pivot groups into columns
+pval_tbl <- pivot_wider(
+    df[, c('organ', 'cell_type', 'groupby', 'pct_cells')],
+    names_from = c('groupby'),
+    values_from = c('pct_cells'),
+    values_fn = list,  # suppress warning
+    names_glue = "{.name}"
+)
+pval_tbl[['metric']] <- 'pct_cells'
+groups <- sort(
+    items_in_a_not_b(colnames(pval_tbl), c('organ', 'cell_type', 'metric'))
+)
+pval_tbl <- pval_tbl[, c('organ', 'cell_type', 'metric', groups)]  # sort cols
+pval_tbl <- pval_tbl[order(pval_tbl$organ, pval_tbl$cell_type), ]  # sort rows
+
+# calculate unpaired t test
+idxpairs <- t(combn(1:length(groups), 2))
+for (i in 1:nrow(idxpairs)) {
+    idx_a <- idxpairs[i, 1]
+    idx_b <- idxpairs[i, 2]
+
+    pval_tbl[paste0('pval_', idx_a, 'v', idx_b)] <- mapply(
+        function(x, y) t.test(x, y, var.equal=FALSE)[['p.value']],
+        pval_tbl[[ groups[idx_a] ]],
+        pval_tbl[[ groups[idx_b] ]]
+    )
+}
+
+# save
+if (!troubleshooting) {
+
+    tmp_pval_tbl <- pval_tbl
+    for (group in groups) {
+        tmp_pval_tbl[[group]] <- mapply(toJSON, pval_tbl[[group]])
+    }
+
+    if (!dir.exists(file.path(wd, opt[['output-dir']], 'data'))) {
+        dir.create(file.path(wd, opt[['output-dir']], 'data'), recursive=TRUE)
+    }
+    filepath = file.path(wd, opt[['output-dir']], 'data', 'unpaired_t_test_pvals.csv')
+    write.table(tmp_pval_tbl, file = filepath, row.names = FALSE, sep = ',' )
+}
+
+
+# ----------------------------------------------------------------------
+# Plot cell type frequency per organ, interactive plot
 
 log_print(paste(Sys.time(), 'Quantifying cell type frequencies...'))
 
@@ -220,72 +271,59 @@ for (organ in sort(organs)) {
 
 
 # ----------------------------------------------------------------------
-# Compute statistics
+# Plot violin with significance
 
-log_print(paste(Sys.time(), 'Computing statistics...'))
+log_print(paste(Sys.time(),
+    paste(nrow(pval_tbl), 'populations found across', length(organs), 'organs')))
+log_print(paste(Sys.time(), 'Plotting violin with pvals...'))
 
-# pivot groups into columns
-pval_tbl <- pivot_wider(
-    df[, c('organ', 'cell_type', 'groupby', 'pct_cells')],
-    names_from = c('groupby'),
-    values_from = c('pct_cells'),
-    values_fn = list,  # suppress warning
-    names_glue = "{.name}"
-)
-pval_tbl[['metric']] <- 'pct_cells'
-groups <- sort(
-    items_in_a_not_b(colnames(pval_tbl), c('organ', 'cell_type', 'metric'))
-)
-pval_tbl <- pval_tbl[, c('organ', 'cell_type', 'metric', groups)]  # sort cols
-pval_tbl <- pval_tbl[order(pval_tbl$organ, pval_tbl$cell_type), ]  # sort rows
+pbar <- progress_bar$new(total = nrow(pval_tbl))
+for (row in 1:nrow(pval_tbl)) {
+    organ <- pval_tbl[row, 'organ'][[1]]
+    cell_type <- pval_tbl[row, 'cell_type'][[1]]
 
-# calculate unpaired t test
-idxpairs <- t(combn(1:length(groups), 2))
-for (i in 1:nrow(idxpairs)) {
-    idx_a <- idxpairs[i, 1]
-    idx_b <- idxpairs[i, 2]
+    # select data
+    df_subset <- df[
+        (df[['organ']] == organ) & (df[['cell_type']] == cell_type),
+        c('organ', 'cell_type', 'groupby', 'pct_cells')
+    ]
+    pval_subset <- pval_tbl[
+        (pval_tbl[['organ']] == organ) & (pval_tbl[['cell_type']] == cell_type),
+        c('pval_1v2', 'pval_1v3', 'pval_1v4', 'pval_2v3', 'pval_2v4', 'pval_3v4')
+    ]
 
-    pval_tbl[paste0('pval_', idx_a, 'v', idx_b)] <- mapply(
-        function(x, y) t.test(x, y, var.equal=FALSE)[['p.value']],
-        pval_tbl[[ groups[idx_a] ]],
-        pval_tbl[[ groups[idx_b] ]]
-    )
-}
+    fig <- plot_violin_with_significance(df_subset, pval_subset, x='groupby', y='pct_cells')
 
-# save
-if (!troubleshooting) {
 
-    tmp_pval_tbl <- pval_tbl
-    for (group in groups) {
-        tmp_pval_tbl[[group]] <- mapply(toJSON, pval_tbl[[group]])
+    # save
+    if (!troubleshooting) {
+
+        dirpath <- file.path(wd, opt[['output-dir']], 'figures', 'comparisons', organ)
+        if (!dir.exists(dirpath)) {
+            dir.create(dirpath, recursive=TRUE)
+        }
+        filepath = file.path(dirpath,
+            paste0('violin-', organ, '-', gsub(' ', '_', tolower(cell_type)), '-',
+                   gsub(',', '_', opt[['group-by']]), '.png' )
+        )
+
+        withCallingHandlers({
+            ggsave(
+                filepath,
+                plot=fig,
+                height=1200, width=1200, dpi=300, units='px', scaling=0.5
+            )
+        }, warning = function(w) {
+            if ( any(grepl("rows containing non-finite values", w),
+                     grepl("fewer than two data points", w),
+                     grepl("argument is not numeric or logical: returning NA", w)) ) {
+                invokeRestart("muffleWarning")
+            }
+        })
     }
 
-    if (!dir.exists(file.path(wd, opt[['output-dir']], 'data'))) {
-        dir.create(file.path(wd, opt[['output-dir']], 'data'), recursive=TRUE)
-    }
-    filepath = file.path(wd, opt[['output-dir']], 'data', 'unpaired_t_test_pvals.csv')
-    write.table(tmp_pval_tbl, file = filepath, row.names = FALSE, sep = ',' )
+    pbar$tick()
 }
-
-
-# ----------------------------------------------------------------------
-# Plot violin
-
-# just iterate through the rows of the pval_subset matrix
-# organ <- 'pb'
-# cell_type <- 'Monocytes'
-
-# df_subset <- df[
-#     (df[['organ']] == organ) & (df[['cell_type']] == cell_type),
-#     c('organ', 'cell_type', 'groupby', 'pct_cells')
-# ]
-
-# pval_subset <- pval_tbl[
-#     (pval_tbl[['organ']] == organ) & (pval_tbl[['cell_type']] == cell_type),
-#     c('pval_1v2', 'pval_1v3', 'pval_1v4', 'pval_2v3', 'pval_2v4', 'pval_3v4')
-# ]
-
-# fig <- plot_violin_with_significance(df_subset, pval_subset, x='groupby', y='pct_cells')
 
 
 end_time = Sys.time()
