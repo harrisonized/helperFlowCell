@@ -11,6 +11,8 @@ import::from(tidyr, 'pivot_longer', 'pivot_wider')
 
 import::from(file.path(wd, 'R', 'functions', 'preprocessing.R'),
     'preprocess_flowjo_export', 'sort_for_graphpad', .character_only=TRUE)
+import::from(file.path(wd, 'R', 'functions', 'plotting.R'),
+    'plot_violin_with_significance', .character_only=TRUE)
 
 import::from(file.path(wd, 'R', 'tools', 'df_tools.R'),
     'rename_columns', .character_only=TRUE)
@@ -243,7 +245,7 @@ for (i in 1:nrow(idxpairs)) {
     idx_a <- idxpairs[i, 1]
     idx_b <- idxpairs[i, 2]
 
-    pval_tbl[paste0('p_value_', idx_a, 'v', idx_b)] <- mapply(
+    pval_tbl[paste0('pval_', idx_a, 'v', idx_b)] <- mapply(
         function(x, y) t.test(x, y, var.equal=FALSE)[['p.value']],
         pval_tbl[[ groups[idx_a] ]],
         pval_tbl[[ groups[idx_b] ]]
@@ -264,6 +266,26 @@ if (!troubleshooting) {
     filepath = file.path(wd, opt[['output-dir']], 'data', 'unpaired_t_test_pvals.csv')
     write.table(tmp_pval_tbl, file = filepath, row.names = FALSE, sep = ',' )
 }
+
+
+# ----------------------------------------------------------------------
+# Plot violin
+
+# just iterate through the rows of the pval_subset matrix
+# organ <- 'pb'
+# cell_type <- 'Monocytes'
+
+# df_subset <- df[
+#     (df[['organ']] == organ) & (df[['cell_type']] == cell_type),
+#     c('organ', 'cell_type', 'groupby', 'pct_cells')
+# ]
+
+# pval_subset <- pval_tbl[
+#     (pval_tbl[['organ']] == organ) & (pval_tbl[['cell_type']] == cell_type),
+#     c('pval_1v2', 'pval_1v3', 'pval_1v4', 'pval_2v3', 'pval_2v4', 'pval_3v4')
+# ]
+
+# fig <- plot_violin_with_significance(df_subset, pval_subset, x='groupby', y='pct_cells')
 
 
 end_time = Sys.time()

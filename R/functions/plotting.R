@@ -65,3 +65,39 @@ plot_spectra_by_each_laser <- function(spectra, detectors, laser) {
 
     return(fig)
 }
+
+
+#' Plot violin with significance
+#' 
+#' @description Produces a violin plot with error bars in between
+#' You will need to pre-calculate the pvalues and label them appropriately
+#' 
+#' @return Returns a ggplot object
+#'
+plot_violin_with_significance <- function(df, pval_tbl, x='groupby', y='pct_cells') {
+
+    max_group <- df[order(df[[y]], decreasing=TRUE), ][1, 'groupby']
+    mean_max_group <- mean(df[(df[[x]]==max_group), y])
+    sd_max_group <- sd(df[(df[[x]]==max_group), y])
+
+    # need to fix this so it works for arbitrary group numbers
+    low_ht <- mean_max_group + 2*sd_max_group
+    med_ht <- low_ht * 1.1
+    hi_ht <- med_ht * 1.1
+    hihi_ht <- hi_ht * 1.1
+
+    fig <- ggplot(df, aes_string(x=x, y=y, fill=x)) + 
+        geom_boxplot(alpha=0.7, aes(middle = mean(y))) +
+        geom_jitter() +
+        scale_fill_brewer(palette="Dark2") +
+
+        # need a loop for arbitrary numbers
+        showSignificance( c(1.1,1.9), low_ht, -0.05, round(pval_tbl[['pval_1v2']], 4)) +
+        showSignificance( c(2.1,2.9), low_ht, -0.05, round(pval_tbl[['pval_2v3']], 4)) +
+        showSignificance( c(3.1,3.9), low_ht, -0.05, round(pval_tbl[['pval_3v4']], 4)) +
+        showSignificance( c(1.1,2.9), med_ht, -0.05, round(pval_tbl[['pval_1v3']], 4)) +
+        showSignificance( c(2.1,3.9), hi_ht, -0.05, round(pval_tbl[['pval_2v4']], 4)) +
+        showSignificance( c(1.1,3.9), hihi_ht, -0.05, round(pval_tbl[['pval_1v4']], 4))
+
+    return(fig)
+}
