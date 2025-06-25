@@ -4,9 +4,10 @@ wd = dirname(this.path::here())  # wd = '~/github/R/helperFlowCell'
 suppressPackageStartupMessages(library('dplyr'))
 library('optparse')
 suppressPackageStartupMessages(library('logr'))
+import::from(jsonlite, 'toJSON')
 import::from(magrittr, '%>%')
 import::from(stringr, 'str_detect')
-import::from(tidyr, 'pivot_longer')
+import::from(tidyr, 'pivot_longer', 'pivot_wider')
 
 import::from(file.path(wd, 'R', 'functions', 'preprocessing.R'),
     'preprocess_flowjo_export', 'sort_for_graphpad', .character_only=TRUE)
@@ -46,7 +47,7 @@ option_list = list(
                 metavar='data/mice', type="character",
                 help="directory of files containing all the mouse data"),
 
-    make_option(c("-g", "--group-by"), default='treatment',
+    make_option(c("-g", "--group-by"), default='treatment,genotype',
                 metavar='treatment', type="character",
                 help="enter a column or comma-separated list of columns, no spaces"),
 
@@ -105,6 +106,8 @@ flow_metadata <- append_many_csv(file.path(wd, opt[['metadata-dir']]), recursive
 # ----------------------------------------------------------------------
 # Preprocessing
 
+log_print(paste(Sys.time(), 'Preprocessing...'))
+
 # Reshape so each row is a gate in each sample
 df <- pivot_longer(counts,
     names_to = "gate", values_to = "num_cells",
@@ -133,6 +136,7 @@ if (length(groupby) > 1) {
 
 
 # left join mouse data
+# don't need all of this
 df <- merge(df, mouse_db[, items_in_a_not_b(colnames(mouse_db), mouse_db_ignore)],
     by="mouse_id", all.x=TRUE, all.y=FALSE, suffixes=c('', '_'))
 df[['weeks_old']] <- round(df[['age']]/7, 1)
@@ -210,6 +214,55 @@ for (organ in sort(organs)) {
         write.table(tmp, file = filepath, row.names = FALSE, sep = ',')
     }
 
+}
+
+
+# ----------------------------------------------------------------------
+# Compute statistics
+
+log_print(paste(Sys.time(), 'Computing statistics...'))
+
+# pivot groups into columns
+pval_tbl <- pivot_wider(
+    df[, c('organ', 'cell_type', 'groupby', 'pct_cells')],
+    names_from = c('groupby'),
+    values_from = c('pct_cells'),
+    values_fn = list,  # suppress warning
+    names_glue = "{.name}"
+)
+pval_tbl[['metric']] <- 'pct_cells'
+groups <- sort(
+    items_in_a_not_b(colnames(pval_tbl), c('organ', 'cell_type', 'metric'))
+)
+pval_tbl <- pval_tbl[, c('organ', 'cell_type', 'metric', groups)]  # sort cols
+pval_tbl <- pval_tbl[order(pval_tbl$organ, pval_tbl$cell_type), ]  # sort rows
+
+# calculate unpaired t test
+idxpairs <- t(combn(1:length(groups), 2))
+for (i in 1:nrow(idxpairs)) {
+    idx_a <- idxpairs[i, 1]
+    idx_b <- idxpairs[i, 2]
+
+    pval_tbl[paste0('p_value_', idx_a, 'v', idx_b)] <- mapply(
+        function(x, y) t.test(x, y, var.equal=FALSE)[['p.value']],
+        pval_tbl[[ groups[idx_a] ]],
+        pval_tbl[[ groups[idx_b] ]]
+    )
+}
+
+# save
+if (!troubleshooting) {
+
+    tmp_pval_tbl <- pval_tbl
+    for (group in groups) {
+        tmp_pval_tbl[[group]] <- mapply(toJSON, pval_tbl[[group]])
+    }
+
+    if (!dir.exists(file.path(wd, opt[['output-dir']], 'data'))) {
+        dir.create(file.path(wd, opt[['output-dir']], 'data'), recursive=TRUE)
+    }
+    filepath = file.path(wd, opt[['output-dir']], 'data', 'unpaired_t_test_pvals.csv')
+    write.table(tmp_pval_tbl, file = filepath, row.names = FALSE, sep = ',' )
 }
 
 
