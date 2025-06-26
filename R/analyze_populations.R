@@ -292,8 +292,11 @@ for (idx in 1:nrow(pval_tbl)) {
         c('organ', 'cell_type', 'group_name', 'pct_cells')
     ]
 
-    fig <- plot_violin_with_significance(df_subset, pval_subset, x='group_name', y='pct_cells')
-
+    fig <- plot_violin_with_significance(
+        df_subset, pval_subset,
+        x='group_name', y='pct_cells',
+        title=paste(toupper(organ), cell_type)
+    )
 
     # save
     if (!troubleshooting) {
