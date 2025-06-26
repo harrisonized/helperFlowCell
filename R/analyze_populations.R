@@ -9,7 +9,7 @@ import::from(jsonlite, 'toJSON')
 import::from(magrittr, '%>%')
 import::from(stringr, 'str_detect')
 import::from(tidyr, 'pivot_longer', 'pivot_wider')
-import::here(ggplot2, 'ggsave')
+import::from(ggplot2, 'ggsave')
 
 import::from(file.path(wd, 'R', 'functions', 'preprocessing.R'),
     'preprocess_flowjo_export', 'sort_for_graphpad', .character_only=TRUE)
@@ -21,7 +21,7 @@ import::from(file.path(wd, 'R', 'tools', 'df_tools.R'),
 import::from(file.path(wd, 'R', 'tools', 'file_io.R'),
     'append_many_csv', .character_only=TRUE)
 import::from(file.path(wd, 'R', 'tools', 'list_tools.R'),
-    'items_in_a_not_b', 'multiple_replacement',
+    'flatten_matrix', 'items_in_a_not_b', 'multiple_replacement',
     .character_only=TRUE)
 import::from(file.path(wd, 'R', 'tools', 'plotting.R'),
     'save_fig', 'plot_scatter', 'plot_violin', .character_only=TRUE)
@@ -78,7 +78,7 @@ output_dir <- file.path(wd, opt[['output-dir']])
 troubleshooting_dir = file.path(output_dir, 'troubleshooting')
 
 # args
-groupby <- unlist(strsplit(opt[['group-by']], ','))
+metadata_cols <- unlist(strsplit(opt[['group-by']], ','))
 
 
 # Start Log
@@ -103,8 +103,8 @@ counts <- preprocess_flowjo_export(counts)
 counts <- counts[!str_detect(counts[['fcs_name']], '(U|u)nstained'), ]  # drop unstained cells
 
 # reference files
-mouse_db <- append_many_csv(file.path(wd, opt[['ref-dir']]), recursive=TRUE, include_filepath=FALSE)
 flow_metadata <- append_many_csv(file.path(wd, opt[['metadata-dir']]), recursive=TRUE, include_filepath=FALSE)
+mouse_db <- append_many_csv(file.path(wd, opt[['ref-dir']]), recursive=TRUE, include_filepath=FALSE)
 
 
 # ----------------------------------------------------------------------
@@ -132,10 +132,10 @@ for (cell_type in c(cell_type_ignore, 'mNeonGreen+')) {
 df <- merge(df, flow_metadata,
     by="fcs_name", all.x=FALSE, all.y=FALSE, suffixes=c('', '_'))
 df <- df[(df[['is_unstained']]==FALSE), ]  # drop unstained cells
-if (length(groupby) > 1) {
-    df[['groupby']] <- apply( df[ , groupby ] , 1 , paste , collapse = ", " )
+if (length(metadata_cols) > 1) {
+    df[['group_name']] <- apply( df[ , metadata_cols ] , 1 , paste , collapse = ", " )
 } else {
-    df[['groupby']] <- df[[groupby]]
+    df[['group_name']] <- df[[metadata_cols]]
 }
 
 
@@ -161,31 +161,30 @@ df[['weeks_old']] <- round(df[['age']]/7, 1)
 
 log_print(paste(Sys.time(), 'Computing statistics...'))
 
+
+group_names <- sort(unique(df[['group_name']]))
+n_groups <- length(group_names)
+
 # pivot groups into columns
 pval_tbl <- pivot_wider(
-    df[, c('organ', 'cell_type', 'groupby', 'pct_cells')],
-    names_from = c('groupby'),
+    df[, c('organ', 'cell_type', 'group_name', 'pct_cells')],
+    names_from = c('group_name'),
     values_from = c('pct_cells'),
     values_fn = list,  # suppress warning
     names_glue = "{.name}"
 )
 pval_tbl[['metric']] <- 'pct_cells'
-groups <- sort(
-    items_in_a_not_b(colnames(pval_tbl), c('organ', 'cell_type', 'metric'))
-)
-pval_tbl <- pval_tbl[, c('organ', 'cell_type', 'metric', groups)]  # sort cols
+pval_tbl <- pval_tbl[, c('organ', 'cell_type', 'metric', group_names)]  # sort cols
 pval_tbl <- pval_tbl[order(pval_tbl$organ, pval_tbl$cell_type), ]  # sort rows
 
-# calculate unpaired t test
-idxpairs <- t(combn(1:length(groups), 2))
-for (i in 1:nrow(idxpairs)) {
-    idx_a <- idxpairs[i, 1]
-    idx_b <- idxpairs[i, 2]
 
-    pval_tbl[paste0('pval_', idx_a, 'v', idx_b)] <- mapply(
-        function(x, y) t.test(x, y, var.equal=FALSE)[['p.value']],
-        pval_tbl[[ groups[idx_a] ]],
-        pval_tbl[[ groups[idx_b] ]]
+# calculate unpaired t test for all pairs of groups
+combos <- flatten_matrix(combn(1:n_groups, 2))
+for (ids in combos) {
+    pval_tbl[paste0('pval_', ids[1], 'v', ids[2])] <- mapply(
+        function(x, y) t.test(x, y, var.equal=FALSE)[['p.value']],  # t test
+        pval_tbl[[ group_names[ids[1]] ]],
+        pval_tbl[[ group_names[ids[2]] ]]
     )
 }
 
@@ -193,8 +192,8 @@ for (i in 1:nrow(idxpairs)) {
 if (!troubleshooting) {
 
     tmp_pval_tbl <- pval_tbl
-    for (group in groups) {
-        tmp_pval_tbl[[group]] <- mapply(toJSON, pval_tbl[[group]])
+    for (col in group_names) {
+        tmp_pval_tbl[[col]] <- mapply(toJSON, pval_tbl[[col]])
     }
 
     if (!dir.exists(file.path(wd, opt[['output-dir']], 'data'))) {
@@ -222,11 +221,11 @@ for (organ in sort(organs)) {
 
     fig <- plot_violin(
         df[(df[['organ']]==organ) & (df[['num_cells']]>10), ],
-        x='cell_type', y='pct_cells', group_by='groupby',
+        x='cell_type', y='pct_cells', group_by='group_name',
         ylabel='Percent of Live Cells', title=organ,
         ymin=0, ymax=100,
         hover_data=unique(c(
-            'mouse_id', 'groupby', groupby, 'sex', 'treatment', 'weeks_old', 
+            'mouse_id', 'group_name', metadata_cols, 'sex', 'treatment', 'weeks_old', 
             'Cells', 'num_cells', 'fcs_name'))
         # color_discrete_map=c(
         #     'heterozygous'='#2ca02c',  # green
@@ -250,10 +249,10 @@ for (organ in sort(organs)) {
 
     tmp <- sort_for_graphpad(
         df[(df[['organ']]==organ) & (df[['num_cells']]>10),
-        c('cell_type', 'groupby', groupby, 'mouse_id', 'pct_cells',
+        c('cell_type', 'group_name', metadata_cols, 'mouse_id', 'pct_cells',
           'Cells/Single Cells/Single Cells/Live Cells', 'num_cells',
           'organ', 'sex', 'treatment', 'weeks_old', 'fcs_name')],
-        groups=c('groupby')
+        groups=c('group_name')
     )
 
     if (!troubleshooting) {
@@ -285,14 +284,17 @@ for (row in 1:nrow(pval_tbl)) {
     # select data
     df_subset <- df[
         (df[['organ']] == organ) & (df[['cell_type']] == cell_type),
-        c('organ', 'cell_type', 'groupby', 'pct_cells')
+        c('organ', 'cell_type', 'group_name', 'pct_cells')
     ]
+
+
+    # need to autogenerate this
     pval_subset <- pval_tbl[
         (pval_tbl[['organ']] == organ) & (pval_tbl[['cell_type']] == cell_type),
         c('pval_1v2', 'pval_1v3', 'pval_1v4', 'pval_2v3', 'pval_2v4', 'pval_3v4')
     ]
 
-    fig <- plot_violin_with_significance(df_subset, pval_subset, x='groupby', y='pct_cells')
+    fig <- plot_violin_with_significance(df_subset, pval_subset, x='group_name', y='pct_cells')
 
 
     # save
