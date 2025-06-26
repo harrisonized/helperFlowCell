@@ -161,11 +161,14 @@ df[['weeks_old']] <- round(df[['age']]/7, 1)
 
 log_print(paste(Sys.time(), 'Computing statistics...'))
 
-
 group_names <- sort(unique(df[['group_name']]))
 n_groups <- length(group_names)
+n_combos <- choose(n_groups, 2)
+id_combos <- flatten_matrix(combn(1:n_groups, 2))  # generate pairs of indexes
+pval_cols <- sapply(id_combos, function(x) paste0('pval_', x[[1]], 'v', x[[2]]))  # colnames for all pairs
 
-# pivot groups into columns
+
+# Collect values into list columns
 pval_tbl <- pivot_wider(
     df[, c('organ', 'cell_type', 'group_name', 'pct_cells')],
     names_from = c('group_name'),
@@ -179,12 +182,13 @@ pval_tbl <- pval_tbl[order(pval_tbl$organ, pval_tbl$cell_type), ]  # sort rows
 
 
 # calculate unpaired t test for all pairs of groups
-combos <- flatten_matrix(combn(1:n_groups, 2))
-for (ids in combos) {
-    pval_tbl[paste0('pval_', ids[1], 'v', ids[2])] <- mapply(
+for (idx in 1:n_combos) {
+    idx1 <- id_combos[[idx]][1]  # 1st col idx
+    idx2 <- id_combos[[idx]][2]  # 2nd col idx
+    pval_tbl[ pval_cols[idx] ] <- mapply(
         function(x, y) t.test(x, y, var.equal=FALSE)[['p.value']],  # t test
-        pval_tbl[[ group_names[ids[1]] ]],
-        pval_tbl[[ group_names[ids[2]] ]]
+        pval_tbl[[ group_names[idx1] ]],  # 1st col
+        pval_tbl[[ group_names[idx2] ]]   # 2nd col
     )
 }
 
@@ -277,21 +281,15 @@ log_print(paste(Sys.time(),
 log_print(paste(Sys.time(), 'Plotting violin with pvals...'))
 
 pbar <- progress_bar$new(total = nrow(pval_tbl))
-for (row in 1:nrow(pval_tbl)) {
-    organ <- pval_tbl[row, 'organ'][[1]]
-    cell_type <- pval_tbl[row, 'cell_type'][[1]]
+for (idx in 1:nrow(pval_tbl)) {
+    organ <- pval_tbl[idx, 'organ'][[1]]
+    cell_type <- pval_tbl[idx, 'cell_type'][[1]]
+    pval_subset <- pval_tbl[idx, pval_cols]
 
-    # select data
+    # filter long data
     df_subset <- df[
         (df[['organ']] == organ) & (df[['cell_type']] == cell_type),
         c('organ', 'cell_type', 'group_name', 'pct_cells')
-    ]
-
-
-    # need to autogenerate this
-    pval_subset <- pval_tbl[
-        (pval_tbl[['organ']] == organ) & (pval_tbl[['cell_type']] == cell_type),
-        c('pval_1v2', 'pval_1v3', 'pval_1v4', 'pval_2v3', 'pval_2v4', 'pval_3v4')
     ]
 
     fig <- plot_violin_with_significance(df_subset, pval_subset, x='group_name', y='pct_cells')
