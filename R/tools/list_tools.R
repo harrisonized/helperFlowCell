@@ -4,6 +4,7 @@ import::here(stringi, 'stri_replace_all_regex')
 ## dict_zip
 ## filter_list_for_match
 ## find_first_match_index
+## flatten_matrix
 ## interleave
 ## items_in_a_not_b
 ## list2matrix
@@ -60,6 +61,21 @@ filter_list_for_match <- function(items, patterns) {
 #' 
 find_first_match_index <- function(pattern, items) {
     return (grep(pattern, items)[[1]])
+}
+
+
+#' Convert a matrix into a list of lists
+#'
+#' Input:
+#'      [,1] [,2] [,3] [,4] [,5] [,6]
+#' [1,]    1    1    1    2    2    3
+#' [2,]    2    3    4    3    4    4
+#' 
+#' Output: 
+#' list(c(1, 2), c(1, 3), c(1, 4), c(2, 4), c(2, 4), c(3, 4))
+#' 
+flatten_matrix <- function(mat) {
+    return(split(mat, col(mat)))
 }
 
 

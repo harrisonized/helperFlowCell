@@ -81,9 +81,9 @@ plot_spectra_by_each_laser <- function(spectra, detectors, laser) {
 #' 
 #' @return Returns a ggplot object
 #'
-plot_violin_with_significance <- function(df, pval_tbl, x='groupby', y='pct_cells') {
+plot_violin_with_significance <- function(df, pval_tbl, x='group_name', y='pct_cells') {
 
-    max_group <- df[order(df[[y]], decreasing=TRUE), ][1, 'groupby']
+    max_group <- df[order(df[[y]], decreasing=TRUE), ][1, x]
     mean_max_group <- mean(df[(df[[x]]==max_group), y])
     sd_max_group <- sd(df[(df[[x]]==max_group), y])
 
