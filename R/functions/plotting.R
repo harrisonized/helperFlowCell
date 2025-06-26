@@ -3,13 +3,30 @@ import::here(magrittr, '%>%')
 import::here(superb, 'showSignificance')
 import::here(ggplot2,
     'ggplot', 'aes', 'aes_string', 'geom_boxplot', 'geom_jitter',
-    'scale_fill_brewer')
+    'scale_fill_brewer', 'ggtitle', 'scale_y_continuous')
 import::here(file.path(wd, 'R', 'config', 'lasers.R'),
     'color_for_laser', .character_only=TRUE)
 
 ## Functions
+## compute_nlevels
 ## plot_spectra_by_each_laser
 ## plot_violin_with_significance
+
+
+#' Calculate the number of non-overlapping bars needed to span every significance level
+#' Used for plot_violin_with_significance
+#' 
+compute_nlevels <- function(n) {
+
+    if ((n %% 2) == 0) {
+        m <- n/2
+        nlevels <- m*(m+1)-m
+    } else {
+        m <- floor(n/2)
+        nlevels <- m*(m+1)
+    }
+    return(nlevels)
+}
 
 
 #' Individual Spill Plots
@@ -77,34 +94,47 @@ plot_spectra_by_each_laser <- function(spectra, detectors, laser) {
 #' Plot violin with significance
 #' 
 #' @description Produces a violin plot with error bars in between
-#' You will need to pre-calculate the pvalues and label them appropriately
+#' You will need to pre-calculate the pvalues and label them as 1v2, 1v3, etc.
+#' Do not include any additional columns in the pval_tbl
 #' 
 #' @return Returns a ggplot object
 #'
-plot_violin_with_significance <- function(df, pval_tbl, x='group_name', y='pct_cells') {
+plot_violin_with_significance <- function(
+    df, pval_tbl,
+    x='group_name', y='pct_cells',
+    title=NULL
+) {
 
-    max_group <- df[order(df[[y]], decreasing=TRUE), ][1, x]
-    mean_max_group <- mean(df[(df[[x]]==max_group), y])
-    sd_max_group <- sd(df[(df[[x]]==max_group), y])
+    # compute bar positions
+    n_groups <- length(unique(df[[x]]))
+    nlevels <- compute_nlevels(n_groups)
 
-    # need to fix this so it works for arbitrary group numbers
-    low_ht <- mean_max_group + 2*sd_max_group
-    med_ht <- low_ht * 1.1
-    hi_ht <- med_ht * 1.1
-    hihi_ht <- hi_ht * 1.1
+    id_combos <- setNames(as.data.frame(t(combn(1:n_groups, 2))), c('a', 'b'))
+    id_combos[['diff']] <- id_combos[['b']]-id_combos[['a']]
+    id_combos <- id_combos[order(id_combos[['diff']]), ]
+
+    # compute starting height
+    h_low <- max(aggregate(df[[y]],
+        list(df[[x]]), FUN=function(x) mean(x)+sd(x)
+    )[['x']])*1.1
+    space <- h_low/10
 
     fig <- ggplot(df, aes_string(x=x, y=y, fill=x)) + 
         geom_boxplot(alpha=0.7, aes(middle = mean(y))) +
         geom_jitter() +
         scale_fill_brewer(palette="Dark2") +
+        scale_y_continuous(limits = c(0, NA)) +
+        ggtitle(title) +
 
         # need a loop for arbitrary numbers
-        showSignificance( c(1.1,1.9), low_ht, -0, round(pval_tbl[['pval_1v2']], 4)) +
-        showSignificance( c(2.1,2.9), low_ht, -0, round(pval_tbl[['pval_2v3']], 4)) +
-        showSignificance( c(3.1,3.9), low_ht, -0, round(pval_tbl[['pval_3v4']], 4)) +
-        showSignificance( c(1.1,2.9), med_ht, -0, round(pval_tbl[['pval_1v3']], 4)) +
-        showSignificance( c(2.1,3.9), hi_ht, -0, round(pval_tbl[['pval_2v4']], 4)) +
-        showSignificance( c(1.1,3.9), hihi_ht, -0, round(pval_tbl[['pval_1v4']], 4))
+        showSignificance( c(1.1,1.9), h_low, -0.05, round(pval_tbl[['pval_1v2']], 4), segmentParams=list(lineend = "round") ) +
+        showSignificance( c(2.1,2.9), h_low, -0.05, round(pval_tbl[['pval_2v3']], 4), segmentParams=list(lineend = "round") ) +
+        showSignificance( c(3.1,3.9), h_low, -0.05, round(pval_tbl[['pval_3v4']], 4), segmentParams=list(lineend = "round") ) +
+
+        showSignificance( c(1.1,2.9), h_low + space, -0.05, round(pval_tbl[['pval_1v3']], 4), segmentParams=list(lineend = "round") ) +
+        showSignificance( c(2.1,3.9), h_low + 2*space, -0.05, round(pval_tbl[['pval_2v4']], 4), segmentParams=list(lineend = "round") ) +
+
+        showSignificance( c(1.1,3.9), h_low + 3*space, -0.05, round(pval_tbl[['pval_1v4']], 4), segmentParams=list(lineend = "round") )
 
     return(fig)
 }
