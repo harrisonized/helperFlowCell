@@ -3,7 +3,8 @@ import::here(magrittr, '%>%')
 import::here(superb, 'showSignificance')
 import::here(ggplot2,
     'ggplot', 'aes', 'aes_string', 'geom_boxplot', 'geom_jitter',
-    'scale_fill_brewer', 'ggtitle', 'scale_y_continuous')
+    'scale_fill_brewer', 'scale_y_continuous', 'expansion',
+    'ggtitle')
 import::here(file.path(wd, 'R', 'config', 'lasers.R'),
     'color_for_laser', .character_only=TRUE)
 
@@ -123,18 +124,18 @@ plot_violin_with_significance <- function(
         geom_boxplot(alpha=0.7, aes(middle = mean(y))) +
         geom_jitter() +
         scale_fill_brewer(palette="Dark2") +
-        scale_y_continuous(limits = c(0, NA)) +
+        scale_y_continuous(limits = c(0, NA), expand = expansion(mult = c(0, 0.1))) +
         ggtitle(title) +
 
         # need a loop for arbitrary numbers
-        showSignificance( c(1.1,1.9), h_low, -0.05, round(pval_tbl[['pval_1v2']], 4), segmentParams=list(lineend = "round") ) +
-        showSignificance( c(2.1,2.9), h_low, -0.05, round(pval_tbl[['pval_2v3']], 4), segmentParams=list(lineend = "round") ) +
-        showSignificance( c(3.1,3.9), h_low, -0.05, round(pval_tbl[['pval_3v4']], 4), segmentParams=list(lineend = "round") ) +
+        showSignificance( c(1.1,1.9), h_low, -0.005, round(pval_tbl[['pval_1v2']], 4)) +
+        showSignificance( c(2.1,2.9), h_low, -0.005, round(pval_tbl[['pval_2v3']], 4)) +
+        showSignificance( c(3.1,3.9), h_low, -0.005, round(pval_tbl[['pval_3v4']], 4)) +
 
-        showSignificance( c(1.1,2.9), h_low + space, -0.05, round(pval_tbl[['pval_1v3']], 4), segmentParams=list(lineend = "round") ) +
-        showSignificance( c(2.1,3.9), h_low + 2*space, -0.05, round(pval_tbl[['pval_2v4']], 4), segmentParams=list(lineend = "round") ) +
+        showSignificance( c(1.1,2.9), h_low + space, -0.005, round(pval_tbl[['pval_1v3']], 4)) +
+        showSignificance( c(2.1,3.9), h_low + 2*space, -0.005, round(pval_tbl[['pval_2v4']], 4)) +
 
-        showSignificance( c(1.1,3.9), h_low + 3*space, -0.05, round(pval_tbl[['pval_1v4']], 4), segmentParams=list(lineend = "round") )
+        showSignificance( c(1.1,3.9), h_low + 3*space, -0.005, round(pval_tbl[['pval_1v4']], 4))
 
     return(fig)
 }
