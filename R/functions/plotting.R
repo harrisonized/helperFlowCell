@@ -3,7 +3,7 @@ import::here(magrittr, '%>%')
 import::here(superb, 'showSignificance')
 import::here(ggplot2,
     'ggplot', 'aes', 'aes_string', 'geom_boxplot', 'geom_jitter',
-    'scale_fill_brewer', 'scale_y_continuous', 'expansion',
+    'stat_summary', 'scale_fill_brewer', 'scale_y_continuous', 'expansion',
     'ggtitle')
 import::here(file.path(wd, 'R', 'config', 'lasers.R'),
     'color_for_laser', .character_only=TRUE)
@@ -121,7 +121,8 @@ plot_violin_with_significance <- function(
     space <- h_low/10
 
     fig <- ggplot(df, aes_string(x=x, y=y, fill=x)) + 
-        geom_boxplot(alpha=0.7, aes(middle = mean(y))) +
+        geom_boxplot(alpha=0.7, aes_string(middle=y)) +
+        stat_summary(fun=mean, geom="crossbar", width=0.75, linewidth=0.25, linetype = "dashed") +
         geom_jitter() +
         scale_fill_brewer(palette="Dark2") +
         scale_y_continuous(limits = c(0, NA), expand = expansion(mult = c(0, 0.1))) +
