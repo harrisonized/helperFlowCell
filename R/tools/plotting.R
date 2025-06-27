@@ -436,7 +436,7 @@ plot_violin_with_significance <- function(
 
     # if fewer groups than expected, recompute pvals to get the correct significance labels
     nlevels <- compute_nlevels( length(unique(df[[x]])) )
-    if ( (nlevels >=2) & (length(pvals) > nlevels) ) {
+    if ( (nlevels > 0) & (length(pvals) > nlevels) ) {
         group_names <- sort(unique(df[[x]]))
         n_groups <- length(group_names)
         n_combos <- choose(n_groups, 2)
@@ -464,7 +464,7 @@ plot_violin_with_significance <- function(
             )
         }
     }
-
+    
     fig <- ggplot(df, aes(x=.data[[x]], y=.data[[y]], fill=.data[[x]])) + 
         geom_boxplot(alpha=0.7, aes(middle=.data[[y]])) +
         stat_summary(fun=mean, geom="crossbar", width=0.75, linewidth=0.25, linetype = "dashed") +
