@@ -2,8 +2,8 @@
 
 wd = dirname(this.path::here())  # wd = '~/github/R/helperFlowCell'
 suppressPackageStartupMessages(library('dplyr'))
-library('optparse')
 suppressPackageStartupMessages(library('logr'))
+library('optparse')
 import::from(progress, 'progress_bar')
 import::from(jsonlite, 'toJSON')
 import::from(magrittr, '%>%')
@@ -144,24 +144,17 @@ if (length(metadata_cols) > 1) {
 }
 
 
-# left join mouse data
-# don't need all of this
-df <- merge(df, mouse_db[, items_in_a_not_b(colnames(mouse_db), mouse_db_ignore)],
-    by="mouse_id", all.x=TRUE, all.y=FALSE, suffixes=c('', '_'))
-df[['weeks_old']] <- round(df[['age']]/7, 1)
+# left join mouse data if available
+if (!is.null(mouse_db)) {
+    df <- merge(df, mouse_db[, items_in_a_not_b(colnames(mouse_db), mouse_db_ignore)],
+        by="mouse_id", all.x=TRUE, all.y=FALSE, suffixes=c('', '_'))
+    df[['weeks_old']] <- round(df[['age']]/7, 1)
+}
 
-
-# # save
-# if (!troubleshooting) {
-#     if (!dir.exists(file.path(wd, opt[['output-dir']], 'data'))) {
-#         dir.create(file.path(wd, opt[['output-dir']], 'data'), recursive=TRUE)
-#     }
-#     filepath = file.path(wd, opt[['output-dir']], 'data', 'populations.csv')
-#     write.table(df, file = filepath, row.names = FALSE, sep = ',' )
-# }
 
 # num_cells filter
 df <- df[(df[['num_cells']]>50), ]
+
 
 # ----------------------------------------------------------------------
 # Compute statistics
@@ -230,13 +223,16 @@ for (organ in sort(organs)) {
     # Plot
 
     fig <- plot_violin(
-        df[(df[['organ']]==organ) & (df[['num_cells']]>10), ],
+        df[(df[['organ']]==organ), ],
         x='cell_type', y='pct_cells', group_by='group_name',
         ylabel='Percent of Live Cells', title=organ,
         ymin=0, ymax=100,
-        hover_data=unique(c(
-            'mouse_id', 'group_name', metadata_cols, 'sex', 'treatment', 'weeks_old', 
-            'Cells', 'num_cells', 'fcs_name'))
+        hover_data=unique(intersect(
+                c('mouse_id', 'group_name', metadata_cols,
+                  'sex', 'treatment', 'weeks_old', 
+                  'Cells', 'num_cells', 'fcs_name'),
+                colnames(df)
+        ))
         # color_discrete_map=c(
         #     'heterozygous'='#2ca02c',  # green
         #     'wild type'='#62c1e5'  # blue
@@ -258,10 +254,14 @@ for (organ in sort(organs)) {
     # Data
 
     tmp <- sort_for_graphpad(
-        df[(df[['organ']]==organ) & (df[['num_cells']]>10),
-        c('cell_type', 'group_name', metadata_cols, 'mouse_id', 'pct_cells',
-          'Cells/Single Cells/Single Cells/Live Cells', 'num_cells',
-          'organ', 'sex', 'treatment', 'weeks_old', 'fcs_name')],
+        df[(df[['organ']]==organ),
+            unique(intersect(
+                c('organ', 'genotype', 'treatment',
+                   'group_name', metadata_cols, 'cell_type',
+                   'Cells/Single Cells/Single Cells/Live Cells', 'num_cells', 'pct_cells', 
+                   'mouse_id', 'sex', 'weeks_old', 'fcs_name'),
+                colnames(df)
+            ))],
         groups=c('group_name')
     )
 
