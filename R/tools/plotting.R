@@ -5,8 +5,8 @@ import::here(tidyr, 'pivot_wider')
 import::here(ggplot2,
     'ggplot', 'aes', 'theme', 'labs',
     'geom_boxplot', 'geom_jitter', 'element_text',
-    'stat_summary', 'scale_fill_brewer', 'scale_y_continuous', 'expansion',
-    'ggtitle')
+    'stat_summary', 'scale_fill_brewer', 'scale_x_discrete', 'scale_y_continuous',
+    'guide_axis', 'expansion', 'ggtitle')
 import::here(superb, 'showSignificance')
 import::here(plotly, 'plot_ly', 'add_trace', 'layout', 'save_image')
 import::here(htmlwidgets, 'saveWidget')  # brew install pandoc
@@ -407,8 +407,8 @@ generate_base_level <- function(n_groups) {
 #'
 plot_violin_with_significance <- function(
     df, pvals,
-    x='group_name', y='pct_cells',
-    title=NULL,
+    x='group_name', y='pct_cells', title=NULL,
+    xaxis_angle=60,
     test='t_test'
 ) {
 
@@ -470,9 +470,9 @@ plot_violin_with_significance <- function(
         stat_summary(fun=mean, geom="crossbar", width=0.75, linewidth=0.25, linetype = "dashed") +
         geom_jitter() +
         scale_fill_brewer(palette="Dark2") +
+        scale_x_discrete(guide=guide_axis(angle=xaxis_angle)) +
         scale_y_continuous(limits = c(0, NA), expand = expansion(mult = c(0, 0.1))) +
         ggtitle(title)
-
 
     # significance brackets
     if (n_groups > 1) {

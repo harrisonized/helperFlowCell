@@ -56,7 +56,7 @@ option_list = list(
                 metavar='treatment', type="character",
                 help="enter a column or comma-separated list of columns, no spaces"),
 
-    make_option(c("-t", "--test"), default='t_test',
+    make_option(c("-s", "--stat"), default='t_test',
                 metavar='t_test', type="character",
                 help="currently, only 't_test' is available"),
 
@@ -193,7 +193,7 @@ for (idx in 1:n_combos) {
     idx1 <- id_combos[[idx]][1]  # 1st col idx
     idx2 <- id_combos[[idx]][2]  # 2nd col idx
     pval_tbl[ pval_cols[idx] ] <- mapply(
-        function(x, y) stats_test(x, y, test=opt[['test']]),  # t test
+        function(x, y) stats_test(x, y, test=opt[['stat']]),  # t test
         pval_tbl[[ group_names[idx1] ]],  # 1st col
         pval_tbl[[ group_names[idx2] ]]   # 2nd col
     )
@@ -209,7 +209,7 @@ if (!troubleshooting) {
     if (!dir.exists(file.path(wd, opt[['output-dir']], 'data'))) {
         dir.create(file.path(wd, opt[['output-dir']], 'data'), recursive=TRUE)
     }
-    filepath = file.path(wd, opt[['output-dir']], 'data', paste0(opt[['test']], '_pvals.csv'))
+    filepath = file.path(wd, opt[['output-dir']], 'data', paste0(opt[['stat']], '_pvals.csv'))
     write.table(tmp_pval_tbl, file = filepath, row.names = FALSE, sep = ',' )
 }
 
@@ -302,19 +302,21 @@ for (idx in 1:nrow(pval_tbl)) {
         df_subset, pval_subset,
         x='group_name', y='pct_cells',
         title=paste(toupper(organ), cell_type),
-        test=opt[['test']]
+        test=opt[['stat']]
     )
 
     # save
     if (!troubleshooting) {
 
-        dirpath <- file.path(wd, opt[['output-dir']], 'figures', 'comparisons', organ)
+        dirpath <- file.path(wd, opt[['output-dir']], 'figures',
+            paste0('comparisons-', gsub(',', '_', opt[['group-by']])),
+            organ
+        )
         if (!dir.exists(dirpath)) {
             dir.create(dirpath, recursive=TRUE)
         }
         filepath = file.path(dirpath,
-            paste0('violin-', organ, '-', gsub(' ', '_', tolower(cell_type)), '-',
-                   gsub(',', '_', opt[['group-by']]), '.png' )
+            paste0('violin-', organ, '-', gsub(' ', '_', tolower(cell_type)), '.png' )
         )
 
         withCallingHandlers({
