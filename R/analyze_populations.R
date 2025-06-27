@@ -185,7 +185,7 @@ pval_tbl <- pivot_wider(
 )
 pval_tbl[['metric']] <- 'pct_cells'
 pval_tbl <- pval_tbl[, c('organ', 'cell_type', 'metric', group_names)]  # sort cols
-pval_tbl <- pval_tbl[order(pval_tbl$organ, pval_tbl$cell_type), ]  # sort rows
+pval_tbl <- pval_tbl[order(pval_tbl[['organ']], pval_tbl[['cell_type']]), ]  # sort rows
 
 
 # calculate unpaired t test for all pairs of groups
@@ -301,7 +301,8 @@ for (idx in 1:nrow(pval_tbl)) {
     fig <- plot_violin_with_significance(
         df_subset, pval_subset,
         x='group_name', y='pct_cells',
-        title=paste(toupper(organ), cell_type)
+        title=paste(toupper(organ), cell_type),
+        test=opt[['test']]
     )
 
     # save

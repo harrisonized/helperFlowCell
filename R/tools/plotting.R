@@ -1,6 +1,7 @@
 # import::here(rlang, 'sym')
 import::here(magrittr, '%>%')
 import::here(dplyr, 'group_by', 'summarize')
+import::here(tidyr, 'pivot_wider')
 import::here(ggplot2,
     'ggplot', 'aes', 'theme', 'labs',
     'geom_boxplot', 'geom_jitter', 'element_text',
@@ -10,6 +11,8 @@ import::here(superb, 'showSignificance')
 import::here(plotly, 'plot_ly', 'add_trace', 'layout', 'save_image')
 import::here(htmlwidgets, 'saveWidget')  # brew install pandoc
 
+import::here(file.path(wd, 'R', 'tools', 'list_tools.R'),
+    'flatten_matrix', .character_only=TRUE)
 
 ## Functions
 ## save_fig
@@ -398,13 +401,15 @@ generate_base_level <- function(n_groups) {
 #' @description Produces a violin plot with error bars in between
 #' You will need to pre-calculate the pvalues and label them as 1v2, 1v3, etc.
 #' Do not include any additional columns in the pvals object
+#' Will update this function to calculate pvals within the function
 #' 
 #' @return Returns a ggplot object
 #'
 plot_violin_with_significance <- function(
     df, pvals,
     x='group_name', y='pct_cells',
-    title=NULL
+    title=NULL,
+    test='t_test'
 ) {
 
     # compute bar positions
@@ -427,6 +432,37 @@ plot_violin_with_significance <- function(
             h_low <- max(df[[y]]) * 1.1
         }
         space <- h_low / 10
+    }
+
+    # if fewer groups than expected, recompute pvals to get the correct significance labels
+    nlevels <- compute_nlevels( length(unique(df[[x]])) )
+    if ( (nlevels >=2) & (length(pvals) > nlevels) ) {
+        group_names <- sort(unique(df[[x]]))
+        n_groups <- length(group_names)
+        n_combos <- choose(n_groups, 2)
+        id_combos <- flatten_matrix(combn(1:n_groups, 2))  # generate pairs of indexes
+        pval_cols <- sapply(id_combos, function(x) paste0('pval_', x[[1]], 'v', x[[2]]))  # colnames for all pairs
+
+        # Collect values into list columns
+        pvals <- pivot_wider(
+            df[, c(x, y)],
+            names_from = c(x),
+            values_from = c(y),
+            values_fn = list,  # suppress warning
+            names_glue = "{.name}"
+        )
+        pvals <- pvals[, group_names]  # sort cols
+
+        # calculate unpaired t test for all pairs of groups
+        for (idx in 1:n_combos) {
+            idx1 <- id_combos[[idx]][1]  # 1st col idx
+            idx2 <- id_combos[[idx]][2]  # 2nd col idx
+            pvals[ pval_cols[idx] ] <- mapply(
+                function(x, y) stats_test(x, y, test=test),
+                pvals[[ group_names[idx1] ]],  # 1st col
+                pvals[[ group_names[idx2] ]]   # 2nd col
+            )
+        }
     }
 
     fig <- ggplot(df, aes(x=.data[[x]], y=.data[[y]], fill=.data[[x]])) + 
