@@ -1,9 +1,12 @@
 ## helperFlowCell
 
-This tool helps with designing flow panels if you have a large collection of antibodies. Currently, there are two scripts:
+This is a general purpose library to assist with handling flow cytometry data.
 
-1. `design_flow_panel.R` takes your `panel.csv` along with the reference files and outputs a succinct Excel spreadsheet in which each row is an antibody and each column is a distinct channel on your flow instrument. Positive cells are shaded gray for easy identification.
-2. `plot_spectra.R` automatically plots the fluorophores listed in your `panel.csv` file.
+1. `build_design_matrix.R` takes a text input of markers (`panel.csv`) and compares it to reference files (`'antibody_inventory.xlsx'` and `instrument_config.xlsx'`) and outputs a succinct Excel spreadsheet in which each row is an antibody and each column is a distinct channel on your flow instrument. Positive cells are shaded gray for easy identification.
+2. `plot_spectra.R` takes a text input of markers (`panel.csv`) and plots the fluorophores against channels available on your instrument (`instrument_config.xlsx'`) to show how well the fluorophores align with the detectors.
+3. `reshape_compensation.R` takes the compensation exported from Flowjo (eg. `Acquisition-defined.csv`) and generates `compensation_matrix.txt` so that it can be imported into FACSDiva. It also allows you to rearrange the channels by providing a list in `fluorochrome_order.txt'`.
+4. `analyze_populations.R` is the main analysis script. It takes raw exported counts from Flowjo's table editor (`Table.csv`), user-defined `metadata.csv`, and data exported from Transnetyx (`mice.csv`) as input, merges and reshapes them for easy access, and automatically calculates two-sided unpaired T test against all groups. It also exports violin plots with the T test statistic provided. In the future, `mice.csv` will be deprecated in favor of adding everything in `metadata.csv`, but this is how it works for now.
+5. `quantify_mfi.R` and `analyze_fluorescence_gates.R` are variations of `analyze_populations` that are still under development.
 
 
 ## Installation
@@ -11,12 +14,34 @@ This tool helps with designing flow panels if you have a large collection of ant
 Install the following packages in R:
 
 ```R
-install.packages('dplyr')
-install.packages('wrapr')
-install.packages("readxl")
-install.packages("openxlsx")
-install.packages('cowplot')
+install.packages('import')
 install.packages("optparse")
+install.packages("logr")
+install.packages("zeallot")  # %<-% operator
+install.packages('magrittr')  # %>% operator
+install.packages("progress")
+
+# file IO
+install.packages("openxlsx")
+install.packages("readxl")
+install.packages("XML")
+install.packages("jsonlite")
+
+# data
+install.packages('plyr')
+install.packages('dplyr')
+install.packages('reshape2')
+install.packages('tidyr')
+install.packages('wrapr')
+install.packages("stringr")
+install.packages("stringi")
+
+# plotting
+install.packages('ggplot2')
+install.packages('superb')
+install.packages('cowplot')
+install.packages('plotly')
+install.packages('htmlwidgets')
 ```
 
 ## Data Requirements
@@ -29,22 +54,14 @@ Set up the following files and place them in the `ref` directory.
 
 3. `spectra.csv`: Download the the fluorescence intensity data from [FPBase](https://www.fpbase.org/spectra/) by selecting your desired fluorophores, then clicking the "Share" button on the bottom right of the lower toolbar. An example file was included, since this is publicly available data.
 
-In the future, if I can find publicly available example data for antibody\_inventory.csv and instrument\_config.csv, I will include those here.
-
  
 ## Getting Started
  
-1. Create a file named `panel.csv` that contains two columns: `antibody` and a `fluorophore`. The first column is important for `design_flow_panel.R`, and you can leave the second column blank at first. Run the panel. 
+1. All scripts are meant to be run from the command line. For example:
 
-	```bash
-	Rscript R/design_flow_panel.R
-	```
-	
-2. After you have decided on which fluorophore combinations to use, enter that information into the `fluorophore` column of `panel.csv`, then run `plot_spectra.R`. This script is based on this [tutorial](https://bradyajohnston.github.io/posts/2022-09-03-plotting-fluorescence/) by Brady Johnston.
-
-	```bash
-	Rscript R/plot_spectra.R
-	```
+    ```bash
+    Rscript R/design_flow_panel.R
+    ```
 
 ## Contributing
 
