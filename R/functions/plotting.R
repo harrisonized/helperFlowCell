@@ -1,68 +1,16 @@
 import::here(zeallot, '%<-%')
 import::here(magrittr, '%>%')
-import::here(superb, 'showSignificance')
 import::here(ggplot2,
-    'ggplot', 'aes', 'geom_boxplot', 'geom_jitter',
-    'stat_summary', 'scale_fill_brewer', 'scale_y_continuous', 'expansion',
-    'ggtitle')
+    'ggplot', 'aes', 
+    'geom_rect', 'geom_area', 'alpha',
+    'facet_wrap', 'scale_linetype_manual',
+    'guides', 'guide_legend', 'theme', 'theme_classic',
+    'xlim', 'ylim')
 import::here(file.path(wd, 'R', 'config', 'lasers.R'),
     'color_for_laser', .character_only=TRUE)
 
 ## Functions
-## compute_nlevels
-## generate_base_level
 ## plot_spectra_by_each_laser
-## plot_violin_with_significance
-
-
-#' Calculate the number of non-overlapping bars needed to span every significance level
-#' Used for plot_violin_with_significance
-#' 
-compute_nlevels <- function(n) {
-
-    if ((n %% 2) == 0) {
-        m <- n/2
-        nlevels <- m*(m+1)-m
-    } else {
-        m <- floor(n/2)
-        nlevels <- m*(m+1)
-    }
-    return(nlevels)
-}
-
-
-#' Generate Starting Positions
-#' 
-#' Generate a sequence used as a floor for each particular level
-#' This serves as the correction factor for the bar height of each p_value bar
-#' Used for plot_violin_with_significance
-#' 
-generate_base_level <- function(n_groups) {
-
-    if ( n_groups == 1 ) {
-        return(0)
-    } else if ( n_groups == 2 ) {
-        return(1)
-    }
-
-    # compute number of levels within the group
-    mid <- floor(n_groups/2)
-    if ( (n_groups%%2) == 0 ) {
-        nlevels <- c(1:mid, (mid-1):1)  # even
-    } else {
-        nlevels <- c(1:mid, (mid):1)  # odd
-    }
-
-    res <- c()
-    value <- 1
-    nreps <- n_groups-1
-    for (step in nlevels) {
-        res <- c(res, rep(value, nreps))
-        value <- value + step
-        nreps <- nreps - 1
-    }
-    return(res)
-}
 
 
 #' Individual Spill Plots
@@ -122,63 +70,6 @@ plot_spectra_by_each_laser <- function(spectra, detectors, laser) {
               legend.justification = c(0, 1)) +  # align legend
         xlim(xmin, xmax) + 
         ylim(0, 1)
-
-    return(fig)
-}
-
-
-#' Plot violin with significance
-#' 
-#' @description Produces a violin plot with error bars in between
-#' You will need to pre-calculate the pvalues and label them as 1v2, 1v3, etc.
-#' Do not include any additional columns in the pval_tbl
-#' 
-#' @return Returns a ggplot object
-#'
-plot_violin_with_significance <- function(
-    df, pval_tbl,
-    x='group_name', y='pct_cells',
-    title=NULL
-) {
-
-    # compute bar positions
-    # TODO: cache this for quick lookup
-    n_groups <- length(unique(df[[x]]))
-    nlevels <- compute_nlevels(n_groups)
-
-    bracket_params <- setNames(as.data.frame(t(combn(1:n_groups, 2))), c('left', 'right'))
-    bracket_params[['dist']] <- bracket_params[['right']] - bracket_params[['left']]
-    bracket_params <- bracket_params[ order(bracket_params[['dist']]), ]
-    bracket_params[['base_level']] <- generate_base_level(n_groups)
-    bracket_params[['level']] <- bracket_params[['base_level']] +  # base level
-        (bracket_params[['left']]-1) %% bracket_params[['dist']]  # alternating correction factor
-
-    # compute starting height
-    h_low <- max(aggregate(df[[y]],
-        list(df[[x]]), FUN=function(x) mean(x)+sd(x)
-    )[['x']])*1.1
-    space <- h_low/10
-
-    fig <- ggplot(df, aes(x=.data[[x]], y=.data[[y]], fill=.data[[x]])) + 
-        geom_boxplot(alpha=0.7, aes(middle=.data[[y]])) +
-        stat_summary(fun=mean, geom="crossbar", width=0.75, linewidth=0.25, linetype = "dashed") +
-        geom_jitter() +
-        scale_fill_brewer(palette="Dark2") +
-        scale_y_continuous(limits = c(0, NA), expand = expansion(mult = c(0, 0.1))) +
-        ggtitle(title)
-
-    # add significance brackets
-    for (row in 1:nrow(bracket_params)) {
-
-        left <- bracket_params[row, "left"]
-        right <- bracket_params[row, "right"]
-        level <- bracket_params[row, "level"]
-        col <- paste0('pval_', left, 'v', right)  # colname
-
-        fig <- fig +
-            showSignificance( c(left+0.1, right-0.1), h_low+(level-1)*space, -0.001,
-                round(pval_tbl[[col]], 4) )
-    }
 
     return(fig)
 }

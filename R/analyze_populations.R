@@ -13,8 +13,6 @@ import::from(ggplot2, 'ggsave')
 
 import::from(file.path(wd, 'R', 'functions', 'preprocessing.R'),
     'preprocess_flowjo_export', 'sort_for_graphpad', .character_only=TRUE)
-import::from(file.path(wd, 'R', 'functions', 'plotting.R'),
-    'plot_violin_with_significance', .character_only=TRUE)
 
 import::from(file.path(wd, 'R', 'tools', 'df_tools.R'),
     'rename_columns', .character_only=TRUE)
@@ -23,8 +21,11 @@ import::from(file.path(wd, 'R', 'tools', 'file_io.R'),
 import::from(file.path(wd, 'R', 'tools', 'list_tools.R'),
     'flatten_matrix', 'items_in_a_not_b', 'multiple_replacement',
     .character_only=TRUE)
+import::from(file.path(wd, 'R', 'tools', 'math.R'),
+    'stats_test', .character_only=TRUE)
 import::from(file.path(wd, 'R', 'tools', 'plotting.R'),
-    'save_fig', 'plot_scatter', 'plot_violin', .character_only=TRUE)
+    'save_fig', 'plot_scatter', 'plot_violin',
+    'plot_violin_with_significance', .character_only=TRUE)
 import::from(file.path(wd, 'R', 'config', 'flow.R'),
     'id_cols', 'initial_gates', 'cell_type_spell_check', 'cell_type_ignore',
     'mouse_db_ignore', .character_only=TRUE)
@@ -54,6 +55,10 @@ option_list = list(
     make_option(c("-g", "--group-by"), default='treatment,genotype',
                 metavar='treatment', type="character",
                 help="enter a column or comma-separated list of columns, no spaces"),
+
+    make_option(c("-t", "--test"), default='t_test',
+                metavar='t_test', type="character",
+                help="currently, only 't_test' is available"),
 
     make_option(c("-p", "--png-only"), default=FALSE, action="store_true",
                 metavar="FALSE", type="logical",
@@ -155,6 +160,8 @@ df[['weeks_old']] <- round(df[['age']]/7, 1)
 #     write.table(df, file = filepath, row.names = FALSE, sep = ',' )
 # }
 
+# num_cells filter
+df <- df[(df[['num_cells']]>50), ]
 
 # ----------------------------------------------------------------------
 # Compute statistics
@@ -186,7 +193,7 @@ for (idx in 1:n_combos) {
     idx1 <- id_combos[[idx]][1]  # 1st col idx
     idx2 <- id_combos[[idx]][2]  # 2nd col idx
     pval_tbl[ pval_cols[idx] ] <- mapply(
-        function(x, y) t.test(x, y, var.equal=FALSE)[['p.value']],  # t test
+        function(x, y) stats_test(x, y, test=opt[['test']]),  # t test
         pval_tbl[[ group_names[idx1] ]],  # 1st col
         pval_tbl[[ group_names[idx2] ]]   # 2nd col
     )
@@ -194,7 +201,6 @@ for (idx in 1:n_combos) {
 
 # save
 if (!troubleshooting) {
-
     tmp_pval_tbl <- pval_tbl
     for (col in group_names) {
         tmp_pval_tbl[[col]] <- mapply(toJSON, pval_tbl[[col]])
@@ -203,7 +209,7 @@ if (!troubleshooting) {
     if (!dir.exists(file.path(wd, opt[['output-dir']], 'data'))) {
         dir.create(file.path(wd, opt[['output-dir']], 'data'), recursive=TRUE)
     }
-    filepath = file.path(wd, opt[['output-dir']], 'data', 'unpaired_t_test_pvals.csv')
+    filepath = file.path(wd, opt[['output-dir']], 'data', paste0(opt[['test']], '_pvals.csv'))
     write.table(tmp_pval_tbl, file = filepath, row.names = FALSE, sep = ',' )
 }
 
