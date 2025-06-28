@@ -13,6 +13,8 @@ import::here(htmlwidgets, 'saveWidget')  # brew install pandoc
 
 import::here(file.path(wd, 'R', 'tools', 'list_tools.R'),
     'flatten_matrix', .character_only=TRUE)
+import::here(file.path(wd, 'R', 'tools', 'math.R'),
+    'unpaired_t_test', .character_only=TRUE)
 
 ## Functions
 ## save_fig
@@ -408,8 +410,8 @@ generate_base_level <- function(n_groups) {
 plot_violin_with_significance <- function(
     df, pvals,
     x='group_name', y='pct_cells', title=NULL,
-    xaxis_angle=60,
-    test='t_test'
+    xaxis_angle=60
+    # test='t_test'  # unused for now
 ) {
 
     # compute bar positions
@@ -458,7 +460,7 @@ plot_violin_with_significance <- function(
             idx1 <- id_combos[[idx]][1]  # 1st col idx
             idx2 <- id_combos[[idx]][2]  # 2nd col idx
             pvals[ pval_cols[idx] ] <- mapply(
-                function(x, y) stats_test(x, y, test=test),
+                function(x, y) unpaired_t_test(x, y),
                 pvals[[ group_names[idx1] ]],  # 1st col
                 pvals[[ group_names[idx2] ]]   # 2nd col
             )
