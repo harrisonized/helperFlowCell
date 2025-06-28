@@ -22,7 +22,7 @@ import::from(file.path(wd, 'R', 'tools', 'list_tools.R'),
     'flatten_matrix', 'items_in_a_not_b', 'multiple_replacement',
     .character_only=TRUE)
 import::from(file.path(wd, 'R', 'tools', 'math.R'),
-    'stats_test', .character_only=TRUE)
+    'unpaired_t_test', .character_only=TRUE)
 import::from(file.path(wd, 'R', 'tools', 'plotting.R'),
     'save_fig', 'plot_scatter', 'plot_violin',
     'plot_violin_with_significance', .character_only=TRUE)
@@ -56,9 +56,9 @@ option_list = list(
                 metavar='treatment', type="character",
                 help="enter a column or comma-separated list of columns, no spaces"),
 
-    make_option(c("-s", "--stat"), default='t_test',
-                metavar='t_test', type="character",
-                help="currently, only 't_test' is available"),
+    # make_option(c("-s", "--stat"), default='t_test',
+    #             metavar='t_test', type="character",
+    #             help="currently, only 't_test' is available"),
 
     make_option(c("-p", "--png-only"), default=FALSE, action="store_true",
                 metavar="FALSE", type="logical",
@@ -157,7 +157,7 @@ df <- df[(df[['num_cells']]>50), ]
 
 
 # ----------------------------------------------------------------------
-# Compute statistics
+# Compute t test
 
 log_print(paste(Sys.time(), 'Computing statistics...'))
 
@@ -186,7 +186,7 @@ for (idx in 1:n_combos) {
     idx1 <- id_combos[[idx]][1]  # 1st col idx
     idx2 <- id_combos[[idx]][2]  # 2nd col idx
     pval_tbl[ pval_cols[idx] ] <- mapply(
-        function(x, y) stats_test(x, y, test=opt[['stat']]),  # t test
+        function(x, y) unpaired_t_test(x, y),  # t test
         pval_tbl[[ group_names[idx1] ]],  # 1st col
         pval_tbl[[ group_names[idx2] ]]   # 2nd col
     )
@@ -278,7 +278,6 @@ for (organ in sort(organs)) {
 
 }
 
-
 # ----------------------------------------------------------------------
 # Plot violin with significance
 
@@ -301,8 +300,8 @@ for (idx in 1:nrow(pval_tbl)) {
     fig <- plot_violin_with_significance(
         df_subset, pval_subset,
         x='group_name', y='pct_cells',
-        title=paste(toupper(organ), cell_type),
-        test=opt[['stat']]
+        title=paste(toupper(organ), cell_type)
+        # test=opt[['stat']]
     )
 
     # save
