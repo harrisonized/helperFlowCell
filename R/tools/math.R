@@ -3,10 +3,33 @@ import::here(file.path(wd, 'R', 'tools', 'list_tools.R'),
     'flatten_matrix', .character_only=TRUE)
 
 ## Functions
+## get_significance_code
 ## unpaired_t_test
 ## apply_unpaired_t_test
-## one_way_anova
-## apply_one_way_anova
+## tukey_multiple_comparisons
+## apply_tukey_multiple_comparisons
+
+
+#' Get Significance Code
+#' 
+#' Convert p value to significance
+#' 
+get_significance_code <- function(p) {
+
+    p <- abs(p)
+
+    if (p > 0.05) {
+        return('n.s.')
+    } else if (p > 0.01) {
+        return('*')
+    } else if (p > 0.001) {
+        return('**')
+    } else if (p > 0.0001 ) {
+        return('***')
+    } else {
+        return('****')
+    }
+}
 
 
 #' Unpaired T Test
@@ -95,7 +118,7 @@ apply_unpaired_t_test <- function(
 #' Returns a list of p values
 #' Uses the Tukey correction (recommended by GraphPad)
 #' 
-one_way_anova <- function(df, group='group_name', metric='pct_cells') {
+tukey_multiple_comparisons <- function(df, group='group_name', metric='pct_cells') {
 
     n_groups <- length(unique(df[[group]]))
 
@@ -125,11 +148,11 @@ one_way_anova <- function(df, group='group_name', metric='pct_cells') {
 }
 
 
-#' Apply One-way ANOVA
+#' Apply Tukey multiple comparisons
 #' 
-#' Apply One-way ANOVA to all rows in dataframe
+#' Apply Tukey multiple comparisons to all groups in a dataframe
 #' 
-apply_one_way_anova <- function(
+apply_tukey_multiple_comparisons <- function(
     df,
     index_cols,  # c('organ', 'cell_type')
     group_name,  # 'group_name'
@@ -151,14 +174,14 @@ apply_one_way_anova <- function(
     res <- res[, c(index_cols, 'metric', group_names)]  # sort cols
     
 
-    # split dataframe to fit expected input for one_way_anova
+    # split dataframe to fit expected input for tukey_multiple_comparisons
     df_list <- split(
         df[, c(index_cols, group_name, metric)],
         df[, c(index_cols)],
         drop=TRUE
     )
     pvals <- mapply(
-        function(x) one_way_anova(x, group='group_name', metric='pct_cells'),
+        function(x) tukey_multiple_comparisons(x, group='group_name', metric='pct_cells'),
         df_list
     )
     colnames <- unique(unlist(lapply(pvals, names)))

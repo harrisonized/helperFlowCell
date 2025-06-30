@@ -14,7 +14,8 @@ import::here(htmlwidgets, 'saveWidget')  # brew install pandoc
 import::here(file.path(wd, 'R', 'tools', 'list_tools.R'),
     'flatten_matrix', 'items_in_a_not_b', .character_only=TRUE)
 import::here(file.path(wd, 'R', 'tools', 'math.R'),
-    'unpaired_t_test', 'one_way_anova', .character_only=TRUE)
+    'get_significance_code', 'unpaired_t_test', 'tukey_multiple_comparisons',
+    .character_only=TRUE)
 
 ## Functions
 ## save_fig
@@ -413,12 +414,13 @@ plot_violin_with_significance <- function(
     y,  #'pct_cells'
     title=NULL,
     xaxis_angle=60,
-    test='t_test'  # 't_test' or 'anova_1w'
+    test='t_test',  # 't_test' or 'anova'
+    stars=FALSE
 ) {
 
     # compute pvals
-    if (test=='anova_1w') {
-        pvals <- one_way_anova(
+    if (test=='anova') {
+        pvals <- tukey_multiple_comparisons(
             df,
             group=x,
             metric=y
@@ -475,10 +477,16 @@ plot_violin_with_significance <- function(
             level <- bracket_params[row, "level"]
             colname <- paste(group_names[[right]], group_names[[left]], sep='-')  # colname
 
+            if (stars) {
+                pval <- get_significance_code( pvals[[colname]] )
+            } else {
+                pval <- toString(round(pvals[[colname]], 4))
+            }
+            
             fig <- fig +
                 showSignificance(
                     c(left+0.1, right-0.1), h_low+(level-1)*space, -0.001*h_low,
-                    toString(round(pvals[[colname]], 4))
+                    pval
                 )
         }
     }
