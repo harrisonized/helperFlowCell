@@ -1,13 +1,14 @@
 import::here(tidyr, 'pivot_wider')
 import::here(file.path(wd, 'R', 'tools', 'list_tools.R'),
-    'flatten_matrix', .character_only=TRUE)
+    'collect_matrix_cols', 'matrix2list', .character_only=TRUE)
 
 ## Functions
 ## get_significance_code
 ## unpaired_t_test
 ## apply_unpaired_t_test
 ## tukey_multiple_comparisons
-## apply_tukey_multiple_comparisons
+## bonferroni_multiple_comparisons
+## apply_multiple_comparisons
 
 
 #' Get Significance Code
@@ -93,7 +94,7 @@ apply_unpaired_t_test <- function(
 
     # iterate through all pairs of columns
     # collect results directly in pval_col
-    id_combos <- flatten_matrix(combn(1:n_groups, 2))  # generate pairs of indexes
+    id_combos <- collect_matrix_cols(combn(1:n_groups, 2))  # generate pairs of indexes
     pval_cols <- sapply(id_combos,  
         function(x) paste(group_names[x[[2]]], group_names[x[[1]]], sep='-')
     )  # generate name pairs
@@ -113,10 +114,10 @@ apply_unpaired_t_test <- function(
 }
 
 
-#' One Way ANOVA with Tukey
+#' One Way ANOVA with Tukey correction
 #' 
-#' Returns a list of p values
-#' Uses the Tukey correction (recommended by GraphPad)
+#' This is supposed to control for false positives due to random chance
+#' when there are many comparisons to choose from
 #' 
 tukey_multiple_comparisons <- function(df, group='group_name', metric='pct_cells') {
 
@@ -148,18 +149,47 @@ tukey_multiple_comparisons <- function(df, group='group_name', metric='pct_cells
 }
 
 
-#' Apply Tukey multiple comparisons
+#' One Way ANOVA with Bonferroni correction
 #' 
-#' Apply Tukey multiple comparisons to all groups in a dataframe
+#' Controls for false positives, but much more stringently as compared to Tukey
+#' This has a high chance of false negatives
 #' 
-apply_tukey_multiple_comparisons <- function(
+bonferroni_multiple_comparisons <- function(
+    df,
+    group='group_name',
+    metric='pct_cells'
+) {
+
+    n_groups <- length(unique( df[[group]] ))
+
+    # exit if only one group
+    if (n_groups==1) {
+        return(NaN)
+    }
+
+    pvals_mat <- pairwise.t.test(
+        df[[metric]], df[[group]],
+        p.adjust.method = "bonferroni"
+    )[['p.value']]
+    pvals <- matrix2list(pvals_mat)  # flatten
+    pvals <- Filter(Negate(is.na), pvals)  # filter NA
+
+    return(pvals)
+}
+
+
+#' Applies one-way ANOVA across a dataframe
+#' Select either Tukey or Bonferroni correction following the one-way ANOVA
+#' 
+apply_multiple_comparisons <- function(
     df,
     index_cols,  # c('organ', 'cell_type')
     group_name,  # 'group_name'
-    metric  # 'pct_cells'
+    metric,  # 'pct_cells'
+    correction='tukey'  # 'tukey' or 'bonferroni'
 ) {
 
-    group_names <- sort(unique(df[[group_name]]))
+    group_names <- sort(unique( df[[group_name]] ))
 
     # Collect values into list columns
     res <- pivot_wider(
@@ -174,16 +204,27 @@ apply_tukey_multiple_comparisons <- function(
     res <- res[, c(index_cols, 'metric', group_names)]  # sort cols
     
 
-    # split dataframe to fit expected input for tukey_multiple_comparisons
+    # split dataframe to fit expected input
     df_list <- split(
         df[, c(index_cols, group_name, metric)],
         df[, c(index_cols)],
         drop=TRUE
     )
-    pvals <- mapply(
-        function(x) tukey_multiple_comparisons(x, group='group_name', metric='pct_cells'),
-        df_list
-    )
+
+    if (correction=='tukey') {
+        pvals <- mapply(
+            function(x) tukey_multiple_comparisons(x, group=group_name, metric=metric),
+            df_list
+        )
+    } else if (correction=='bonferroni') {
+        pvals <- mapply(
+            function(x) bonferroni_multiple_comparisons(x, group=group_name, metric=metric),
+            df_list
+        )
+    } else {
+        stop("Choose correction='tukey' or 'bonferroni'")
+    }
+
     colnames <- unique(unlist(lapply(pvals, names)))
     pvals  <- mapply(function(x) fill_missing_keys(x, colnames), pvals)
     res <- cbind(res, t(pvals))  # res and pvals are sorted for the same order

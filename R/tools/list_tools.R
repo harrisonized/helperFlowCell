@@ -1,17 +1,33 @@
 import::here(stringi, 'stri_replace_all_regex')
 
 ## Functions
+
 ## dict_zip
 ## fill_missing_keys
 ## filter_list_for_match
 ## find_first_match_index
-## flatten_matrix
 ## interleave
 ## items_in_a_not_b
 ## list2matrix
+## matrix2list
 ## move_list_items_to_front
 ## multiple_replacement
 ## replace_specific_items
+
+
+#' Convert a matrix into a list of lists
+#'
+#' Input:
+#'      [,1] [,2] [,3] [,4] [,5] [,6]
+#' [1,]    1    1    1    2    2    3
+#' [2,]    2    3    4    3    4    4
+#' 
+#' Output: 
+#' list(c(1, 2), c(1, 3), c(1, 4), c(2, 4), c(2, 4), c(3, 4))
+#' 
+collect_matrix_cols <- function(mat) {
+    return(split(mat, col(mat)))
+}
 
 
 #' Dictionary
@@ -78,21 +94,6 @@ find_first_match_index <- function(pattern, items) {
 }
 
 
-#' Convert a matrix into a list of lists
-#'
-#' Input:
-#'      [,1] [,2] [,3] [,4] [,5] [,6]
-#' [1,]    1    1    1    2    2    3
-#' [2,]    2    3    4    3    4    4
-#' 
-#' Output: 
-#' list(c(1, 2), c(1, 3), c(1, 4), c(2, 4), c(2, 4), c(3, 4))
-#' 
-flatten_matrix <- function(mat) {
-    return(split(mat, col(mat)))
-}
-
-
 #' Interleave
 #' 
 #' @description
@@ -153,6 +154,18 @@ list2matrix <- function(z, ncol=2, byrow=TRUE, fill=NA) {
     }
     mtx <- matrix(z, ncol = ncol, byrow = byrow)
     return(mtx)
+}
+
+
+#' Rearrange a matrix to a named list
+#' 
+matrix2list <- function(mat) {
+    vec <- as.vector(mat)
+    names(vec) <- with(
+        expand.grid(rownames(mat), colnames(mat)), 
+        paste(Var1, Var2, sep = "-")
+    )
+    return(unlist(vec))
 }
 
 
