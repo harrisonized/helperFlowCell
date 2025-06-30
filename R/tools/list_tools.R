@@ -2,6 +2,7 @@ import::here(stringi, 'stri_replace_all_regex')
 
 ## Functions
 ## dict_zip
+## fill_missing_keys
 ## filter_list_for_match
 ## find_first_match_index
 ## flatten_matrix
@@ -25,6 +26,19 @@ dict_zip <- function(keys, values) {
     named_list <- setNames(values, keys)
     env <- list2env(named_list)
     return(env)
+}
+
+
+#' Fill Missing Keys
+#' 
+#' Add missing keys to a named list (ie. dict)
+#' 
+fill_missing_keys <- function(x, keys, val=NA) {
+
+    missing <- setdiff(keys, names(x))
+    x[missing] <- val  # fill
+    x <- x[keys]  # sort
+    return(x)
 }
 
 
