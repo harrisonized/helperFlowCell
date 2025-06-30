@@ -12,9 +12,10 @@ import::here(plotly, 'plot_ly', 'add_trace', 'layout', 'save_image')
 import::here(htmlwidgets, 'saveWidget')  # brew install pandoc
 
 import::here(file.path(wd, 'R', 'tools', 'list_tools.R'),
-    'flatten_matrix', 'items_in_a_not_b', .character_only=TRUE)
+    'items_in_a_not_b', .character_only=TRUE)
 import::here(file.path(wd, 'R', 'tools', 'math.R'),
-    'get_significance_code', 'unpaired_t_test', 'tukey_multiple_comparisons',
+    'get_significance_code', 'unpaired_t_test',
+    'tukey_multiple_comparisons', 'bonferroni_multiple_comparisons',
     .character_only=TRUE)
 
 ## Functions
@@ -414,26 +415,32 @@ plot_violin_with_significance <- function(
     y,  #'pct_cells'
     title=NULL,
     xaxis_angle=60,
-    test='t_test',  # 't_test' or 'anova'
+    test='t_test',  # 't_test', 'tukey', or 'bonferroni'
     stars=FALSE
 ) {
 
     # compute pvals
-    if (test=='anova') {
-        pvals <- tukey_multiple_comparisons(
-            df,
-            group=x,
-            metric=y
-        )
-    } else if (test=='t_test') {
+    if (test=='t_test') {
         pvals <- apply_unpaired_t_test(
             df,
             index_cols=items_in_a_not_b(colnames(df), c(x, y)),
             group_name=x,
             metric=y
         )
+    } else if (test=='tukey') {
+        pvals <- tukey_multiple_comparisons(
+            df,
+            group=x,
+            metric=y
+        )
+    } else if (test=='bonferroni') {
+        pvals <- bonferroni_multiple_comparisons(
+            df,
+            group=x,
+            metric=y
+        )
     } else {
-        stop("Choose test= 't_test' or 'anova_1w")
+        stop("Choose from test= 't_test', 'tukey', or 'bonferroni'")
     }
 
     # compute bar positions

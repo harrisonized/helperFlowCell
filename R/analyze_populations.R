@@ -19,10 +19,10 @@ import::from(file.path(wd, 'R', 'tools', 'df_tools.R'),
 import::from(file.path(wd, 'R', 'tools', 'file_io.R'),
     'append_many_csv', .character_only=TRUE)
 import::from(file.path(wd, 'R', 'tools', 'list_tools.R'),
-    'fill_missing_keys', 'flatten_matrix', 'items_in_a_not_b', 'multiple_replacement',
+    'fill_missing_keys', 'items_in_a_not_b', 'multiple_replacement',
     .character_only=TRUE)
 import::from(file.path(wd, 'R', 'tools', 'math.R'),
-    'apply_unpaired_t_test', 'apply_tukey_multiple_comparisons', .character_only=TRUE)
+    'apply_unpaired_t_test', 'apply_multiple_comparisons', .character_only=TRUE)
 import::from(file.path(wd, 'R', 'tools', 'plotting.R'),
     'save_fig', 'plot_scatter', 'plot_violin',
     'plot_violin_with_significance', .character_only=TRUE)
@@ -58,7 +58,7 @@ option_list = list(
 
     make_option(c("-s", "--stat"), default='t_test',
                 metavar='t_test', type="character",
-                help="Choose 't_test' or 'anova'"),
+                help="Choose 't_test', 'tukey', or 'bonferroni'"),
 
     make_option(c("-p", "--png-only"), default=FALSE, action="store_true",
                 metavar="FALSE", type="logical",
@@ -82,8 +82,8 @@ troubleshooting = opt[['troubleshooting']]
 output_dir <- file.path(wd, opt[['output-dir']])
 troubleshooting_dir = file.path(output_dir, 'troubleshooting')
 
-if (!(opt[['stat']] %in% c('t_test', 'anova'))) {
-    stop("Choose stat= 't_test' or 'anova")
+if (!(opt[['stat']] %in% c('t_test', 'tukey', 'bonferroni'))) {
+    stop("Choose from stat= 't_test', 'tukey', or 'bonferroni'")
 }
 
 # args
@@ -155,27 +155,18 @@ if (!is.null(mouse_db)) {
 }
 
 
-# num_cells filter
-df <- df[(df[['num_cells']]>50), ]
-
-
-# sort
-df <- df[order(df[['cell_type']], df[['organ']], df[['group_name']]), ]
+# there's a bug where it breaks if the filter isn't stringent enough
+df <- df[(df[['num_cells']]>50), ]  # num_cells filter
+df <- df[order(df[['cell_type']], df[['organ']], df[['group_name']]), ]  # sort rows
 group_names <- sort(unique( df[['group_name']] ))
+
 
 # ----------------------------------------------------------------------
 # Compute statistics
 
 log_print(paste(Sys.time(), paste0('Computing ', opt[['stat']], '...')))
 
-if (opt[['stat']]=='anova') {
-    pval_tbl <- apply_tukey_multiple_comparisons(
-        df,
-        index_cols=c('organ', 'cell_type'),
-        group_name='group_name',
-        metric='pct_cells'
-    )
-} else if (opt[['stat']]=='t_test') {
+if (opt[['stat']]=='t_test') {
     pval_tbl <- apply_unpaired_t_test(
         df,
         index_cols=c('organ', 'cell_type'),
@@ -183,9 +174,14 @@ if (opt[['stat']]=='anova') {
         metric='pct_cells'
     )
 } else {
-    stop("Choose test= 't_test' or 'anova")
+    pval_tbl <- apply_multiple_comparisons(
+        df,
+        index_cols=c('organ', 'cell_type'),
+        group_name='group_name',
+        metric='pct_cells',
+        correction=opt[['stat']]
+    )
 }
-
 
 # save
 if (!troubleshooting) {
@@ -282,17 +278,12 @@ log_print(paste(Sys.time(),
 log_print(paste(Sys.time(), 'Plotting violin with pvals...'))
 
 
-pval_cols <- items_in_a_not_b(
-    colnames(pval_tbl),
-    c('organ', 'cell_type', 'metric', group_names)
-)
-
 pbar <- progress_bar$new(total = nrow(pval_tbl))
 for (idx in 1:nrow(pval_tbl)) {
+
+    # subset data
     organ <- pval_tbl[idx, 'organ'][[1]]
     cell_type <- pval_tbl[idx, 'cell_type'][[1]]
-
-    # filter long data
     df_subset <- df[
         (df[['organ']] == organ) & (df[['cell_type']] == cell_type),
         c('organ', 'cell_type', 'group_name', 'pct_cells')
