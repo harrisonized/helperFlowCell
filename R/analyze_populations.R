@@ -22,7 +22,7 @@ import::from(file.path(wd, 'R', 'tools', 'list_tools.R'),
     'fill_missing_keys', 'flatten_matrix', 'items_in_a_not_b', 'multiple_replacement',
     .character_only=TRUE)
 import::from(file.path(wd, 'R', 'tools', 'math.R'),
-    'apply_unpaired_t_test', 'apply_one_way_anova', .character_only=TRUE)
+    'apply_unpaired_t_test', 'apply_tukey_multiple_comparisons', .character_only=TRUE)
 import::from(file.path(wd, 'R', 'tools', 'plotting.R'),
     'save_fig', 'plot_scatter', 'plot_violin',
     'plot_violin_with_significance', .character_only=TRUE)
@@ -58,7 +58,7 @@ option_list = list(
 
     make_option(c("-s", "--stat"), default='t_test',
                 metavar='t_test', type="character",
-                help="Choose 't_test' or 'anova_1w'"),
+                help="Choose 't_test' or 'anova'"),
 
     make_option(c("-p", "--png-only"), default=FALSE, action="store_true",
                 metavar="FALSE", type="logical",
@@ -82,8 +82,8 @@ troubleshooting = opt[['troubleshooting']]
 output_dir <- file.path(wd, opt[['output-dir']])
 troubleshooting_dir = file.path(output_dir, 'troubleshooting')
 
-if (!(opt[['stat']] %in% c('t_test', 'anova_1w'))) {
-    stop("Choose stat= 't_test' or 'anova_1w")
+if (!(opt[['stat']] %in% c('t_test', 'anova'))) {
+    stop("Choose stat= 't_test' or 'anova")
 }
 
 # args
@@ -168,8 +168,8 @@ group_names <- sort(unique( df[['group_name']] ))
 
 log_print(paste(Sys.time(), paste0('Computing ', opt[['stat']], '...')))
 
-if (opt[['stat']]=='anova_1w') {
-    pval_tbl <- apply_one_way_anova(
+if (opt[['stat']]=='anova') {
+    pval_tbl <- apply_tukey_multiple_comparisons(
         df,
         index_cols=c('organ', 'cell_type'),
         group_name='group_name',
@@ -183,7 +183,7 @@ if (opt[['stat']]=='anova_1w') {
         metric='pct_cells'
     )
 } else {
-    stop("Choose test= 't_test' or 'anova_1w")
+    stop("Choose test= 't_test' or 'anova")
 }
 
 
