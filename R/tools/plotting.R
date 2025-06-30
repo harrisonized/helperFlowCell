@@ -12,9 +12,9 @@ import::here(plotly, 'plot_ly', 'add_trace', 'layout', 'save_image')
 import::here(htmlwidgets, 'saveWidget')  # brew install pandoc
 
 import::here(file.path(wd, 'R', 'tools', 'list_tools.R'),
-    'flatten_matrix', .character_only=TRUE)
+    'flatten_matrix', 'items_in_a_not_b', .character_only=TRUE)
 import::here(file.path(wd, 'R', 'tools', 'math.R'),
-    'unpaired_t_test', .character_only=TRUE)
+    'unpaired_t_test', 'one_way_anova', .character_only=TRUE)
 
 ## Functions
 ## save_fig
@@ -408,15 +408,35 @@ generate_base_level <- function(n_groups) {
 #' @return Returns a ggplot object
 #'
 plot_violin_with_significance <- function(
-    df, pvals,
-    x='group_name', y='pct_cells', title=NULL,
-    xaxis_angle=60
-    # test='t_test'  # unused for now
+    df,
+    x,  # 'group_name'
+    y,  #'pct_cells'
+    title=NULL,
+    xaxis_angle=60,
+    test='t_test'  # 't_test' or 'anova_1w'
 ) {
 
+    # compute pvals
+    if (test=='anova_1w') {
+        pvals <- one_way_anova(
+            df,
+            group=x,
+            metric=y
+        )
+    } else if (test=='t_test') {
+        pvals <- apply_unpaired_t_test(
+            df,
+            index_cols=items_in_a_not_b(colnames(df), c(x, y)),
+            group_name=x,
+            metric=y
+        )
+    } else {
+        stop("Choose test= 't_test' or 'anova_1w")
+    }
+
     # compute bar positions
-    # TODO: cache this for quick lookup
-    n_groups <- length(unique(df[[x]]))
+    group_names <- sort(unique( df[[x]] ))
+    n_groups <- length(group_names)
 
     if (n_groups > 1) {
         bracket_params <- setNames(as.data.frame(t(combn(1:n_groups, 2))), c('left', 'right'))
@@ -436,37 +456,7 @@ plot_violin_with_significance <- function(
         space <- h_low / 10
     }
 
-    # if fewer groups than expected, recompute pvals to get the correct significance labels
-    nlevels <- compute_nlevels( length(unique(df[[x]])) )
-    if ( (nlevels > 0) & (length(pvals) > nlevels) ) {
-        group_names <- sort(unique(df[[x]]))
-        n_groups <- length(group_names)
-        n_combos <- choose(n_groups, 2)
-        id_combos <- flatten_matrix(combn(1:n_groups, 2))  # generate pairs of indexes
-        pval_cols <- sapply(id_combos, function(x) paste0('pval_', x[[1]], 'v', x[[2]]))  # colnames for all pairs
-
-        # Collect values into list columns
-        pvals <- pivot_wider(
-            df[, c(x, y)],
-            names_from = c(x),
-            values_from = c(y),
-            values_fn = list,  # suppress warning
-            names_glue = "{.name}"
-        )
-        pvals <- pvals[, group_names]  # sort cols
-
-        # calculate unpaired t test for all pairs of groups
-        for (idx in 1:n_combos) {
-            idx1 <- id_combos[[idx]][1]  # 1st col idx
-            idx2 <- id_combos[[idx]][2]  # 2nd col idx
-            pvals[ pval_cols[idx] ] <- mapply(
-                function(x, y) unpaired_t_test(x, y),
-                pvals[[ group_names[idx1] ]],  # 1st col
-                pvals[[ group_names[idx2] ]]   # 2nd col
-            )
-        }
-    }
-    
+    # base plot
     fig <- ggplot(df, aes(x=.data[[x]], y=.data[[y]], fill=.data[[x]])) + 
         geom_boxplot(alpha=0.7, aes(middle=.data[[y]])) +
         stat_summary(fun=mean, geom="crossbar", width=0.75, linewidth=0.25, linetype = "dashed") +
@@ -483,11 +473,13 @@ plot_violin_with_significance <- function(
             left <- bracket_params[row, "left"]
             right <- bracket_params[row, "right"]
             level <- bracket_params[row, "level"]
-            col <- paste0('pval_', left, 'v', right)  # colname
+            colname <- paste(group_names[[right]], group_names[[left]], sep='-')  # colname
 
             fig <- fig +
-                showSignificance( c(left+0.1, right-0.1), h_low+(level-1)*space, -0.001*h_low,
-                    toString(round(pvals[[col]], 4)) )
+                showSignificance(
+                    c(left+0.1, right-0.1), h_low+(level-1)*space, -0.001*h_low,
+                    toString(round(pvals[[colname]], 4))
+                )
         }
     }
 

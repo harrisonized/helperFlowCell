@@ -19,10 +19,10 @@ import::from(file.path(wd, 'R', 'tools', 'df_tools.R'),
 import::from(file.path(wd, 'R', 'tools', 'file_io.R'),
     'append_many_csv', .character_only=TRUE)
 import::from(file.path(wd, 'R', 'tools', 'list_tools.R'),
-    'flatten_matrix', 'items_in_a_not_b', 'multiple_replacement',
+    'fill_missing_keys', 'flatten_matrix', 'items_in_a_not_b', 'multiple_replacement',
     .character_only=TRUE)
 import::from(file.path(wd, 'R', 'tools', 'math.R'),
-    'unpaired_t_test', .character_only=TRUE)
+    'apply_unpaired_t_test', 'apply_one_way_anova', .character_only=TRUE)
 import::from(file.path(wd, 'R', 'tools', 'plotting.R'),
     'save_fig', 'plot_scatter', 'plot_violin',
     'plot_violin_with_significance', .character_only=TRUE)
@@ -56,9 +56,9 @@ option_list = list(
                 metavar='treatment', type="character",
                 help="enter a column or comma-separated list of columns, no spaces"),
 
-    # make_option(c("-s", "--stat"), default='t_test',
-    #             metavar='t_test', type="character",
-    #             help="currently, only 't_test' is available"),
+    make_option(c("-s", "--stat"), default='t_test',
+                metavar='t_test', type="character",
+                help="Choose 't_test' or 'anova_1w'"),
 
     make_option(c("-p", "--png-only"), default=FALSE, action="store_true",
                 metavar="FALSE", type="logical",
@@ -82,9 +82,12 @@ troubleshooting = opt[['troubleshooting']]
 output_dir <- file.path(wd, opt[['output-dir']])
 troubleshooting_dir = file.path(output_dir, 'troubleshooting')
 
+if (!(opt[['stat']] %in% c('t_test', 'anova_1w'))) {
+    stop("Choose stat= 't_test' or 'anova_1w")
+}
+
 # args
 metadata_cols <- unlist(strsplit(opt[['group-by']], ','))
-
 
 # Start Log
 start_time = Sys.time()
@@ -156,55 +159,48 @@ if (!is.null(mouse_db)) {
 df <- df[(df[['num_cells']]>50), ]
 
 
+# sort
+df <- df[order(df[['cell_type']], df[['organ']], df[['group_name']]), ]
+group_names <- sort(unique( df[['group_name']] ))
+
 # ----------------------------------------------------------------------
-# Compute t test
+# Compute statistics
 
-log_print(paste(Sys.time(), 'Computing statistics...'))
+log_print(paste(Sys.time(), paste0('Computing ', opt[['stat']], '...')))
 
-group_names <- sort(unique(df[['group_name']]))
-n_groups <- length(group_names)
-n_combos <- choose(n_groups, 2)
-id_combos <- flatten_matrix(combn(1:n_groups, 2))  # generate pairs of indexes
-pval_cols <- sapply(id_combos, function(x) paste0('pval_', x[[1]], 'v', x[[2]]))  # colnames for all pairs
-
-
-# Collect values into list columns
-pval_tbl <- pivot_wider(
-    df[, c('organ', 'cell_type', 'group_name', 'pct_cells')],
-    names_from = c('group_name'),
-    values_from = c('pct_cells'),
-    values_fn = list,  # suppress warning
-    names_glue = "{.name}"
-)
-pval_tbl[['metric']] <- 'pct_cells'
-pval_tbl <- pval_tbl[, c('organ', 'cell_type', 'metric', group_names)]  # sort cols
-pval_tbl <- pval_tbl[order(pval_tbl[['organ']], pval_tbl[['cell_type']]), ]  # sort rows
-
-
-# calculate unpaired t test for all pairs of groups
-for (idx in 1:n_combos) {
-    idx1 <- id_combos[[idx]][1]  # 1st col idx
-    idx2 <- id_combos[[idx]][2]  # 2nd col idx
-    pval_tbl[ pval_cols[idx] ] <- mapply(
-        function(x, y) unpaired_t_test(x, y),  # t test
-        pval_tbl[[ group_names[idx1] ]],  # 1st col
-        pval_tbl[[ group_names[idx2] ]]   # 2nd col
+if (opt[['stat']]=='anova_1w') {
+    pval_tbl <- apply_one_way_anova(
+        df,
+        index_cols=c('organ', 'cell_type'),
+        group_name='group_name',
+        metric='pct_cells'
     )
+} else if (opt[['stat']]=='t_test') {
+    pval_tbl <- apply_unpaired_t_test(
+        df,
+        index_cols=c('organ', 'cell_type'),
+        group_name='group_name',
+        metric='pct_cells'
+    )
+} else {
+    stop("Choose test= 't_test' or 'anova_1w")
 }
+
 
 # save
 if (!troubleshooting) {
-    tmp_pval_tbl <- pval_tbl
+    tmp <- pval_tbl
     for (col in group_names) {
-        tmp_pval_tbl[[col]] <- mapply(toJSON, pval_tbl[[col]])
+        tmp[[col]] <- mapply(toJSON, tmp[[col]])
     }
 
     if (!dir.exists(file.path(wd, opt[['output-dir']], 'data'))) {
         dir.create(file.path(wd, opt[['output-dir']], 'data'), recursive=TRUE)
     }
     filepath = file.path(wd, opt[['output-dir']], 'data', paste0(opt[['stat']], '_pvals.csv'))
-    write.table(tmp_pval_tbl, file = filepath, row.names = FALSE, sep = ',' )
+    write.table(tmp, file = filepath, row.names = FALSE, sep = ',' )
 }
+
 
 
 # ----------------------------------------------------------------------
@@ -285,11 +281,16 @@ log_print(paste(Sys.time(),
     paste(nrow(pval_tbl), 'populations found across', length(organs), 'organs')))
 log_print(paste(Sys.time(), 'Plotting violin with pvals...'))
 
+
+pval_cols <- items_in_a_not_b(
+    colnames(pval_tbl),
+    c('organ', 'cell_type', 'metric', group_names)
+)
+
 pbar <- progress_bar$new(total = nrow(pval_tbl))
 for (idx in 1:nrow(pval_tbl)) {
     organ <- pval_tbl[idx, 'organ'][[1]]
     cell_type <- pval_tbl[idx, 'cell_type'][[1]]
-    pval_subset <- pval_tbl[idx, pval_cols]
 
     # filter long data
     df_subset <- df[
@@ -298,24 +299,24 @@ for (idx in 1:nrow(pval_tbl)) {
     ]
 
     fig <- plot_violin_with_significance(
-        df_subset, pval_subset,
+        df_subset,
         x='group_name', y='pct_cells',
-        title=paste(toupper(organ), cell_type)
-        # test=opt[['stat']]
+        title=paste(toupper(organ), cell_type),
+        test=opt[['stat']]
     )
 
     # save
     if (!troubleshooting) {
 
         dirpath <- file.path(wd, opt[['output-dir']], 'figures',
-            paste0('comparisons-', gsub(',', '_', opt[['group-by']])),
+            paste0(opt[['stat']], '-', gsub(',', '_', opt[['group-by']])),
             organ
         )
         if (!dir.exists(dirpath)) {
             dir.create(dirpath, recursive=TRUE)
         }
         filepath = file.path(dirpath,
-            paste0('violin-', organ, '-', gsub(' ', '_', tolower(cell_type)), '.png' )
+            paste0(opt[['stat']], '-', organ, '-', gsub(' ', '_', tolower(cell_type)), '.png' )
         )
 
         withCallingHandlers({
