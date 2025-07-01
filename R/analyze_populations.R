@@ -12,7 +12,7 @@ import::from(tidyr, 'pivot_longer', 'pivot_wider')
 import::from(ggplot2, 'ggsave')
 
 import::from(file.path(wd, 'R', 'functions', 'preprocessing.R'),
-    'preprocess_flowjo_export', 'sort_for_graphpad', .character_only=TRUE)
+    'preprocess_flowjo_export', 'sort_groups_by_metric', .character_only=TRUE)
 
 import::from(file.path(wd, 'R', 'tools', 'df_tools.R'),
     'rename_columns', .character_only=TRUE)
@@ -25,7 +25,7 @@ import::from(file.path(wd, 'R', 'tools', 'math.R'),
     'apply_unpaired_t_test', 'apply_multiple_comparisons', .character_only=TRUE)
 import::from(file.path(wd, 'R', 'tools', 'plotting.R'),
     'save_fig', 'plot_scatter', 'plot_violin',
-    'plot_violin_with_significance', .character_only=TRUE)
+    'plot_multiple_comparisons', .character_only=TRUE)
 import::from(file.path(wd, 'R', 'config', 'flow.R'),
     'id_cols', 'initial_gates', 'cell_type_spell_check', 'cell_type_ignore',
     'mouse_db_ignore', .character_only=TRUE)
@@ -40,13 +40,13 @@ option_list = list(
                 metavar='data/flow-data', type="character",
                 help="input directory, all csv files will be read in"),
 
-    make_option(c("-m", "--metadata-dir"), default="data/flow-metadata",
-                metavar="data/flow-metadata", type="character",
-                help="metadata directory containing csvs mapping fcs to mouse ids"),
-
     make_option(c("-o", "--output-dir"), default="output",
                 metavar="output", type="character",
                 help="output directory for the data"),
+
+    make_option(c("-m", "--metadata-dir"), default="data/flow-metadata",
+                metavar="data/flow-metadata", type="character",
+                help="metadata directory containing csvs mapping fcs to mouse ids"),
 
     make_option(c("-r", "--ref-dir"), default='data/mice',
                 metavar='data/mice', type="character",
@@ -60,9 +60,13 @@ option_list = list(
                 metavar='fishers_lsd', type="character",
                 help="Choose 'fishers_lsd', 't_test', 'tukey', or 'bonferroni'"),
 
-    make_option(c("-p", "--png-only"), default=FALSE, action="store_true",
+    make_option(c("-p", "--plotly-overview"), default=FALSE, action="store_true",
                 metavar="FALSE", type="logical",
-                help="only save png and not HTML, useful for setting png height/width"),
+                help="generate overview interactive violin plot"),
+
+    make_option(c("-n", "--show-numbers"), default=FALSE, action="store_true",
+                metavar="FALSE", type="logical",
+                help="in violin with significance, show all numbers instead of stars"),
 
     make_option(c("-l", "--height"), default=500,
                 metavar="500", type="integer",
@@ -111,8 +115,10 @@ counts <- preprocess_flowjo_export(counts)
 counts <- counts[!str_detect(counts[['fcs_name']], '(U|u)nstained'), ]  # drop unstained cells
 
 # reference files
-flow_metadata <- append_many_csv(file.path(wd, opt[['metadata-dir']]), recursive=TRUE, include_filepath=FALSE)
-mouse_db <- append_many_csv(file.path(wd, opt[['ref-dir']]), recursive=TRUE, include_filepath=FALSE)
+flow_metadata <- append_many_csv(
+    file.path(wd, opt[['metadata-dir']]), recursive=TRUE, include_filepath=FALSE)
+mouse_db <- append_many_csv(
+    file.path(wd, opt[['ref-dir']]), recursive=TRUE, include_filepath=FALSE)
 
 
 # ----------------------------------------------------------------------
@@ -149,14 +155,15 @@ if (length(metadata_cols) > 1) {
 
 # left join mouse data if available
 if (!is.null(mouse_db)) {
+    log_print(paste(Sys.time(), 'Merging mouse data...'))
     df <- merge(df, mouse_db[, items_in_a_not_b(colnames(mouse_db), mouse_db_ignore)],
         by="mouse_id", all.x=TRUE, all.y=FALSE, suffixes=c('', '_'))
     df[['weeks_old']] <- round(df[['age']]/7, 1)
 }
 
 
-# there's a bug where it breaks if the filter isn't stringent enough
-df <- df[(df[['num_cells']]>50), ]  # num_cells filter
+# filter and sort
+df <- df[(df[['num_cells']]>10), ]
 df <- df[order(df[['cell_type']], df[['organ']], df[['group_name']]), ]  # sort rows
 group_names <- sort(unique( df[['group_name']] ))
 
@@ -193,64 +200,39 @@ if (!troubleshooting) {
     if (!dir.exists(file.path(wd, opt[['output-dir']], 'data'))) {
         dir.create(file.path(wd, opt[['output-dir']], 'data'), recursive=TRUE)
     }
-    filepath = file.path(wd, opt[['output-dir']], 'data', paste0(opt[['stat']], '_pvals.csv'))
+    filepath = file.path(
+        wd, opt[['output-dir']], 'data', paste0(opt[['stat']], '_pvals.csv'))
     write.table(tmp, file = filepath, row.names = FALSE, sep = ',' )
 }
 
 
-
 # ----------------------------------------------------------------------
-# Plot cell type frequency per organ, interactive plot
-
-log_print(paste(Sys.time(), 'Quantifying cell type frequencies...'))
+# Data overview
 
 organs <- sort(unique(df[['organ']]))
 log_print(paste(Sys.time(), 'Groups found...', paste(organs, collapse = ', ')))
+
+if (opt[['plotly-overview']]) {
+    log_print(paste(Sys.time(), 'Exporting data with plots...'))
+} else {
+    log_print(paste(Sys.time(), 'Exporting data...'))
+}
+
 for (organ in sort(organs)) {
 
-    log_print(paste(Sys.time(), 'Processing...', organ))
-
-
-    # ----------------------------------------------------------------------
-    # Plot
-
-    fig <- plot_violin(
-        df[(df[['organ']]==organ), ],
-        x='cell_type', y='pct_cells', group_by='group_name',
-        ylabel='Percent of Live Cells', title=organ,
-        ymin=0, ymax=100,
-        hover_data=unique(intersect(
-                c('mouse_id', 'group_name', metadata_cols,
-                  'sex', 'treatment', 'weeks_old', 
-                  'Cells', 'num_cells', 'fcs_name'),
-                colnames(df)
-        ))
-        # color_discrete_map=c(
-        #     'heterozygous'='#2ca02c',  # green
-        #     'wild type'='#62c1e5'  # blue
-        # )
-    )
-
-    if (!troubleshooting) {
-        save_fig(
-            fig=fig,
-            height=opt[['height']], width=opt[['width']],
-            dirpath=file.path(wd, opt[['output-dir']], 'figures', 'populations'),
-            filename=paste('violin-pct_cells', organ, gsub(',', '_', opt[['group-by']]), sep='-'),
-            save_html=!opt[['png-only']]
-        )
-    }
+    log_print(paste0(Sys.time(), ' Processing ', organ, '...'))
 
 
     # ----------------------------------------------------------------------
     # Data
 
-    tmp <- sort_for_graphpad(
+    tmp <- sort_groups_by_metric(
         df[(df[['organ']]==organ),
             unique(intersect(
                 c('organ', 'genotype', 'treatment',
                    'group_name', metadata_cols, 'cell_type',
-                   'Cells/Single Cells/Single Cells/Live Cells', 'num_cells', 'pct_cells', 
+                   'Cells/Single Cells/Single Cells/Live Cells',
+                   'num_cells', 'pct_cells', 
                    'mouse_id', 'sex', 'weeks_old', 'fcs_name'),
                 colnames(df)
             ))],
@@ -263,20 +245,57 @@ for (organ in sort(organs)) {
             dir.create(dirpath, recursive=TRUE)
         }
         filepath = file.path(dirpath,
-            paste0(organ, '-', gsub(',', '_', opt[['group-by']]), '.csv')
+            paste0(organ, '.csv')
         )
         write.table(tmp, file = filepath, row.names = FALSE, sep = ',')
     }
 
+
+    # ----------------------------------------------------------------------
+    # Plot
+
+    if (opt[['plotly-overview']]) {
+
+        fig <- plot_violin(
+            df[(df[['organ']]==organ), ],
+            x='cell_type', y='pct_cells', group_by='group_name',
+            ylabel='Percent of Live Cells', title=organ,
+            ymin=0, ymax=100,
+            hover_data=unique(intersect(
+                    c('mouse_id', 'group_name', metadata_cols,
+                      'sex', 'treatment', 'weeks_old', 
+                      'Cells', 'num_cells', 'fcs_name'),
+                    colnames(df)
+            ))
+            # color_discrete_map=c(
+            #     'heterozygous'='#2ca02c',  # green
+            #     'wild type'='#62c1e5'  # blue
+            # )
+        )
+
+        if (!troubleshooting) {
+            save_fig(
+                fig=fig,
+                height=opt[['height']], width=opt[['width']],
+                dirpath=file.path(wd, opt[['output-dir']], 'figures', 'overview'),
+                filename=paste('violin-pct_cells', 
+                    organ, gsub(',', '_', opt[['group-by']]), sep='-'),
+                save_html=TRUE
+            )
+        }
+    }
 }
 
+
 # ----------------------------------------------------------------------
-# Plot violin with significance
+# Violin with significance
 
-log_print(paste(Sys.time(),
-    paste(nrow(pval_tbl), 'populations found across', length(organs), 'organs')))
-log_print(paste(Sys.time(), 'Plotting violin with pvals...'))
+log_print(paste(Sys.time(), paste(
+    nrow(pval_tbl), 'populations found across',
+    length(organs), 'organs') )
+)
 
+log_print(paste(Sys.time(), paste('Plotting mulitple comparisons using', opt[['stat']])))
 
 pbar <- progress_bar$new(total = nrow(pval_tbl))
 for (idx in 1:nrow(pval_tbl)) {
@@ -289,18 +308,19 @@ for (idx in 1:nrow(pval_tbl)) {
         c('organ', 'cell_type', 'group_name', 'pct_cells')
     ]
 
-    fig <- plot_violin_with_significance(
+    fig <- plot_multiple_comparisons(
         df_subset,
         x='group_name', y='pct_cells',
         title=paste(toupper(organ), cell_type),
-        test=opt[['stat']]
+        test=opt[['stat']],
+        show_numbers=opt[['show-numbers']]
     )
 
     # save
     if (!troubleshooting) {
 
         dirpath <- file.path(wd, opt[['output-dir']], 'figures',
-            paste0(opt[['stat']], '-', gsub(',', '_', opt[['group-by']])),
+            paste( opt[['stat']], gsub(',', '_', opt[['group-by']]), sep='-' ),
             organ
         )
         if (!dir.exists(dirpath)) {

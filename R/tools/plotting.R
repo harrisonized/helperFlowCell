@@ -14,8 +14,8 @@ import::here(htmlwidgets, 'saveWidget')  # brew install pandoc
 import::here(file.path(wd, 'R', 'tools', 'list_tools.R'),
     'items_in_a_not_b', .character_only=TRUE)
 import::here(file.path(wd, 'R', 'tools', 'math.R'),
-    'get_significance_code', 'unpaired_t_test', 'fishers_lsd',
-    'tukey_multiple_comparisons', 'bonferroni_multiple_comparisons',
+    'unpaired_t_test', 'fishers_lsd', 'tukey_multiple_comparisons',
+    'bonferroni_multiple_comparisons',
     .character_only=TRUE)
 
 ## Functions
@@ -25,7 +25,8 @@ import::here(file.path(wd, 'R', 'tools', 'math.R'),
 ## plot_violin
 ## compute_nlevels
 ## generate_base_level
-## plot_violin_with_significance
+## get_significance_code
+## plot_multiple_comparisons
 
 
 #' Save Figure
@@ -349,9 +350,9 @@ plot_violin <- function(
 
 #' Compute N Levels
 #' 
-#' Used for plot_violin_with_significance
-#' Calculate the number of non-overlapping bars needed to span every significance level
-#' In practice, this is not actually necessary
+#' @description Calculate the number of non-overlapping bars needed to span
+#' every significance level. Didn't end up needing this.
+#' Helper function for plot_multiple_comparisons
 #' 
 compute_nlevels <- function(n) {
 
@@ -368,9 +369,9 @@ compute_nlevels <- function(n) {
 
 #' Generate Starting Positions
 #'
-#' Used for plot_violin_with_significance
-#' Generate a sequence used as a floor for each particular level
+#' @description Generate a sequence used as a floor for each particular level
 #' This serves as the correction factor for the bar height of each p_value bar
+#' Helper function for plot_multiple_comparisons
 #' 
 generate_base_level <- function(n_groups) {
 
@@ -400,6 +401,30 @@ generate_base_level <- function(n_groups) {
 }
 
 
+#' Get Significance Code
+#' 
+#' @description Convert p value to significance
+#' Helper function for plot_multiple_comparisons
+#' 
+get_significance_code <- function(p, digits=3) {
+
+    p <- abs(p)
+    if (p > 0.20) {
+        return('n.s.')
+    } else if (p > 0.05) {
+        return( format(round(p, digits), nsmall = digits) )
+    } else if (p > 0.01) {
+        return('✱')  # Note: These are not Shift+8 asterisks
+    } else if (p > 0.001) {
+        return('✱✱')
+    } else if (p > 0.0001 ) {
+        return('✱✱✱')
+    } else {
+        return('✱✱✱✱')
+    }
+}
+
+
 #' Plot violin with significance
 #' 
 #' @description Produces a violin plot with error bars in between
@@ -409,14 +434,15 @@ generate_base_level <- function(n_groups) {
 #' 
 #' @return Returns a ggplot object
 #'
-plot_violin_with_significance <- function(
+plot_multiple_comparisons <- function(
     df,
     x,  # 'group_name'
     y,  #'pct_cells'
     title=NULL,
     xaxis_angle=60,
     test='t_test',  # 'fishers_lsd', 't_test', 'tukey', or 'bonferroni'
-    stars=FALSE
+    show_numbers=FALSE,
+    digits=4
 ) {
 
     # compute pvals
@@ -490,10 +516,10 @@ plot_violin_with_significance <- function(
             level <- bracket_params[row, "level"]
             colname <- paste(group_names[[right]], group_names[[left]], sep='-')  # colname
 
-            if (stars) {
-                pval <- get_significance_code( pvals[[colname]] )
+            if (show_numbers) {
+                pval <- toString( format(round(pvals[[colname]], digits), nsmall = digits) )
             } else {
-                pval <- toString(round(pvals[[colname]], 4))
+                pval <- get_significance_code( pvals[[colname]] )
             }
             
             fig <- fig +

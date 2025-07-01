@@ -3,7 +3,6 @@ import::here(file.path(wd, 'R', 'tools', 'list_tools.R'),
     'collect_matrix_cols', 'matrix2list', .character_only=TRUE)
 
 ## Functions
-## get_significance_code
 ## unpaired_t_test
 ## apply_unpaired_t_test
 ## fishers_lsd
@@ -12,33 +11,12 @@ import::here(file.path(wd, 'R', 'tools', 'list_tools.R'),
 ## apply_multiple_comparisons
 
 
-#' Get Significance Code
-#' 
-#' Convert p value to significance
-#' 
-get_significance_code <- function(p) {
-
-    p <- abs(p)
-
-    if (p > 0.05) {
-        return('n.s.')
-    } else if (p > 0.01) {
-        return('*')
-    } else if (p > 0.001) {
-        return('**')
-    } else if (p > 0.0001 ) {
-        return('***')
-    } else {
-        return('****')
-    }
-}
-
-
 #' Unpaired T Test
 #' 
-#' This implementation does not assume the variances are equal between groups
-#' For multiple comparison, try fishers_lsd first, then try this if the variances are clearly unequal between groups
-#' 
+#' @description Use this when you have multiple groups that are not dependent on each other
+#' and the variances are clearly unequal between the groups
+#' Try this as a second resort if fishers_lsd is giving too many false positives
+#'
 unpaired_t_test <- function(x, y) {
 
     # exit if either side is null or both sides have fewer observations
@@ -76,7 +54,7 @@ unpaired_t_test <- function(x, y) {
 
 #' Apply Unpaired T Test
 #' 
-#' Apply unpaired t test to dataframe
+#' @description Apply unpaired t test to dataframe
 #' 
 apply_unpaired_t_test <- function(
     df,
@@ -125,9 +103,10 @@ apply_unpaired_t_test <- function(
 
 #' One Way ANOVA with no correction, ie. Fisher's LSD
 #' 
-#' This is used when the groups are independent of each other
-#' This reduces to using a t test with the assumption that the variances
-#' between groups are equal
+#' @description Use this when you have multiple groups that are not dependent on each other
+#' and the variances are roughly equal between the groups.
+#' Use this first. If the group with the largest variance is more than 4x the variance of
+#' the smallest group, switch to unpaired_t_test
 #' 
 fishers_lsd <- function(
     df,
@@ -191,8 +170,10 @@ fishers_lsd <- function(
 
 #' One Way ANOVA with Tukey correction
 #' 
-#' This is supposed to control for false positives due to random chance
-#' when there are many comparisons to choose from
+#' @description Use this when you have multiple groups that are may be dependent on each other
+#' and the variances are roughly equal between the groups. This is supposed to control for false
+#' positives due to group effects. In general, this will provide larger p values
+#' (ie. less significance) compared with fishers_lsd.
 #' 
 tukey_multiple_comparisons <- function(
     df,
@@ -230,8 +211,10 @@ tukey_multiple_comparisons <- function(
 
 #' One Way ANOVA with Bonferroni correction
 #' 
-#' Controls for false positives, but much more stringently as compared to Tukey
-#' This has a high chance of false negatives
+#' @description Use this when you have multiple groups that are heavily dependent on each other
+#' and there are a large number of false positives because of group interactions. Since this is
+#' much more stringent than tukey_multiple_comparisons, this is not recommended due to the
+#' potential to have false negatives, especially for small datasets.
 #' 
 bonferroni_multiple_comparisons <- function(
     df,
@@ -257,8 +240,12 @@ bonferroni_multiple_comparisons <- function(
 }
 
 
-#' Applies one-way ANOVA across a dataframe
-#' Select either Tukey or Bonferroni correction following the one-way ANOVA
+#' Apply Multiple Comparisons
+#' 
+#' @description Applies one-way ANOVA across a dataframe
+#' Currently, this implementation skips the ANOVA parameters and instead just
+#' provides the p_values of the post-hoc analysis for plotting
+#' In the future, the ANOVA F-statistic may be provided
 #' 
 apply_multiple_comparisons <- function(
     df,
@@ -294,7 +281,7 @@ apply_multiple_comparisons <- function(
         pvals <- mapply(
             function(x) fishers_lsd(x, group=group_name, metric=metric),
             df_list
-        )  
+        )
     } else if (correction=='tukey') {
         pvals <- mapply(
             function(x) tukey_multiple_comparisons(x, group=group_name, metric=metric),
@@ -309,10 +296,14 @@ apply_multiple_comparisons <- function(
         stop("Choose correction='tukey' or 'bonferroni'")
     }
 
-    colnames <- unique(unlist(lapply(pvals, names)))
-    pvals  <- mapply(function(x) fill_missing_keys(x, colnames), pvals)
-    res <- cbind(res, t(pvals))  # res and pvals are sorted for the same order
+    # convert to matrix
+    if (is.null(dim(pvals))) {
+        colnames <- unique(unlist(lapply(pvals, names)))
+        pvals  <- mapply(function(x) fill_missing_keys(x, colnames), pvals)
+    }
 
+    res <- cbind(res, t(pvals))  # res and pvals are sorted for the same order
     res <- res[do.call(order, res[index_cols]), ]    # sort rows in original order
+
     return(res)
 }
