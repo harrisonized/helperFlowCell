@@ -42,6 +42,9 @@ install.packages('superb')
 install.packages('cowplot')
 install.packages('plotly')
 install.packages('htmlwidgets')
+install.packages('ggprism')
+install.packages('svglite')
+update.packages('systemfonts')
 ```
 
 ## Data Requirements
