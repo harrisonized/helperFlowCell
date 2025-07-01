@@ -6,6 +6,7 @@ import::here(file.path(wd, 'R', 'tools', 'list_tools.R'),
 ## get_significance_code
 ## unpaired_t_test
 ## apply_unpaired_t_test
+## fishers_lsd
 ## tukey_multiple_comparisons
 ## bonferroni_multiple_comparisons
 ## apply_multiple_comparisons
@@ -35,6 +36,9 @@ get_significance_code <- function(p) {
 
 #' Unpaired T Test
 #' 
+#' This implementation does not assume the variances are equal between groups
+#' For multiple comparison, try fishers_lsd first, then try this if the variances are clearly unequal between groups
+#' 
 unpaired_t_test <- function(x, y) {
 
     # exit if either side is null or both sides have fewer observations
@@ -59,7 +63,12 @@ unpaired_t_test <- function(x, y) {
         obs <- x 
         ob <- y  # single observation
     }
-    pval <- t.test(obs, alternative=(if (mean(obs) > ob) {"greater"} else {"less"}), mu=ob)[['p.value']]
+    pval <- t.test(
+        obs,
+        alternative=(if (mean(obs) > ob) {"greater"} else {"less"}),
+        mu=ob,
+        var.equal=FALSE
+    )[['p.value']]
 
     return(pval)
 }
@@ -114,12 +123,82 @@ apply_unpaired_t_test <- function(
 }
 
 
+#' One Way ANOVA with no correction, ie. Fisher's LSD
+#' 
+#' This is used when the groups are independent of each other
+#' This reduces to using a t test with the assumption that the variances
+#' between groups are equal
+#' 
+fishers_lsd <- function(
+    df,
+    group,  # 'group_name'
+    metric  # 'pct_cells'
+) {
+
+    group_names <- sort(unique( df[[group]] ))
+    n_groups <- length(group_names)
+
+
+    # ----------------------------------------------------------------------
+    # ANOVA
+
+    # computations
+    formula <- as.formula(
+        paste(deparse(as.name(metric)), "~", deparse(as.name(group)))  # 'metric ~ group'
+    )
+    group_means <- aggregate(formula, data = df, FUN = mean)
+    group_means <- setNames(group_means[[metric]], group_means[[group]])
+    group_sizes <- aggregate(formula, data = df, FUN = length)
+    group_sizes <- setNames(group_sizes[[metric]], group_sizes[[group]])
+
+    overall_mean <- mean(df[[metric]])
+    ss_total <- sum((df[[metric]] - overall_mean)^2)
+    ss_between <- sum(group_sizes * (group_means - overall_mean)^2)
+    ss_within <- ss_total - ss_between
+
+    df_between <- length(group_names) - 1  # degrees of freedom between
+    df_within <- length(df[[metric]]) - length(group_names)  # degrees of freedom within
+    mse <- ss_within / df_within  # mean square error
+
+
+    # ----------------------------------------------------------------------
+    # Fisher's LSD p values
+
+    # iterate through all pairs of columns
+    # collect results directly in pval_col
+    id_combos <- collect_matrix_cols(combn(1:n_groups, 2))  # generate pairs of indexes
+    pval_cols <- sapply(id_combos,  
+        function(x) paste(group_names[x[[2]]], group_names[x[[1]]], sep='-')
+    )  # generate name pairs
+    pvals <- list()
+
+    for (idx in 1:choose(n_groups, 2)) {
+        left <- group_names[ id_combos[[idx]][1] ]  # 1st col
+        right <- group_names[ id_combos[[idx]][2] ]  # 2st col
+
+        # fishers lsd test
+        mean_diff <- group_means[right] - group_means[left]
+        se_diff <- sqrt(mse * (1/group_sizes[left] + 1/group_sizes[right]))
+        t_stat <- mean_diff / se_diff
+        pval <- 2 * pt(-abs(t_stat), df_within)
+
+        pvals[ pval_cols[idx] ] <- pval
+    }
+
+    return(unlist(pvals))
+}
+
+
 #' One Way ANOVA with Tukey correction
 #' 
 #' This is supposed to control for false positives due to random chance
 #' when there are many comparisons to choose from
 #' 
-tukey_multiple_comparisons <- function(df, group='group_name', metric='pct_cells') {
+tukey_multiple_comparisons <- function(
+    df,
+    group,  # 'group_name',
+    metric  # 'pct_cells'
+) {
 
     n_groups <- length(unique(df[[group]]))
 
@@ -156,8 +235,8 @@ tukey_multiple_comparisons <- function(df, group='group_name', metric='pct_cells
 #' 
 bonferroni_multiple_comparisons <- function(
     df,
-    group='group_name',
-    metric='pct_cells'
+    group,  # 'group_name'
+    metric  # 'pct_cells'
 ) {
 
     n_groups <- length(unique( df[[group]] ))
@@ -186,7 +265,7 @@ apply_multiple_comparisons <- function(
     index_cols,  # c('organ', 'cell_type')
     group_name,  # 'group_name'
     metric,  # 'pct_cells'
-    correction='tukey'  # 'tukey' or 'bonferroni'
+    correction='fishers_lsd'  # 'fishers_lsd', 'tukey', or 'bonferroni'
 ) {
 
     group_names <- sort(unique( df[[group_name]] ))
@@ -211,7 +290,12 @@ apply_multiple_comparisons <- function(
         drop=TRUE
     )
 
-    if (correction=='tukey') {
+    if (correction=='fishers_lsd') {
+        pvals <- mapply(
+            function(x) fishers_lsd(x, group=group_name, metric=metric),
+            df_list
+        )  
+    } else if (correction=='tukey') {
         pvals <- mapply(
             function(x) tukey_multiple_comparisons(x, group=group_name, metric=metric),
             df_list

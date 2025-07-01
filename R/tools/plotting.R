@@ -14,7 +14,7 @@ import::here(htmlwidgets, 'saveWidget')  # brew install pandoc
 import::here(file.path(wd, 'R', 'tools', 'list_tools.R'),
     'items_in_a_not_b', .character_only=TRUE)
 import::here(file.path(wd, 'R', 'tools', 'math.R'),
-    'get_significance_code', 'unpaired_t_test',
+    'get_significance_code', 'unpaired_t_test', 'fishers_lsd',
     'tukey_multiple_comparisons', 'bonferroni_multiple_comparisons',
     .character_only=TRUE)
 
@@ -415,7 +415,7 @@ plot_violin_with_significance <- function(
     y,  #'pct_cells'
     title=NULL,
     xaxis_angle=60,
-    test='t_test',  # 't_test', 'tukey', or 'bonferroni'
+    test='t_test',  # 'fishers_lsd', 't_test', 'tukey', or 'bonferroni'
     stars=FALSE
 ) {
 
@@ -425,6 +425,12 @@ plot_violin_with_significance <- function(
             df,
             index_cols=items_in_a_not_b(colnames(df), c(x, y)),
             group_name=x,
+            metric=y
+        )
+    } else if (test=='fishers_lsd') {
+        pvals <- fishers_lsd(
+            df,
+            group=x,
             metric=y
         )
     } else if (test=='tukey') {
