@@ -6,32 +6,28 @@ suppressPackageStartupMessages(library('logr'))
 library('optparse')
 import::from(progress, 'progress_bar')
 import::from(jsonlite, 'toJSON')
-import::from(magrittr, '%>%')
 import::from(stringr, 'str_detect')
-import::from(tidyr, 'pivot_longer', 'pivot_wider')
+import::from(tidyr, 'pivot_longer')
 import::from(ggplot2, 'ggsave')
 
 import::from(file.path(wd, 'R', 'functions', 'preprocessing.R'),
     'preprocess_flowjo_export', 'sort_groups_by_metric', .character_only=TRUE)
 
-import::from(file.path(wd, 'R', 'tools', 'df_tools.R'),
-    'rename_columns', .character_only=TRUE)
 import::from(file.path(wd, 'R', 'tools', 'file_io.R'),
     'append_many_csv', .character_only=TRUE)
 import::from(file.path(wd, 'R', 'tools', 'list_tools.R'),
-    'fill_missing_keys', 'items_in_a_not_b', 'multiple_replacement',
+    'items_in_a_not_b', 'multiple_replacement',
     .character_only=TRUE)
 import::from(file.path(wd, 'R', 'tools', 'math.R'),
     'apply_unpaired_t_test', 'apply_multiple_comparisons', .character_only=TRUE)
 import::from(file.path(wd, 'R', 'tools', 'plotting.R'),
-    'save_fig', 'plot_scatter', 'plot_violin',
-    'plot_multiple_comparisons', .character_only=TRUE)
+    'save_fig', 'plot_violin', 'plot_multiple_comparisons', .character_only=TRUE)
 import::from(file.path(wd, 'R', 'config', 'flow.R'),
     'id_cols', 'initial_gates', 'cell_type_spell_check', 'cell_type_ignore',
     'mouse_db_ignore', .character_only=TRUE)
 
 
-# ----------------------------------------------------------------------
+# ----------------------------s------------------------------------------
 # Pre-script settings
 
 # args
@@ -152,6 +148,10 @@ if (length(metadata_cols) > 1) {
     df[['group_name']] <- df[[metadata_cols]]
 }
 
+# calculate
+if ('total_viable_cells' %in% colnames(df)) {
+    df[['abs_count']] <- round(df[['total_viable_cells']] * df[['pct_cells']]/100, 0)
+}
 
 # left join mouse data if available
 if (!is.null(mouse_db)) {
@@ -197,12 +197,49 @@ if (!troubleshooting) {
         tmp[[col]] <- mapply(toJSON, tmp[[col]])
     }
 
-    if (!dir.exists(file.path(wd, opt[['output-dir']], 'data'))) {
-        dir.create(file.path(wd, opt[['output-dir']], 'data'), recursive=TRUE)
+    dirpath <- file.path(wd, opt[['output-dir']], 'data', 'pct_cells')
+    if (!dir.exists(dirpath)) {
+        dir.create(dirpath, recursive=TRUE)
     }
-    filepath = file.path(
-        wd, opt[['output-dir']], 'data', paste0('pvals-', opt[['stat']], '.csv'))
+    filepath = file.path(dirpath, paste0('pct_cells-', opt[['stat']], '.csv'))
     write.table(tmp, file = filepath, row.names = FALSE,  sep = ',' )
+}
+
+
+# Absolute Counts
+if ('abs_count' %in% colnames(df)) {
+
+    if (opt[['stat']]=='t_test') {
+        abs_count_tbl <- apply_unpaired_t_test(
+            df[!is.na(df[['abs_count']]), ],
+            index_cols=c('organ', 'cell_type'),
+            group_name='group_name',
+            metric='abs_count'
+        )
+    } else {
+        abs_count_tbl <- apply_multiple_comparisons(
+            df[!is.na(df[['abs_count']]), ],
+            index_cols=c('organ', 'cell_type'),
+            group_name='group_name',
+            metric='abs_count',
+            correction=opt[['stat']]
+        )
+    }
+
+    # save
+    if (!troubleshooting) {
+        tmp <- abs_count_tbl
+        for (col in group_names) {
+            tmp[[col]] <- mapply(toJSON, tmp[[col]])
+        }
+
+        dirpath <- file.path(wd, opt[['output-dir']], 'data', 'abs_count')
+        if (!dir.exists(dirpath)) {
+            dir.create(dirpath, recursive=TRUE)
+        }
+        filepath = file.path(dirpath, paste0('abs_count-', opt[['stat']], '.csv'))
+        write.table(tmp, file = filepath, row.names = FALSE,  sep = ',' )
+    }
 }
 
 
@@ -232,7 +269,8 @@ for (organ in sort(organs)) {
                 c('organ', 'genotype', 'treatment',
                    'group_name', metadata_cols, 'cell_type',
                    'Cells/Single Cells/Single Cells/Live Cells',
-                   'num_cells', 'pct_cells', 
+                   'num_cells', 'pct_cells', 'viable_cells_conc',
+                   'total_vol', 'total_viable_cells', 'abs_count',
                    'mouse_id', 'sex', 'weeks_old', 'fcs_name'),
                 colnames(df)
             ))],
@@ -256,6 +294,9 @@ for (organ in sort(organs)) {
 
     if (opt[['plotly-overview']]) {
 
+        # ----------------------------------------------------------------------
+        # Percent Cells
+
         fig <- plot_violin(
             df[(df[['organ']]==organ), ],
             x='cell_type', y='pct_cells', group_by='group_name',
@@ -267,10 +308,6 @@ for (organ in sort(organs)) {
                       'Cells', 'num_cells', 'fcs_name'),
                     colnames(df)
             ))
-            # color_discrete_map=c(
-            #     'heterozygous'='#2ca02c',  # green
-            #     'wild type'='#62c1e5'  # blue
-            # )
         )
 
         if (!troubleshooting) {
@@ -283,12 +320,39 @@ for (organ in sort(organs)) {
                 save_html=TRUE
             )
         }
+
+        # ----------------------------------------------------------------------
+        # Absolute Counts
+
+        fig <- plot_violin(
+            df[(df[['organ']]==organ), ],
+            x='cell_type', y='abs_count', group_by='group_name',
+            ylabel='Absolute Count', title=organ,
+            ymin=0,
+            hover_data=unique(intersect(
+                    c('mouse_id', 'group_name', metadata_cols,
+                      'sex', 'treatment', 'weeks_old', 
+                      'Cells', 'num_cells', 'fcs_name'),
+                    colnames(df)
+            ))
+        )
+
+        if (!troubleshooting) {
+            save_fig(
+                fig=fig,
+                height=opt[['height']], width=opt[['width']],
+                dirpath=file.path(wd, opt[['output-dir']], 'figures', 'overview'),
+                filename=paste('violin-abs_count', 
+                    organ, gsub(',', '_', opt[['group-by']]), sep='-'),
+                save_html=TRUE
+            )
+        }
     }
 }
 
 
 # ----------------------------------------------------------------------
-# Violin with significance
+# Multiple Comparisons
 
 log_print(paste(Sys.time(), paste(
     nrow(pval_tbl), 'populations found across',
@@ -305,11 +369,17 @@ for (idx in 1:nrow(pval_tbl)) {
     cell_type <- pval_tbl[idx, 'cell_type'][[1]]
     df_subset <- df[
         (df[['organ']] == organ) & (df[['cell_type']] == cell_type),
-        c('organ', 'cell_type', 'group_name', 'pct_cells')
+        unique(intersect(
+                c('organ', 'cell_type', 'group_name', 'pct_cells', 'abs_count'),
+                colnames(df)
+        ))
     ]
 
+    # ----------------------------------------------------------------------
+    # Percent Cells
+
     fig <- plot_multiple_comparisons(
-        df_subset,
+        df_subset[, c("organ", "cell_type", "group_name", "pct_cells")],
         x='group_name', y='pct_cells',
         ylabel='Percent of\nLive Cells',
         title=paste(toupper(organ), cell_type),
@@ -321,16 +391,14 @@ for (idx in 1:nrow(pval_tbl)) {
     if (!troubleshooting) {
         
         dirpath <- file.path(wd, opt[['output-dir']], 'figures',
-            paste( opt[['stat']], gsub(',', '_', opt[['group-by']]), sep='-' ),
-            organ
+            'pct_cells', organ,
+            paste( opt[['stat']], gsub(',', '_', opt[['group-by']]), sep='-' )
         )
-        if (!dir.exists(dirpath)) {
-            dir.create(dirpath, recursive=TRUE)
-        }
+        if (!dir.exists(dirpath)) { dir.create(dirpath, recursive=TRUE) }
+        
         filepath = file.path(dirpath,
             paste0(opt[['stat']], '-', organ, '-', gsub(' ', '_', tolower(cell_type)), '.svg' )
         )
-
         withCallingHandlers({
             ggsave(
                 filepath,  
@@ -344,6 +412,56 @@ for (idx in 1:nrow(pval_tbl)) {
                 invokeRestart("muffleWarning")
             }
         })
+    }
+
+    # ----------------------------------------------------------------------
+    # Absolute Counts
+
+    if ('abs_count' %in% colnames(df)) {
+
+        tmp <- df_subset[
+            !is.na(df_subset[['abs_count']]), 
+            c("organ", "cell_type", "group_name", "abs_count")
+        ]
+
+        if (nrow(tmp)>0) {
+
+            fig <- plot_multiple_comparisons(
+                tmp,
+                x='group_name', y='abs_count',
+                ylabel='Absolute Count',
+                title=paste(toupper(organ), cell_type),
+                test=opt[['stat']],
+                show_numbers=opt[['show-numbers']]
+            )
+
+            # save
+            if (!troubleshooting) {
+                
+                dirpath <- file.path(wd, opt[['output-dir']], 'figures', 'abs_count',
+                    paste(organ, 'absolute', sep='-'),
+                    paste( opt[['stat']], gsub(',', '_', opt[['group-by']]), sep='-' )
+                )
+                if (!dir.exists(dirpath)) { dir.create(dirpath, recursive=TRUE) }
+                
+                filepath = file.path(dirpath,
+                    paste0(opt[['stat']], '-', organ, '-', gsub(' ', '_', tolower(cell_type)), '.svg' )
+                )
+                withCallingHandlers({
+                    ggsave(
+                        filepath,  
+                        plot=fig,
+                        height=5000, width=5000, dpi=500, units='px', scaling=2 
+                    )
+                }, warning = function(w) {
+                    if ( any(grepl("rows containing non-finite values", w),
+                             grepl("fewer than two data points", w),
+                             grepl("argument is not numeric or logical: returning NA", w)) ) {
+                        invokeRestart("muffleWarning")
+                    }
+                })
+            }
+        }
     }
 
     pbar$tick()
