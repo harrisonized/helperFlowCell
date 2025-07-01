@@ -7,6 +7,7 @@ import::here(ggplot2,
     'geom_boxplot', 'geom_jitter', 'element_text',
     'stat_summary', 'scale_fill_brewer', 'scale_x_discrete', 'scale_y_continuous',
     'guide_axis', 'expansion', 'ggtitle')
+import::here(ggprism, 'theme_prism')
 import::here(superb, 'showSignificance')
 import::here(plotly, 'plot_ly', 'add_trace', 'layout', 'save_image')
 import::here(htmlwidgets, 'saveWidget')  # brew install pandoc
@@ -505,7 +506,8 @@ plot_multiple_comparisons <- function(
         scale_fill_brewer(palette="Dark2") +
         scale_x_discrete(guide=guide_axis(angle=xaxis_angle)) +
         scale_y_continuous(limits = c(0, NA), expand = expansion(mult = c(0, 0.1))) +
-        ggtitle(title)
+        ggtitle(title) +
+        theme_prism()
 
     # significance brackets
     if (n_groups > 1) {

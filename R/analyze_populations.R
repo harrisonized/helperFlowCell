@@ -318,7 +318,7 @@ for (idx in 1:nrow(pval_tbl)) {
 
     # save
     if (!troubleshooting) {
-
+        
         dirpath <- file.path(wd, opt[['output-dir']], 'figures',
             paste( opt[['stat']], gsub(',', '_', opt[['group-by']]), sep='-' ),
             organ
@@ -327,14 +327,14 @@ for (idx in 1:nrow(pval_tbl)) {
             dir.create(dirpath, recursive=TRUE)
         }
         filepath = file.path(dirpath,
-            paste0(opt[['stat']], '-', organ, '-', gsub(' ', '_', tolower(cell_type)), '.png' )
+            paste0(opt[['stat']], '-', organ, '-', gsub(' ', '_', tolower(cell_type)), '.svg' )
         )
 
         withCallingHandlers({
             ggsave(
-                filepath,
+                filepath,  
                 plot=fig,
-                height=1200, width=1200, dpi=300, units='px', scaling=0.5
+                height=5000, width=5000, dpi=500, units='px', scaling=2 
             )
         }, warning = function(w) {
             if ( any(grepl("rows containing non-finite values", w),
