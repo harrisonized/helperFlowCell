@@ -56,9 +56,9 @@ option_list = list(
                 metavar='treatment', type="character",
                 help="enter a column or comma-separated list of columns, no spaces"),
 
-    make_option(c("-s", "--stat"), default='t_test',
-                metavar='t_test', type="character",
-                help="Choose 't_test', 'tukey', or 'bonferroni'"),
+    make_option(c("-s", "--stat"), default='fishers_lsd',
+                metavar='fishers_lsd', type="character",
+                help="Choose 'fishers_lsd', 't_test', 'tukey', or 'bonferroni'"),
 
     make_option(c("-p", "--png-only"), default=FALSE, action="store_true",
                 metavar="FALSE", type="logical",
@@ -82,8 +82,8 @@ troubleshooting = opt[['troubleshooting']]
 output_dir <- file.path(wd, opt[['output-dir']])
 troubleshooting_dir = file.path(output_dir, 'troubleshooting')
 
-if (!(opt[['stat']] %in% c('t_test', 'tukey', 'bonferroni'))) {
-    stop("Choose from stat= 't_test', 'tukey', or 'bonferroni'")
+if (!(opt[['stat']] %in% c('fishers_lsd', 't_test', 'tukey', 'bonferroni'))) {
+    stop("Choose from stat= 'fishers_lsd', 't_test', 'tukey', or 'bonferroni'")
 }
 
 # args
