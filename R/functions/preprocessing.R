@@ -15,7 +15,7 @@ import::here(file.path(wd, 'R', 'tools', 'list_tools.R'),
 ## preprocess_flowjo_export
 ## preprocess_antibody_inventory
 ## preprocess_instrument_config
-## sort_for_graphpad
+## sort_groups_by_metric
 ## spillover_to_xml
 
 
@@ -124,24 +124,25 @@ preprocess_instrument_config <- function(df) {
 }
 
 
-#' Sort rows to be in the same order as the violin plot
-#' for easy copy-paste into Graphpad
-#' sort cell_type by decreasing order of percent cells
-#' then sort any other groups
+#' Sort Groups by Metric
 #' 
-sort_for_graphpad <- function(
+#' Sort rows by groups in decreasing order of the median percent cells
+#' 
+sort_groups_by_metric <- function(
     df,
-    x='cell_type',
-    y='pct_cells',
+    x='cell_type',  # group
+    y='pct_cells',  # metric
     groups=c('groupby')  # enter a collection of groups
 ) {
 
+    # find the median of each group
     x_axis_order <- df %>%
         group_by(.data[[x]]) %>%
         summarize(median = median(.data[[y]], na.rm=TRUE)) %>%
         arrange(-.data[['median']]) %>%
         select(.data[[x]])
 
+    # sort each group by decreasing median
     sorted <- df %>% arrange(
         match(.data[[x]], unlist(x_axis_order)),
         !!! rlang::syms(groups)
