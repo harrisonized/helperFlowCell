@@ -406,16 +406,19 @@ generate_base_level <- function(n_groups) {
 #' 
 #' @description Convert p value to significance
 #' Helper function for plot_multiple_comparisons
+#' Note: Adobe Illustrator may throw the following error:
+#' "Certain alternate glyphs are not available in this version of Illustrator.""
+#' To circumvent this, first copy the svg into Powerpoint, then from Powerpoint to Adobe Illustrator
 #' 
 get_significance_code <- function(p, digits=3) {
 
     p <- abs(p)
     if (p > 0.20) {
-        return('n.s.')
+        return('ns')
     } else if (p > 0.05) {
         return( format(round(p, digits), nsmall = digits) )
     } else if (p > 0.01) {
-        return('✱')  # Note: These are not Shift+8 asterisks
+        return('✱')  # U+2731 asterisk
     } else if (p > 0.001) {
         return('✱✱')
     } else if (p > 0.0001 ) {
@@ -439,7 +442,7 @@ plot_multiple_comparisons <- function(
     df,
     x,  # 'group_name'
     y,  #'pct_cells'
-    title=NULL,
+    xlabel=NULL, ylabel=NULL, title=NULL,
     xaxis_angle=60,
     test='t_test',  # 'fishers_lsd', 't_test', 'tukey', or 'bonferroni'
     show_numbers=FALSE,
@@ -506,7 +509,7 @@ plot_multiple_comparisons <- function(
         scale_fill_brewer(palette="Dark2") +
         scale_x_discrete(guide=guide_axis(angle=xaxis_angle)) +
         scale_y_continuous(limits = c(0, NA), expand = expansion(mult = c(0, 0.1))) +
-        ggtitle(title) +
+        labs(x=xlabel, y=ylabel, title=title) +
         theme_prism()
 
     # significance brackets
@@ -523,11 +526,11 @@ plot_multiple_comparisons <- function(
             } else {
                 pval <- get_significance_code( pvals[[colname]] )
             }
-            
+
             fig <- fig +
                 showSignificance(
-                    c(left+0.1, right-0.1), h_low+(level-1)*space, -0.001*h_low,
-                    pval
+                    x=c(left+0.1, right-0.1), y=h_low+(level-1)*space, width=-0.001*h_low,
+                    text=pval, textParams=list(size=3)
                 )
         }
     }
