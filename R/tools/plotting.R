@@ -412,6 +412,10 @@ generate_base_level <- function(n_groups) {
 #' 
 get_significance_code <- function(p, digits=3) {
 
+    if (is.na(p)) {
+        return('NA')
+    }
+
     p <- abs(p)
     if (p > 0.20) {
         return('ns')

@@ -66,6 +66,11 @@ apply_unpaired_t_test <- function(
     group_names <- sort(unique(df[[group_name]]))
     n_groups <- length(group_names)
 
+    # exit if only one group
+    if (n_groups==1) {
+        return(NaN)
+    }
+    
     # Collect values into list columns
     res <- pivot_wider(
         df[, c(index_cols, group_name, metric)],
@@ -77,7 +82,6 @@ apply_unpaired_t_test <- function(
     res[['metric']] <- metric
     res <- res[do.call(order, res[index_cols]), ]  # sort rows
     res <- res[, c(index_cols, 'metric', group_names)]  # sort cols
-
 
     # iterate through all pairs of columns
     # collect results directly in pval_col
@@ -116,6 +120,11 @@ fishers_lsd <- function(
 
     group_names <- sort(unique( df[[group]] ))
     n_groups <- length(group_names)
+
+    # exit if only one group
+    if (n_groups==1) {
+        return(NaN)
+    }
 
 
     # ----------------------------------------------------------------------
