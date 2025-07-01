@@ -163,7 +163,7 @@ if (!is.null(mouse_db)) {
 
 
 # filter and sort
-df <- df[(df[['num_cells']]>10), ]
+df <- df[(df[['num_cells']]>50), ]
 df <- df[order(df[['cell_type']], df[['organ']], df[['group_name']]), ]  # sort rows
 group_names <- sort(unique( df[['group_name']] ))
 
@@ -201,8 +201,8 @@ if (!troubleshooting) {
         dir.create(file.path(wd, opt[['output-dir']], 'data'), recursive=TRUE)
     }
     filepath = file.path(
-        wd, opt[['output-dir']], 'data', paste0(opt[['stat']], '_pvals.csv'))
-    write.table(tmp, file = filepath, row.names = FALSE, sep = ',' )
+        wd, opt[['output-dir']], 'data', paste0('pvals-', opt[['stat']], '.csv'))
+    write.table(tmp, file = filepath, row.names = FALSE,  sep = ',' )
 }
 
 
@@ -311,6 +311,7 @@ for (idx in 1:nrow(pval_tbl)) {
     fig <- plot_multiple_comparisons(
         df_subset,
         x='group_name', y='pct_cells',
+        ylabel='Percent of\nLive Cells',
         title=paste(toupper(organ), cell_type),
         test=opt[['stat']],
         show_numbers=opt[['show-numbers']]
