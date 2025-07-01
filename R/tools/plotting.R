@@ -512,7 +512,11 @@ plot_multiple_comparisons <- function(
         geom_jitter() +
         scale_fill_brewer(palette="Dark2") +
         scale_x_discrete(guide=guide_axis(angle=xaxis_angle)) +
-        scale_y_continuous(limits = c(0, NA), expand = expansion(mult = c(0, 0.1))) +
+        scale_y_continuous(
+            limits = c(0, NA),
+            expand = expansion(mult = c(0, 0.1)),
+            labels = function(x) format(x, scientific=FALSE)
+        ) +
         labs(x=xlabel, y=ylabel, title=title) +
         theme_prism()
 

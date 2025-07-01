@@ -63,6 +63,10 @@ apply_unpaired_t_test <- function(
     metric  # 'pct_cells'
 ) {
 
+    if (all(is.na( df[[metric]] )) ) {
+        return(NA)
+    }
+
     group_names <- sort(unique(df[[group_name]]))
     n_groups <- length(group_names)
 
@@ -117,6 +121,10 @@ fishers_lsd <- function(
     group,  # 'group_name'
     metric  # 'pct_cells'
 ) {
+
+    if (all(is.na( df[[metric]] )) ) {
+        return(NA)
+    }
 
     group_names <- sort(unique( df[[group]] ))
     n_groups <- length(group_names)
@@ -190,6 +198,10 @@ tukey_multiple_comparisons <- function(
     metric  # 'pct_cells'
 ) {
 
+    if (all(is.na( df[[metric]] )) ) {
+        return(NA)
+    }
+
     n_groups <- length(unique(df[[group]]))
 
     # exit if only one group
@@ -231,6 +243,10 @@ bonferroni_multiple_comparisons <- function(
     metric  # 'pct_cells'
 ) {
 
+    if (all(is.na( df[[metric]] )) ) {
+        return(NA)
+    }
+
     n_groups <- length(unique( df[[group]] ))
 
     # exit if only one group
@@ -260,7 +276,7 @@ apply_multiple_comparisons <- function(
     df,
     index_cols,  # c('organ', 'cell_type')
     group_name,  # 'group_name'
-    metric,  # 'pct_cells'
+    metric,  # 'pct_cells' or 'abs_count'
     correction='fishers_lsd'  # 'fishers_lsd', 'tukey', or 'bonferroni'
 ) {
 
