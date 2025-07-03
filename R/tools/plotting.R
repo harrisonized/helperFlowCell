@@ -5,8 +5,10 @@ import::here(tidyr, 'pivot_wider')
 import::here(ggplot2,
     'ggplot', 'aes', 'theme', 'labs',
     'geom_boxplot', 'geom_jitter', 'element_text',
-    'stat_summary', 'scale_fill_brewer', 'scale_x_discrete', 'scale_y_continuous',
+    'stat_summary', 'scale_fill_brewer', 'scale_fill_manual',
+    'scale_x_discrete', 'scale_y_continuous',
     'guide_axis', 'expansion', 'ggtitle')
+import::here(RColorBrewer, 'brewer.pal')
 import::here(ggprism, 'theme_prism')
 import::here(superb, 'showSignificance')
 import::here(plotly, 'plot_ly', 'add_trace', 'layout', 'save_image')
@@ -510,7 +512,11 @@ plot_multiple_comparisons <- function(
         geom_boxplot(alpha=0.7, aes(middle=.data[[y]])) +
         stat_summary(fun=mean, geom="crossbar", width=0.75, linewidth=0.25, linetype = "dashed") +
         geom_jitter() +
-        scale_fill_brewer(palette="Dark2") +
+        (if (n_groups <=8 ) scale_fill_brewer(palette="Dark2")
+            else scale_fill_manual(
+                values = colorRampPalette(brewer.pal(8, "Dark2"))(n_groups)
+            )
+        ) +
         scale_x_discrete(guide=guide_axis(angle=xaxis_angle)) +
         scale_y_continuous(
             limits = c(0, NA),
@@ -518,7 +524,7 @@ plot_multiple_comparisons <- function(
             labels = function(x) format(x, scientific=FALSE)
         ) +
         labs(x=xlabel, y=ylabel, title=title) +
-        theme_prism()
+        theme_prism(base_size = round(50/n_groups, 0))
 
     # significance brackets
     if (n_groups > 1) {
@@ -538,7 +544,7 @@ plot_multiple_comparisons <- function(
             fig <- fig +
                 showSignificance(
                     x=c(left+0.1, right-0.1), y=h_low+(level-1)*space, width=-0.001*h_low,
-                    text=pval, textParams=list(size=3)
+                    text=pval, textParams=list(size=(if (n_groups <= 6) 3 else 2))
                 )
         }
     }
