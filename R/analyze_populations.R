@@ -384,6 +384,7 @@ for (idx in 1:nrow(pval_tbl)) {
     # ----------------------------------------------------------------------
     # Percent Cells
 
+    custom_group_order <- c()
     fig <- plot_multiple_comparisons(
         df_subset[, c("organ", "cell_type", "group_name", "pct_cells")],
         x='group_name', y='pct_cells',
@@ -391,7 +392,7 @@ for (idx in 1:nrow(pval_tbl)) {
         title=paste(toupper(organ), cell_type),
         test=opt[['stat']],
         show_numbers=opt[['show-numbers']],
-        custom_group_order=c()  # manual input
+        custom_group_order=custom_group_order  # manual input
     )
 
     # save
@@ -432,14 +433,14 @@ for (idx in 1:nrow(pval_tbl)) {
         ]
 
         if (nrow(tmp)>0) {
-
             fig <- plot_multiple_comparisons(
                 tmp,
                 x='group_name', y='abs_count',
                 ylabel='Absolute Count',
                 title=paste(toupper(organ), cell_type),
                 test=opt[['stat']],
-                show_numbers=opt[['show-numbers']]
+                show_numbers=opt[['show-numbers']],
+                custom_group_order=custom_group_order
             )
 
             # save
