@@ -314,6 +314,7 @@ for (idx in 1:nrow(pval_tbl)) {
     # ----------------------------------------------------------------------
     # MFI
 
+    custom_group_order <- c()
     fig <- plot_multiple_comparisons(
         df_subset[, c("organ", "cell_type", "group_name", "mfi")],
         x='group_name', y='mfi',
@@ -321,7 +322,7 @@ for (idx in 1:nrow(pval_tbl)) {
         title=paste(toupper(organ), cell_type),
         test=opt[['stat']],
         show_numbers=opt[['show-numbers']],
-        custom_group_order=c()  # manual input
+        custom_group_order=custom_group_order  # manual input
     )
 
     # save
