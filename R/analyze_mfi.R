@@ -211,11 +211,10 @@ if (!troubleshooting) {
 organs <- sort(unique(df[['organ']]))
 log_print(paste(Sys.time(), 'Groups found...', paste(organs, collapse = ', ')))
 
-if (opt[['plotly-overview']]) {
-    log_print(paste(Sys.time(), 'Exporting data with plots...'))
-} else {
-    log_print(paste(Sys.time(), 'Exporting data...'))
-}
+
+log_print(paste(Sys.time(), 
+    (if (opt[['plotly-overview']]) 'Exporting data with plots...' else 'Exporting data...' )
+))
 
 for (organ in sort(organs)) {
 
@@ -321,7 +320,8 @@ for (idx in 1:nrow(pval_tbl)) {
         ylabel='MFI',
         title=paste(toupper(organ), cell_type),
         test=opt[['stat']],
-        show_numbers=opt[['show-numbers']]
+        show_numbers=opt[['show-numbers']],
+        custom_group_order=c()  # c('Female, DMSO', 'Male, DMSO', 'Female, R848', 'Male, R848')
     )
 
     # save
