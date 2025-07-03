@@ -57,8 +57,10 @@ parse_flowjo_metadata <- function(
 #' 
 preprocess_flowjo_export <- function(df) {
 
-    df <- rename_columns(df, c('X1'='fcs_name'))
-    colnames(df) <- gsub('[[:space:]]\\|[[:space:]]Count', '', colnames(df))  # remove suffix
+    df <- rename_columns(df,
+        c('X1'='fcs_name', setNames('Ungated', colnames(df)[4]) )
+    )
+    colnames(df) <- unname(sapply(colnames(df), function(x) strsplit(x, ' \\| ')[[1]][1]))
     df <- df[!(df[['fcs_name']] %in% c('Mean', 'SD')), ]  # drop summary statistics
     df <- df[!str_detect(df[['fcs_name']], 'unstained'), ]  # drop unstained cells
     df <- reset_index(df, drop=TRUE)

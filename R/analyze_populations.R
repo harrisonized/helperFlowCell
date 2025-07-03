@@ -32,8 +32,8 @@ import::from(file.path(wd, 'R', 'config', 'flow.R'),
 
 # args
 option_list = list(
-    make_option(c("-i", "--input-dir"), default='data/flow-data',
-                metavar='data/flow-data', type="character",
+    make_option(c("-i", "--input-dir"), default='data/flowjo-counts',
+                metavar='data/flowjo-counts', type="character",
                 help="input directory, all csv files will be read in"),
 
     make_option(c("-o", "--output-dir"), default="output",
@@ -108,11 +108,16 @@ if (is.null(counts)) {
     stop(msg)
 }
 counts <- preprocess_flowjo_export(counts)
-counts <- counts[!str_detect(counts[['fcs_name']], '(U|u)nstained'), ]  # drop unstained cells
+colnames(counts)[[4]] <- 'Ungated'
 
 # reference files
 flow_metadata <- append_many_csv(
     file.path(wd, opt[['metadata-dir']]), recursive=TRUE, include_filepath=FALSE)
+if (is.null(flow_metadata)) {
+    msg <- paste("No metadata found. Please check", opt[['metadata-dir']], '...')
+    stop(msg)
+}
+
 mouse_db <- append_many_csv(
     file.path(wd, opt[['ref-dir']]), recursive=TRUE, include_filepath=FALSE)
 
@@ -125,18 +130,17 @@ log_print(paste(Sys.time(), 'Preprocessing...'))
 # Reshape so each row is a gate in each sample
 df <- pivot_longer(counts,
     names_to = "gate", values_to = "num_cells",
-    cols=items_in_a_not_b(colnames(counts), c(id_cols, initial_gates)),
+    cols=items_in_a_not_b(colnames(counts), c(id_cols, 'Count', initial_gates)),
     values_drop_na = TRUE
 )
 df[['cell_type']] <- unlist(lapply(strsplit(df[['gate']], '/'), function(x) x[length(x)]))
 df[['cell_type']] <- multiple_replacement(df[['cell_type']], cell_type_spell_check)
-df[['pct_cells']] <- round(df[['num_cells']] /
-    df[['Cells/Single Cells/Single Cells/Live Cells']] * 100, 4)
 # filter ignored cell types
 for (cell_type in c(cell_type_ignore, 'mNeonGreen+')) {
     df <- df[!str_detect(df[['cell_type']], cell_type), ]
 }
-
+df[['pct_cells']] <- round(df[['num_cells']] /
+    df[['Cells/Single Cells/Single Cells/Live Cells']] * 100, 4)
 
 # inner join flow metadata
 df <- merge(df, flow_metadata,
@@ -447,6 +451,8 @@ for (idx in 1:nrow(pval_tbl)) {
                 filepath = file.path(dirpath,
                     paste0(opt[['stat']], '-', organ, '-', gsub(' ', '_', tolower(cell_type)), '.svg' )
                 )
+
+                # need bugfix for compressed images when more than 2 groups
                 withCallingHandlers({
                     ggsave(
                         filepath,  

@@ -19,7 +19,8 @@ import::here(file.path(wd, 'R', 'tools', 'list_tools.R'),
 #' @export
 append_many_csv <- function(dir_path,
     sep=',', row_names=NULL, recursive=FALSE,
-    include_filepath=TRUE, return_list=FALSE
+    include_filepath=TRUE, return_list=FALSE,
+    na_strings=c()
 ) {
     filenames <- list.files(dir_path, recursive=recursive, full.names=TRUE)
 
@@ -27,7 +28,8 @@ append_many_csv <- function(dir_path,
     for (file in filenames) {
         df <- read.csv(
             file, sep=sep, row.names=row_names,
-            header=TRUE, check.names=FALSE
+            header=TRUE, check.names=FALSE,
+            na.strings=na_strings
         )
 
         # remove nulls

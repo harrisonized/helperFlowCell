@@ -10,7 +10,7 @@
 
 id_cols <- c('filepath', 'filename', 'fcs_name')
 
-initial_gates <- c('Count', 'Cells', 'Cells/Single Cells',
+initial_gates <- c('Ungated', 'Cells', 'Cells/Single Cells',
     'Cells/Single Cells/Single Cells', 'Cells/Single Cells/Single Cells/Live Cells'
 )
 
