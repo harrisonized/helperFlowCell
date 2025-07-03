@@ -58,7 +58,10 @@ parse_flowjo_metadata <- function(
 preprocess_flowjo_export <- function(df) {
 
     df <- rename_columns(df,
-        c('X1'='fcs_name', setNames('Ungated', colnames(df)[4]) )
+        c('X1'='fcs_name',
+          'Count'='Ungated',
+          'Mean (Comp-Alexa Fluor 488-A)'='Ungated'  # find a better solution
+        )
     )
     colnames(df) <- unname(sapply(colnames(df), function(x) strsplit(x, ' \\| ')[[1]][1]))
     df <- df[!(df[['fcs_name']] %in% c('Mean', 'SD')), ]  # drop summary statistics
