@@ -27,7 +27,7 @@ import::from(file.path(wd, 'R', 'config', 'flow.R'),
     'mouse_db_ignore', .character_only=TRUE)
 
 
-# ----------------------------s------------------------------------------
+# ----------------------------------------------------------------------
 # Pre-script settings
 
 # args
@@ -273,11 +273,13 @@ for (organ in sort(organs)) {
                 c('organ', 'genotype', 'treatment',
                    'group_name', metadata_cols, 'cell_type',
                    'Cells/Single Cells/Single Cells/Live Cells',
-                   'num_cells', 'pct_cells', 'viable_cells_conc',
-                   'total_vol', 'total_viable_cells', 'abs_count',
+                   'num_cells', 'pct_cells', 'abs_count', 'viable_cells_conc',
+                   'total_vol', 'total_viable_cells',
                    'mouse_id', 'sex', 'weeks_old', 'fcs_name'),
                 colnames(df)
             ))],
+        x='cell_type',
+        y='pct_cells',
         groups=c('group_name')
     )
 
@@ -302,7 +304,7 @@ for (organ in sort(organs)) {
         # Percent Cells
 
         fig <- plot_violin(
-            df[(df[['organ']]==organ), ],
+            tmp,
             x='cell_type', y='pct_cells', group_by='group_name',
             ylabel='Percent of Live Cells', title=organ,
             ymin=0, ymax=100,
@@ -329,7 +331,7 @@ for (organ in sort(organs)) {
         # Absolute Counts
 
         fig <- plot_violin(
-            df[(df[['organ']]==organ), ],
+            tmp,
             x='cell_type', y='abs_count', group_by='group_name',
             ylabel='Absolute Count', title=organ,
             ymin=0,
