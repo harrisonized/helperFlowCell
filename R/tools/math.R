@@ -60,14 +60,20 @@ apply_unpaired_t_test <- function(
     df,
     index_cols,  # c('organ', 'cell_type')
     group_name,  # 'group_name'
-    metric  # 'pct_cells'
+    metric,  # 'pct_cells'
+    custom_group_order=c()
 ) {
 
     if (all(is.na( df[[metric]] )) ) {
         return(NA)
     }
 
-    group_names <- sort(unique(df[[group_name]]))
+    if (length(custom_group_order)>=1) {
+        group_names <- custom_group_order
+    } else {
+        group_names <- sort(unique( df[[group_name]] ))
+    }
+
     n_groups <- length(group_names)
 
     # exit if only one group
@@ -119,14 +125,20 @@ apply_unpaired_t_test <- function(
 fishers_lsd <- function(
     df,
     group,  # 'group_name'
-    metric  # 'pct_cells'
+    metric,  # 'pct_cells'
+    custom_group_order=c()
 ) {
 
     if (all(is.na( df[[metric]] )) ) {
         return(NA)
     }
 
-    group_names <- sort(unique( df[[group]] ))
+    if (length(custom_group_order)>=1) {
+        group_names <- custom_group_order
+    } else {
+        group_names <- sort(unique( df[[group]] ))
+    }
+
     n_groups <- length(group_names)
 
     # exit if only one group
@@ -195,14 +207,22 @@ fishers_lsd <- function(
 tukey_multiple_comparisons <- function(
     df,
     group,  # 'group_name',
-    metric  # 'pct_cells'
+    metric,  # 'pct_cells'
+    custom_group_order=c()
 ) {
 
     if (all(is.na( df[[metric]] )) ) {
         return(NA)
     }
 
-    n_groups <- length(unique(df[[group]]))
+    if (length(custom_group_order)>=1) {
+        group_names <- custom_group_order
+        df[[group]] <- factor(df[[group]], levels = custom_group_order)
+    } else {
+        group_names <- sort(unique( df[[group]] ))
+    }
+
+    n_groups <- length(group_names)
 
     # exit if only one group
     if (n_groups==1) {
@@ -222,8 +242,7 @@ tukey_multiple_comparisons <- function(
     })
 
     if (n_groups==2) {
-        groups <- unique(df[['group_name']])
-        pvals <- setNames(pvals, paste(groups[2],groups[1], sep='-'))
+        pvals <- setNames(pvals, paste(group_names[2],group_names[1], sep='-'))
     }
 
     return(pvals)
@@ -240,11 +259,19 @@ tukey_multiple_comparisons <- function(
 bonferroni_multiple_comparisons <- function(
     df,
     group,  # 'group_name'
-    metric  # 'pct_cells'
+    metric,  # 'pct_cells'
+    custom_group_order=c()
 ) {
 
     if (all(is.na( df[[metric]] )) ) {
         return(NA)
+    }
+
+    if (length(custom_group_order)>=1) {
+        group_names <- custom_group_order
+        df[[group]] <- factor(df[[group]], levels = custom_group_order)
+    } else {
+        group_names <- sort(unique( df[[group]] ))
     }
 
     n_groups <- length(unique( df[[group]] ))
@@ -277,10 +304,15 @@ apply_multiple_comparisons <- function(
     index_cols,  # c('organ', 'cell_type')
     group_name,  # 'group_name'
     metric,  # 'pct_cells' or 'abs_count'
-    correction='fishers_lsd'  # 'fishers_lsd', 'tukey', or 'bonferroni'
+    correction='fishers_lsd',  # 'fishers_lsd', 'tukey', or 'bonferroni'
+    custom_group_order=c()
 ) {
-
-    group_names <- sort(unique( df[[group_name]] ))
+    
+    if (length(custom_group_order)>=1) {
+        group_names <- custom_group_order
+    } else {
+        group_names <- sort(unique( df[[group_name]] ))
+    }
 
     # Collect values into list columns
     res <- pivot_wider(
@@ -318,7 +350,7 @@ apply_multiple_comparisons <- function(
             df_list
         )
     } else {
-        stop("Choose correction='tukey' or 'bonferroni'")
+        stop("Choose correction='fishers_lsd', 'tukey' or 'bonferroni'")
     }
 
     # convert to matrix

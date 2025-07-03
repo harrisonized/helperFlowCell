@@ -452,59 +452,74 @@ plot_multiple_comparisons <- function(
     xaxis_angle=60,
     test='t_test',  # 'fishers_lsd', 't_test', 'tukey', or 'bonferroni'
     show_numbers=FALSE,
-    digits=4
+    digits=4,
+    show_brackets=TRUE,
+    custom_group_order=c()
 ) {
 
-    # compute pvals
-    if (test=='t_test') {
-        pvals <- apply_unpaired_t_test(
-            df,
-            index_cols=items_in_a_not_b(colnames(df), c(x, y)),
-            group_name=x,
-            metric=y
-        )
-    } else if (test=='fishers_lsd') {
-        pvals <- fishers_lsd(
-            df,
-            group=x,
-            metric=y
-        )
-    } else if (test=='tukey') {
-        pvals <- tukey_multiple_comparisons(
-            df,
-            group=x,
-            metric=y
-        )
-    } else if (test=='bonferroni') {
-        pvals <- bonferroni_multiple_comparisons(
-            df,
-            group=x,
-            metric=y
-        )
+    if (length(custom_group_order)>=1) {
+        group_names <- custom_group_order
+        df[[x]] <- factor(df[[x]], levels = group_names)
     } else {
-        stop("Choose from test= 't_test', 'tukey', or 'bonferroni'")
+        group_names <- sort(unique( df[[x]] ))
     }
 
-    # compute bar positions
-    group_names <- sort(unique( df[[x]] ))
     n_groups <- length(group_names)
 
-    if (n_groups > 1) {
-        bracket_params <- setNames(as.data.frame(t(combn(1:n_groups, 2))), c('left', 'right'))
-        bracket_params[['dist']] <- bracket_params[['right']] - bracket_params[['left']]
-        bracket_params <- bracket_params[ order(bracket_params[['dist']]), ]
-        bracket_params[['base_level']] <- generate_base_level(n_groups)
-        bracket_params[['level']] <- bracket_params[['base_level']] +  # base level
-            (bracket_params[['left']]-1) %% bracket_params[['dist']]  # alternating correction factor
+    if (show_brackets) {
 
-        # compute starting height
-        h_low <- max(aggregate(df[[y]],
-            list(df[[x]]), FUN=function(x) mean(x)+sd(x)
-        )[['x']], na.rm=TRUE) * 1.1
-        if (h_low < max(df[[y]])) {
-            h_low <- max(df[[y]]) * 1.1
+        # compute pvals
+        if (test=='t_test') {
+            pvals <- apply_unpaired_t_test(
+                df,
+                index_cols=items_in_a_not_b(colnames(df), c(x, y)),
+                group_name=x,
+                metric=y,
+                custom_group_order=custom_group_order
+            )
+        } else if (test=='fishers_lsd') {
+            pvals <- fishers_lsd(
+                df,
+                group=x,
+                metric=y,
+                custom_group_order=custom_group_order
+            )
+        } else if (test=='tukey') {
+            pvals <- tukey_multiple_comparisons(
+                df,
+                group=x,
+                metric=y,
+                custom_group_order=custom_group_order
+            )
+        } else if (test=='bonferroni') {
+            pvals <- bonferroni_multiple_comparisons(
+                df,
+                group=x,
+                metric=y,
+                custom_group_order=custom_group_order
+            )
+        } else {
+            stop("Choose from test='t_test', 'fishers_lsd', 'tukey', or 'bonferroni'")
         }
-        space <- h_low / 10
+
+        # compute bar positions
+        if (n_groups > 1) {
+            bracket_params <- setNames(as.data.frame(t(combn(1:n_groups, 2))), c('left', 'right'))
+            bracket_params[['dist']] <- bracket_params[['right']] - bracket_params[['left']]
+            bracket_params <- bracket_params[ order(bracket_params[['dist']]), ]
+            bracket_params[['base_level']] <- generate_base_level(n_groups)
+            bracket_params[['level']] <- bracket_params[['base_level']] +  # base level
+                (bracket_params[['left']]-1) %% bracket_params[['dist']]  # alternating correction factor
+
+            # compute starting height
+            h_low <- max(aggregate(df[[y]],
+                list(df[[x]]), FUN=function(x) mean(x)+sd(x)
+            )[['x']], na.rm=TRUE) * 1.1
+            if (h_low < max(df[[y]])) {
+                h_low <- max(df[[y]]) * 1.1
+            }
+            space <- h_low / 10
+        }
     }
 
     # base plot
@@ -526,26 +541,28 @@ plot_multiple_comparisons <- function(
         labs(x=xlabel, y=ylabel, title=title) +
         theme_prism(base_size = round(50/n_groups, 0))
 
-    # significance brackets
-    if (n_groups > 1) {
-        for (row in 1:nrow(bracket_params)) {
+    if (show_brackets) {
+        # significance brackets
+        if (n_groups > 1) {
+            for (row in 1:nrow(bracket_params)) {
 
-            left <- bracket_params[row, "left"]
-            right <- bracket_params[row, "right"]
-            level <- bracket_params[row, "level"]
-            colname <- paste(group_names[[right]], group_names[[left]], sep='-')  # colname
+                left <- bracket_params[row, "left"]
+                right <- bracket_params[row, "right"]
+                level <- bracket_params[row, "level"]
+                colname <- paste(group_names[[right]], group_names[[left]], sep='-')  # colname
 
-            if (show_numbers) {
-                pval <- toString( format(round(pvals[[colname]], digits), nsmall = digits) )
-            } else {
-                pval <- get_significance_code( pvals[[colname]] )
+                if (show_numbers) {
+                    pval <- toString( format(round(pvals[[colname]], digits), nsmall = digits) )
+                } else {
+                    pval <- get_significance_code( pvals[[colname]] )
+                }
+
+                fig <- fig +
+                    showSignificance(
+                        x=c(left+0.1, right-0.1), y=h_low+(level-1)*space, width=-0.001*h_low,
+                        text=pval, textParams=list(size=(if (n_groups <= 6) 3 else 2))
+                    )
             }
-
-            fig <- fig +
-                showSignificance(
-                    x=c(left+0.1, right-0.1), y=h_low+(level-1)*space, width=-0.001*h_low,
-                    text=pval, textParams=list(size=(if (n_groups <= 6) 3 else 2))
-                )
         }
     }
 
