@@ -321,7 +321,7 @@ for (idx in 1:nrow(pval_tbl)) {
         title=paste(toupper(organ), cell_type),
         test=opt[['stat']],
         show_numbers=opt[['show-numbers']],
-        custom_group_order=c()  # c('Female, DMSO', 'Male, DMSO', 'Female, R848', 'Male, R848')
+        custom_group_order=c()  # manual input
     )
 
     # save

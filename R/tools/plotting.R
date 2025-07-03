@@ -458,7 +458,8 @@ plot_multiple_comparisons <- function(
 ) {
 
     if (length(custom_group_order)>=1) {
-        group_names <- custom_group_order
+        group_names <- intersect( custom_group_order, unique(df[[x]]) )
+        df <- df[(df[[x]] %in% group_names), ]
         df[[x]] <- factor(df[[x]], levels = group_names)
     } else {
         group_names <- sort(unique( df[[x]] ))
