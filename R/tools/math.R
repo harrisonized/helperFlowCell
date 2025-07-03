@@ -69,7 +69,7 @@ apply_unpaired_t_test <- function(
     }
 
     if (length(custom_group_order)>=1) {
-        group_names <- custom_group_order
+        group_names <- intersect( custom_group_order, unique(df[[group_name]]) )
     } else {
         group_names <- sort(unique( df[[group_name]] ))
     }
@@ -134,7 +134,7 @@ fishers_lsd <- function(
     }
 
     if (length(custom_group_order)>=1) {
-        group_names <- custom_group_order
+        group_names <- intersect( custom_group_order, unique(df[[group]]) )
     } else {
         group_names <- sort(unique( df[[group]] ))
     }
@@ -216,7 +216,7 @@ tukey_multiple_comparisons <- function(
     }
 
     if (length(custom_group_order)>=1) {
-        group_names <- custom_group_order
+        group_names <- intersect( custom_group_order, unique(df[[group]]) )
         df[[group]] <- factor(df[[group]], levels = custom_group_order)
     } else {
         group_names <- sort(unique( df[[group]] ))
@@ -268,7 +268,7 @@ bonferroni_multiple_comparisons <- function(
     }
 
     if (length(custom_group_order)>=1) {
-        group_names <- custom_group_order
+        group_names <- intersect( custom_group_order, unique(df[[group]]) )
         df[[group]] <- factor(df[[group]], levels = custom_group_order)
     } else {
         group_names <- sort(unique( df[[group]] ))
@@ -309,7 +309,7 @@ apply_multiple_comparisons <- function(
 ) {
     
     if (length(custom_group_order)>=1) {
-        group_names <- custom_group_order
+        group_names <- intersect( custom_group_order, unique(df[[group_name]]) )
     } else {
         group_names <- sort(unique( df[[group_name]] ))
     }

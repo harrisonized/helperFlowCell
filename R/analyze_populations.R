@@ -390,7 +390,8 @@ for (idx in 1:nrow(pval_tbl)) {
         ylabel='Percent of\nLive Cells',
         title=paste(toupper(organ), cell_type),
         test=opt[['stat']],
-        show_numbers=opt[['show-numbers']]
+        show_numbers=opt[['show-numbers']],
+        custom_group_order=c()  # manual input
     )
 
     # save
