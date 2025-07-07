@@ -60,7 +60,8 @@ preprocess_flowjo_export <- function(df) {
     df <- rename_columns(df,
         c('X1'='fcs_name',
           'Count'='Ungated',
-          'Mean (Comp-Alexa Fluor 488-A)'='Ungated'  # find a better solution
+          'Mean (Comp-Alexa Fluor 488-A)'='Ungated',  # find a better solution
+          'Mode (Comp-Alexa Fluor 488-A)'='Ungated'
         )
     )
     colnames(df) <- unname(sapply(colnames(df), function(x) strsplit(x, ' \\| ')[[1]][1]))

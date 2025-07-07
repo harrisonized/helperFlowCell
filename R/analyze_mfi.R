@@ -56,6 +56,10 @@ option_list = list(
                 metavar='fishers_lsd', type="character",
                 help="Choose 'fishers_lsd', 't_test', 'tukey', or 'bonferroni'"),
 
+    make_option(c("-x", "--metric"), default="mfi",
+                metavar="mfi", type="character",
+                help="metric name, eg. opt[['metric']] or 'mode'"),
+
     make_option(c("-p", "--plotly-overview"), default=FALSE, action="store_true",
                 metavar="FALSE", type="logical",
                 help="generate overview interactive violin plot"),
@@ -101,16 +105,16 @@ log_print(paste('Script started at:', start_time))
 
 log_print(paste(Sys.time(), 'Reading data...'))
 
-# Read mfi data exported from flowjo
-mfi_tbl <- append_many_csv(
+# Read data exported from flowjo
+flowjo_export <- append_many_csv(
     file.path(wd, opt[['input-dir']]),
     recursive=TRUE, na_strings=c('n/a')
 )
-if (is.null(mfi_tbl)) {
-    msg <- paste("No mfi data found. Please check", opt[['input-dir']], '...')
+if (is.null(flowjo_export)) {
+    msg <- paste("No flowjo data found. Please check", opt[['input-dir']], '...')
     stop(msg)
 }
-mfi_tbl <- preprocess_flowjo_export(mfi_tbl)
+flowjo_export <- preprocess_flowjo_export(flowjo_export)
 
 # reference files
 flow_metadata <- append_many_csv(
@@ -130,9 +134,9 @@ mouse_db <- append_many_csv(
 log_print(paste(Sys.time(), 'Preprocessing...'))
 
 # Reshape so each row is a gate in each sample
-df <- pivot_longer(mfi_tbl,
-    names_to = "gate", values_to = "mfi",
-    cols=items_in_a_not_b(colnames(mfi_tbl), id_cols),
+df <- pivot_longer(flowjo_export,
+    names_to = "gate", values_to = opt[['metric']],
+    cols=items_in_a_not_b(colnames(flowjo_export), id_cols),
     values_drop_na = TRUE
 )
 df[['cell_type']] <- unlist(lapply(strsplit(df[['gate']], '/'), function(x) x[length(x)]))
@@ -177,14 +181,14 @@ if (opt[['stat']]=='t_test') {
         df,
         index_cols=c('organ', 'cell_type'),
         group_name='group_name',
-        metric='mfi'
+        metric=opt[['metric']]
     )
 } else {
     pval_tbl <- apply_multiple_comparisons(
         df,
         index_cols=c('organ', 'cell_type'),
         group_name='group_name',
-        metric='mfi',
+        metric=opt[['metric']],
         correction=opt[['stat']]
     )
 }
@@ -196,11 +200,11 @@ if (!troubleshooting) {
         tmp[[col]] <- mapply(toJSON, tmp[[col]])
     }
 
-    dirpath <- file.path(wd, opt[['output-dir']], 'data', 'mfi')
+    dirpath <- file.path(wd, opt[['output-dir']], 'data', opt[['metric']])
     if (!dir.exists(dirpath)) {
         dir.create(dirpath, recursive=TRUE)
     }
-    filepath = file.path(dirpath, paste0('mfi-', opt[['stat']], '.csv'))
+    filepath = file.path(dirpath, paste0(opt[['metric']], '-', opt[['stat']], '.csv'))
     write.table(tmp, file = filepath, row.names = FALSE,  sep = ',' )
 }
 
@@ -230,13 +234,13 @@ for (organ in sort(organs)) {
                 c('organ', 'genotype', 'treatment',
                    'group_name', metadata_cols, 'cell_type',
                    'Cells/Single Cells/Single Cells/Live Cells',
-                   'num_cells', 'mfi', 'viable_cells_conc',
+                   'num_cells', opt[['metric']], 'viable_cells_conc',
                    'total_vol', 'total_viable_cells', 'abs_count',
                    'mouse_id', 'sex', 'weeks_old', 'fcs_name'),
                 colnames(df)
             ))],
         x='cell_type',
-        y='mfi',
+        y=opt[['metric']],
         groups=c('group_name')
     )
 
@@ -262,7 +266,7 @@ for (organ in sort(organs)) {
 
         fig <- plot_violin(
             tmp,
-            x='cell_type', y='mfi', group_by='group_name',
+            x='cell_type', y=opt[['metric']], group_by='group_name',
             ylabel='MFI', title=organ,
             ymin=0,
             hover_data=unique(intersect(
@@ -278,7 +282,7 @@ for (organ in sort(organs)) {
                 fig=fig,
                 height=opt[['height']], width=opt[['width']],
                 dirpath=file.path(wd, opt[['output-dir']], 'figures', 'overview'),
-                filename=paste('violin-mfi', 
+                filename=paste('violin', opt[['metric']], 
                     organ, gsub(',', '_', opt[['group-by']]), sep='-'),
                 save_html=TRUE
             )
@@ -306,7 +310,7 @@ for (idx in 1:nrow(pval_tbl)) {
     df_subset <- df[
         (df[['organ']] == organ) & (df[['cell_type']] == cell_type),
         unique(intersect(
-                c('organ', 'cell_type', 'group_name', 'mfi', 'abs_count'),
+                c('organ', 'cell_type', 'group_name', opt[['metric']], 'abs_count'),
                 colnames(df)
         ))
     ]
@@ -314,11 +318,16 @@ for (idx in 1:nrow(pval_tbl)) {
     # ----------------------------------------------------------------------
     # MFI
 
-    custom_group_order <- c()
+    custom_group_order <- c(
+        'F, DMSO, WT', 'F, DMSO, het', 'F, DMSO, homo',
+        'F, R848, WT', 'F, R848, homo',
+        'M, DMSO, WT', 'M, DMSO, hemi',
+        'M, R848, WT', 'M, R848, hemi'
+    )
     fig <- plot_multiple_comparisons(
-        df_subset[, c("organ", "cell_type", "group_name", "mfi")],
-        x='group_name', y='mfi',
-        ylabel='MFI',
+        df_subset[, c("organ", "cell_type", "group_name", opt[['metric']])],
+        x='group_name', y=opt[['metric']],
+        ylabel=opt[['metric']],
         title=paste(toupper(organ), cell_type),
         test=opt[['stat']],
         show_numbers=opt[['show-numbers']],
@@ -329,7 +338,7 @@ for (idx in 1:nrow(pval_tbl)) {
     if (!troubleshooting) {
         
         dirpath <- file.path(wd, opt[['output-dir']], 'figures',
-            'mfi', organ,
+            opt[['metric']], organ,
             paste( opt[['stat']], gsub(',', '_', opt[['group-by']]), sep='-' )
         )
         if (!dir.exists(dirpath)) { dir.create(dirpath, recursive=TRUE) }
