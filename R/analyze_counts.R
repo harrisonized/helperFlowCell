@@ -320,7 +320,7 @@ for (organ in sort(organs)) {
             save_fig(
                 fig=fig,
                 height=opt[['height']], width=opt[['width']],
-                dirpath=file.path(wd, opt[['output-dir']], 'figures', 'overview'),
+                dirpath=file.path(wd, opt[['output-dir']], 'figures', 'pct_cells', 'overview'),
                 filename=paste('violin-pct_cells', 
                     organ, gsub(',', '_', opt[['group-by']]), sep='-'),
                 save_html=TRUE
@@ -348,7 +348,7 @@ for (organ in sort(organs)) {
                 save_fig(
                     fig=fig,
                     height=opt[['height']], width=opt[['width']],
-                    dirpath=file.path(wd, opt[['output-dir']], 'figures', 'overview'),
+                    dirpath=file.path(wd, opt[['output-dir']], 'figures', 'abs_count', 'overview'),
                     filename=paste('violin-abs_count', 
                         organ, gsub(',', '_', opt[['group-by']]), sep='-'),
                     save_html=TRUE
