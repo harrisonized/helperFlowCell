@@ -1,4 +1,15 @@
-## Graphs a non-normalized metric for each cell population
+## Graphs MFI for each cell population
+## There are three different ways of calculating MFI
+## 1. Geometric mean: This is the best choice, because the calculation compensates
+## for extreme skew, which is standard in flow cytometry data due to the logarithmic
+## nature of flow cytometry data.
+## 2. Median is a good second choice, however, in situations where the distribution
+## deviates from a bell curve, the median may not be as sensitive as geometric mean
+## 3. The Arithmetic Mean (ie. the Mean) is a bad choice. It will systemically
+## overestimate the representative value due to the logarithmic nature of flow
+## cytometry data.
+## This script treats all three kinds of MFI equally, however, you can rename it on
+## graph using the -x option
 
 wd = dirname(this.path::here())  # wd = '~/github/R/helperFlowCell'
 suppressPackageStartupMessages(library('dplyr'))
