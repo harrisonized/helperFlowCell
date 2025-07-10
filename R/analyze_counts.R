@@ -1,4 +1,7 @@
-## Graphs percentage of live cells of each cell population
+## Graphs percentage of live cells for each cell population
+## Expects the first four gates to be Cells/Single Cells/Single Cells/Live Cells
+## If abs_count is included as a column in your metadata file, this script
+## will also calculate absolute counts
 
 wd = dirname(this.path::here())  # wd = '~/github/R/helperFlowCell'
 suppressPackageStartupMessages(library('dplyr'))
