@@ -60,7 +60,7 @@ option_list = list(
                 metavar="mfi", type="character",
                 help="metric name, eg. opt[['metric']] or 'mode'"),
 
-    make_option(c("-p", "--plotly-overview"), default=FALSE, action="store_true",
+    make_option(c("-a", "--overview"), default=FALSE, action="store_true",
                 metavar="FALSE", type="logical",
                 help="generate overview interactive violin plot"),
 
@@ -217,7 +217,7 @@ log_print(paste(Sys.time(), 'Groups found...', paste(organs, collapse = ', ')))
 
 
 log_print(paste(Sys.time(), 
-    (if (opt[['plotly-overview']]) 'Exporting data with plots...' else 'Exporting data...' )
+    (if (opt[['overview']]) 'Exporting data with plots...' else 'Exporting data...' )
 ))
 
 for (organ in sort(organs)) {
@@ -245,13 +245,8 @@ for (organ in sort(organs)) {
     )
 
     if (!troubleshooting) {
-        dirpath <- file.path(wd, opt[['output-dir']], 'data', 'populations')
-        if (!dir.exists(dirpath)) {
-            dir.create(dirpath, recursive=TRUE)
-        }
-        filepath = file.path(dirpath,
-            paste0(organ, '.csv')
-        )
+        dirpath <- file.path(wd, opt[['output-dir']], 'data', opt[['metric']])  # created above
+        filepath = file.path(dirpath, paste0(organ, '.csv'))
         write.table(tmp, file = filepath, row.names = FALSE, sep = ',')
     }
 
@@ -259,7 +254,7 @@ for (organ in sort(organs)) {
     # ----------------------------------------------------------------------
     # Plot
 
-    if (opt[['plotly-overview']]) {
+    if (opt[['overview']]) {
 
         # ----------------------------------------------------------------------
         # Percent Cells
@@ -281,7 +276,8 @@ for (organ in sort(organs)) {
             save_fig(
                 fig=fig,
                 height=opt[['height']], width=opt[['width']],
-                dirpath=file.path(wd, opt[['output-dir']], 'figures', 'overview'),
+                dirpath=file.path(wd, opt[['output-dir']], 'figures',
+                    opt[['metric']], 'overview'),
                 filename=paste('violin', opt[['metric']], 
                     organ, gsub(',', '_', opt[['group-by']]), sep='-'),
                 save_html=TRUE
@@ -319,10 +315,10 @@ for (idx in 1:nrow(pval_tbl)) {
     # MFI
 
     custom_group_order <- c(
-        'F, DMSO, WT', 'F, DMSO, het', 'F, DMSO, homo',
-        'F, R848, WT', 'F, R848, homo',
-        'M, DMSO, WT', 'M, DMSO, hemi',
-        'M, R848, WT', 'M, R848, hemi'
+        # 'F, DMSO, WT', 'F, DMSO, het', 'F, DMSO, homo',
+        # 'F, R848, WT', 'F, R848, homo',
+        # 'M, DMSO, WT', 'M, DMSO, hemi',
+        # 'M, R848, WT', 'M, R848, hemi'
     )
     fig <- plot_multiple_comparisons(
         df_subset[, c("organ", "cell_type", "group_name", opt[['metric']])],
