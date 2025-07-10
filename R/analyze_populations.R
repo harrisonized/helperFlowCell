@@ -48,7 +48,7 @@ option_list = list(
                 metavar='data/mice', type="character",
                 help="directory of files containing all the mouse data"),
 
-    make_option(c("-g", "--group-by"), default='treatment,genotype',
+    make_option(c("-g", "--group-by"), default='sex,treatment,zygosity',
                 metavar='treatment', type="character",
                 help="enter a column or comma-separated list of columns, no spaces"),
 
@@ -56,9 +56,9 @@ option_list = list(
                 metavar='fishers_lsd', type="character",
                 help="Choose 'fishers_lsd', 't_test', 'tukey', or 'bonferroni'"),
 
-    make_option(c("-p", "--plotly-overview"), default=FALSE, action="store_true",
+    make_option(c("-a", "--overview"), default=FALSE, action="store_true",
                 metavar="FALSE", type="logical",
-                help="generate overview interactive violin plot"),
+                help="generate plotly overview interactive violin plot"),
 
     make_option(c("-n", "--show-numbers"), default=FALSE, action="store_true",
                 metavar="FALSE", type="logical",
@@ -253,7 +253,7 @@ if ('abs_count' %in% colnames(df)) {
 organs <- sort(unique(df[['organ']]))
 log_print(paste(Sys.time(), 'Groups found...', paste(organs, collapse = ', ')))
 
-if (opt[['plotly-overview']]) {
+if (opt[['overview']]) {
     log_print(paste(Sys.time(), 'Exporting data with plots...'))
 } else {
     log_print(paste(Sys.time(), 'Exporting data...'))
@@ -284,10 +284,7 @@ for (organ in sort(organs)) {
     )
 
     if (!troubleshooting) {
-        dirpath <- file.path(wd, opt[['output-dir']], 'data', 'populations')
-        if (!dir.exists(dirpath)) {
-            dir.create(dirpath, recursive=TRUE)
-        }
+        dirpath <- file.path(wd, opt[['output-dir']], 'data', 'pct_cells')  # created above
         filepath = file.path(dirpath,
             paste0(organ, '.csv')
         )
@@ -298,7 +295,7 @@ for (organ in sort(organs)) {
     # ----------------------------------------------------------------------
     # Plot
 
-    if (opt[['plotly-overview']]) {
+    if (opt[['overview']]) {
 
         # ----------------------------------------------------------------------
         # Percent Cells
@@ -330,28 +327,30 @@ for (organ in sort(organs)) {
         # ----------------------------------------------------------------------
         # Absolute Counts
 
-        fig <- plot_violin(
-            tmp,
-            x='cell_type', y='abs_count', group_by='group_name',
-            ylabel='Absolute Count', title=organ,
-            ymin=0,
-            hover_data=unique(intersect(
-                    c('mouse_id', 'group_name', metadata_cols,
-                      'sex', 'treatment', 'weeks_old', 
-                      'Cells', 'num_cells', 'fcs_name'),
-                    colnames(df)
-            ))
-        )
-
-        if (!troubleshooting) {
-            save_fig(
-                fig=fig,
-                height=opt[['height']], width=opt[['width']],
-                dirpath=file.path(wd, opt[['output-dir']], 'figures', 'overview'),
-                filename=paste('violin-abs_count', 
-                    organ, gsub(',', '_', opt[['group-by']]), sep='-'),
-                save_html=TRUE
+        if ('abs_count' %in% colnames(df)) {
+            fig <- plot_violin(
+                tmp,
+                x='cell_type', y='abs_count', group_by='group_name',
+                ylabel='Absolute Count', title=organ,
+                ymin=0,
+                hover_data=unique(intersect(
+                        c('mouse_id', 'group_name', metadata_cols,
+                          'sex', 'treatment', 'weeks_old', 
+                          'Cells', 'num_cells', 'fcs_name'),
+                        colnames(df)
+                ))
             )
+
+            if (!troubleshooting) {
+                save_fig(
+                    fig=fig,
+                    height=opt[['height']], width=opt[['width']],
+                    dirpath=file.path(wd, opt[['output-dir']], 'figures', 'overview'),
+                    filename=paste('violin-abs_count', 
+                        organ, gsub(',', '_', opt[['group-by']]), sep='-'),
+                    save_html=TRUE
+                )
+            }
         }
     }
 }
@@ -383,8 +382,13 @@ for (idx in 1:nrow(pval_tbl)) {
 
     # ----------------------------------------------------------------------
     # Percent Cells
-
-    custom_group_order <- c()
+    
+    custom_group_order <- c(
+        # 'F, DMSO, WT', 'F, DMSO, het', 'F, DMSO, homo',
+        # 'F, R848, WT', 'F, R848, homo',
+        # 'M, DMSO, WT', 'M, DMSO, hemi',
+        # 'M, R848, WT', 'M, R848, hemi'
+    )
     fig <- plot_multiple_comparisons(
         df_subset[, c("organ", "cell_type", "group_name", "pct_cells")],
         x='group_name', y='pct_cells',
