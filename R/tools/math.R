@@ -1,6 +1,7 @@
 import::here(tidyr, 'pivot_wider')
 import::here(file.path(wd, 'R', 'tools', 'list_tools.R'),
-    'collect_matrix_cols', 'matrix2list', .character_only=TRUE)
+    'collect_matrix_cols', 'matrix2list', 'fill_missing_keys',
+    .character_only=TRUE)
 
 ## Functions
 ## unpaired_t_test
