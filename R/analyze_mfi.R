@@ -4,7 +4,8 @@
 ## for extreme skew, which is standard in flow cytometry data due to the logarithmic
 ## nature of flow cytometry data.
 ## 2. Median is a good second choice, however, in situations where the distribution
-## deviates from a bell curve, the median may not be as sensitive as geometric mean
+## is an exponential decay with 0 being the most common value, the median will not
+## accurately represent the distribution
 ## 3. The Arithmetic Mean (ie. the Mean) is a bad choice. It will systemically
 ## overestimate the representative value due to the logarithmic nature of flow
 ## cytometry data.
@@ -43,8 +44,8 @@ import::from(file.path(wd, 'R', 'config', 'flow.R'),
 
 # args
 option_list = list(
-    make_option(c("-i", "--input-dir"), default='data/flowjo-mfi',
-                metavar='data/flowjo-mfi', type="character",
+    make_option(c("-i", "--input-dir"), default='data/flow-gmfi',
+                metavar='data/flow-gmfi', type="character",
                 help="input directory, all csv files will be read in"),
 
     make_option(c("-o", "--output-dir"), default="output",
@@ -67,8 +68,8 @@ option_list = list(
                 metavar='fishers_lsd', type="character",
                 help="Choose 'fishers_lsd', 't_test', 'tukey', or 'bonferroni'"),
 
-    make_option(c("-x", "--metric"), default="mfi",
-                metavar="mfi", type="character",
+    make_option(c("-x", "--metric"), default="gmfi",
+                metavar="gmfi", type="character",
                 help="metric name, eg. opt[['metric']] or 'mode'"),
 
     make_option(c("-a", "--overview"), default=FALSE, action="store_true",

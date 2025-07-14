@@ -35,8 +35,8 @@ import::from(file.path(wd, 'R', 'config', 'flow.R'),
 
 # args
 option_list = list(
-    make_option(c("-i", "--input-dir"), default='data/flowjo-counts',
-                metavar='data/flowjo-counts', type="character",
+    make_option(c("-i", "--input-dir"), default='data/flow-counts',
+                metavar='data/flow-counts', type="character",
                 help="input directory, all csv files will be read in"),
 
     make_option(c("-o", "--output-dir"), default="output",
@@ -94,7 +94,7 @@ metadata_cols <- unlist(strsplit(opt[['group-by']], ','))
 
 # Start Log
 start_time = Sys.time()
-log <- log_open(paste0("analyze_populations-",
+log <- log_open(paste0("analyze_counts-",
     strftime(start_time, format="%Y%m%d_%H%M%S"), '.log'))
 log_print(paste('Script started at:', start_time))
 
@@ -111,7 +111,7 @@ if (is.null(counts)) {
     stop(msg)
 }
 counts <- preprocess_flowjo_export(counts)
-colnames(counts)[[4]] <- 'Ungated'
+# colnames(counts)[[4]] <- 'Ungated'
 
 # reference files
 flow_metadata <- append_many_csv(
@@ -387,10 +387,10 @@ for (idx in 1:nrow(pval_tbl)) {
     # Percent Cells
     
     custom_group_order <- c(
-        # 'F, DMSO, WT', 'F, DMSO, het', 'F, DMSO, homo',
-        # 'F, R848, WT', 'F, R848, homo',
-        # 'M, DMSO, WT', 'M, DMSO, hemi',
-        # 'M, R848, WT', 'M, R848, hemi'
+        'F, DMSO, WT', 'F, DMSO, het', 'F, DMSO, homo',
+        'F, R848, WT', 'F, R848, homo',
+        'M, DMSO, WT', 'M, DMSO, hemi',
+        'M, R848, WT', 'M, R848, hemi'
     )
     fig <- plot_multiple_comparisons(
         df_subset[, c("organ", "cell_type", "group_name", "pct_cells")],
