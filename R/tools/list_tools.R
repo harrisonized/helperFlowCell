@@ -181,7 +181,7 @@ matrix2list <- function(mat) {
 #' move_list_items_to_front(c('a', 'b', 'c', 'd'), c('b', 'c'))
 #' 
 move_list_items_to_front <- function(items, ordered) {
-    return(c(intersect(items, ordered),
+    return(c(ordered[ordered %in% items],
              items_in_a_not_b(items, ordered)))
 }
 
@@ -191,6 +191,7 @@ move_list_items_to_front <- function(items, ordered) {
 #' @description
 #' Convenience function to perform multiple replacements on a list or dataframe column.
 #' Unlike [replace_specific_items()], `multiple_replacement()` can recognize patterns.
+#' Note: this is equivalent to [plyr::mapvalues()]
 #' 
 #' @param items list or vector
 #' @param replacements a named list of replacements. uses names to match and values to replace.

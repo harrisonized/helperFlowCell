@@ -19,6 +19,7 @@ library('optparse')
 import::from(progress, 'progress_bar')
 import::from(jsonlite, 'toJSON')
 import::from(stringr, 'str_detect')
+import::from(plyr, 'mapvalues')
 import::from(tidyr, 'pivot_longer')
 import::from(ggplot2, 'ggsave')
 
@@ -28,7 +29,7 @@ import::from(file.path(wd, 'R', 'functions', 'preprocessing.R'),
 import::from(file.path(wd, 'R', 'tools', 'file_io.R'),
     'append_many_csv', .character_only=TRUE)
 import::from(file.path(wd, 'R', 'tools', 'list_tools.R'),
-    'items_in_a_not_b', 'multiple_replacement',
+    'items_in_a_not_b', 'multiple_replacement', 'move_list_items_to_front',
     .character_only=TRUE)
 import::from(file.path(wd, 'R', 'tools', 'math.R'),
     'apply_unpaired_t_test', 'apply_multiple_comparisons', .character_only=TRUE)
@@ -72,7 +73,7 @@ option_list = list(
                 metavar="gmfi", type="character",
                 help="metric name, eg. opt[['metric']] or 'mode'"),
 
-    make_option(c("-a", "--overview"), default=FALSE, action="store_true",
+    make_option(c("-p", "--plotly-overview"), default=FALSE, action="store_true",
                 metavar="FALSE", type="logical",
                 help="generate overview interactive violin plot"),
 
@@ -105,9 +106,11 @@ if (!(opt[['stat']] %in% c('fishers_lsd', 't_test', 'tukey', 'bonferroni'))) {
 # args
 metadata_cols <- unlist(strsplit(opt[['group-by']], ','))
 
+custom_group_order <- c()
+
 # Start Log
 start_time = Sys.time()
-log <- log_open(paste0("analyze_populations-",
+log <- log_open(paste0("analyze_mfi-",
     strftime(start_time, format="%Y%m%d_%H%M%S"), '.log'))
 log_print(paste('Script started at:', start_time))
 
@@ -134,6 +137,17 @@ flow_metadata <- append_many_csv(
 if (is.null(flow_metadata)) {
     msg <- paste("No metadata found. Please check", opt[['metadata-dir']], '...')
     stop(msg)
+}
+# single value column with only 'F' causes R to interpret this as FALSE
+if ('sex' %in% colnames(flow_metadata)) {
+    if ( typeof(flow_metadata[['sex']])=='logical' ) {
+        flow_metadata[['sex']] <- mapvalues(
+            flow_metadata[['sex']],
+            from = c(FALSE, TRUE),
+            to = c('F', 'T'),
+            warn_missing=FALSE
+        )
+    }
 }
 
 mouse_db <- append_many_csv(
@@ -179,6 +193,7 @@ if (!is.null(mouse_db)) {
 
 
 # filter and sort
+# df <- df[(df[['num_cells']]>50), ]
 df <- df[order(df[['cell_type']], df[['organ']], df[['group_name']]), ]  # sort rows
 group_names <- sort(unique( df[['group_name']] ))
 
@@ -229,7 +244,7 @@ log_print(paste(Sys.time(), 'Groups found...', paste(organs, collapse = ', ')))
 
 
 log_print(paste(Sys.time(), 
-    (if (opt[['overview']]) 'Exporting data with plots...' else 'Exporting data...' )
+    (if (opt[['plotly-overview']]) 'Exporting data with plots...' else 'Exporting data...' )
 ))
 
 for (organ in sort(organs)) {
@@ -266,7 +281,7 @@ for (organ in sort(organs)) {
     # ----------------------------------------------------------------------
     # Plot
 
-    if (opt[['overview']]) {
+    if (opt[['plotly-overview']]) {
 
         # ----------------------------------------------------------------------
         # Percent Cells
@@ -326,12 +341,11 @@ for (idx in 1:nrow(pval_tbl)) {
     # ----------------------------------------------------------------------
     # MFI
 
-    custom_group_order <- c(
-        # 'F, DMSO, WT', 'F, DMSO, het', 'F, DMSO, homo',
-        # 'F, R848, WT', 'F, R848, homo',
-        # 'M, DMSO, WT', 'M, DMSO, hemi',
-        # 'M, R848, WT', 'M, R848, hemi'
+    custom_group_order <- move_list_items_to_front(
+        unique(df_subset[['group_name']]),
+        custom_group_order
     )
+
     fig <- plot_multiple_comparisons(
         df_subset[, c("organ", "cell_type", "group_name", opt[['metric']])],
         x='group_name', y=opt[['metric']],
@@ -352,7 +366,9 @@ for (idx in 1:nrow(pval_tbl)) {
         if (!dir.exists(dirpath)) { dir.create(dirpath, recursive=TRUE) }
         
         filepath = file.path(dirpath,
-            paste0(opt[['stat']], '-', organ, '-', gsub(' ', '_', tolower(cell_type)), '.svg' )
+            paste0(opt[['stat']], '-',
+                gsub(' ', '', tolower(organ)), '-',
+                gsub(' ', '_', tolower(cell_type)), '.svg' )
         )
         withCallingHandlers({
             ggsave(
