@@ -1,4 +1,5 @@
 import::here(stringr, 'str_detect')
+import::here(plyr, 'mapvalues')
 import::here(XML, 'xmlOutputDOM')
 import::here(file.path(wd, 'R', 'config', 'replacements.R'),
     'fluorophore_replacements', 'antibody_replacements', 'instr_cfg_colreps', 'ab_inv_colreps',
@@ -11,46 +12,12 @@ import::here(file.path(wd, 'R', 'tools', 'list_tools.R'),
     'multiple_replacement', 'find_first_match_index', .character_only=TRUE)
 
 ## Functions
-## parse_flowjo_metadata
 ## preprocess_flowjo_export
 ## preprocess_antibody_inventory
 ## preprocess_instrument_config
 ## sort_groups_by_metric
 ## spillover_to_xml
-
-
-#' Parse metadata saved in the fcs name
-#' 
-#' @description This function is specific to the naming convention of the experiment. To be deprecated.
-#'
-parse_flowjo_metadata <- function(
-    df,
-    cols=c('organ', 'mouse_id', 'treatment_group', 'strain')
-) {
-
-    df[['metadata']] <- as.character(
-        lapply(strsplit(df[['fcs_name']], '_'),
-        function(x) paste( x[4:length(x)-1], collapse='_' )) 
-    )
-
-    for (i in 1:length(cols)) {
-        col <- cols[[i]]
-        tryCatch({
-            df[[col]] <- as.character(
-                lapply(strsplit(df[['metadata']], '-'), function(x) x[[i]])
-            )
-        },
-        error = function(condition) {
-            log_print(paste("Column", col, "not in metadata"))
-        })
-    }
-
-    df[['strain']] <- unlist(as.character(
-        lapply(df[['mouse_id']], function(x) strsplit(x, '_')[[1]][[1]])
-    ))
-
-    return(df)
-}
+## parse_flowjo_metadata
 
 
 #' Preprocess Flowjo Export
@@ -230,4 +197,51 @@ spillover_to_xml <- function(spillover_table, channels, name='test') {
 
     xml$closeTag()
     return(xml)
+}
+
+
+# ----------------------------------------------------------------------
+# To be deprecated
+
+
+#' Parse metadata saved in the fcs name
+#' 
+#' @description This function is specific to the naming convention of the experiment. To be deprecated.
+#'
+parse_flowjo_metadata <- function(
+    df,
+    cols=c('organ', 'mouse_id', 'treatment_group', 'strain')
+) {
+
+    df[['metadata']] <- as.character(
+        lapply(strsplit(df[['fcs_name']], '_'),
+        function(x) paste( x[4:length(x)-1], collapse='_' )) 
+    )
+
+    # single value column with only 'F' causes R to interpret this as FALSE
+    if ('sex' %in% colnames(df)) {
+        if ( typeof(df[['sex']])=='logical' ) {
+            df[['sex']] <- mapvalues(
+                tmp[['sex']], from = c(FALSE, TRUE), to = c('F', 'T')
+            )
+        }        
+    }
+
+    for (i in 1:length(cols)) {
+        col <- cols[[i]]
+        tryCatch({
+            df[[col]] <- as.character(
+                lapply(strsplit(df[['metadata']], '-'), function(x) x[[i]])
+            )
+        },
+        error = function(condition) {
+            log_print(paste("Column", col, "not in metadata"))
+        })
+    }
+
+    df[['strain']] <- unlist(as.character(
+        lapply(df[['mouse_id']], function(x) strsplit(x, '_')[[1]][[1]])
+    ))
+
+    return(df)
 }
