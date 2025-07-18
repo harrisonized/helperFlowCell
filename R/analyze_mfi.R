@@ -25,7 +25,6 @@ import::from(ggplot2, 'ggsave')
 
 import::from(file.path(wd, 'R', 'functions', 'preprocessing.R'),
     'preprocess_flowjo_export', 'sort_groups_by_metric', .character_only=TRUE)
-
 import::from(file.path(wd, 'R', 'tools', 'file_io.R'),
     'append_many_csv', .character_only=TRUE)
 import::from(file.path(wd, 'R', 'tools', 'list_tools.R'),
@@ -38,6 +37,8 @@ import::from(file.path(wd, 'R', 'tools', 'plotting.R'),
 import::from(file.path(wd, 'R', 'config', 'flow.R'),
     'id_cols', 'cell_type_spell_check', 'cell_type_ignore',
     'mouse_db_ignore', .character_only=TRUE)
+import::from(file.path(wd, 'R', 'config', 'user_input.R'),
+    'custom_group_order', .character_only=TRUE)
 
 
 # ----------------------------------------------------------------------
@@ -105,18 +106,6 @@ if (!(opt[['stat']] %in% c('fishers_lsd', 't_test', 'tukey', 'bonferroni'))) {
 
 # args
 metadata_cols <- unlist(strsplit(opt[['group-by']], ','))
-
-custom_group_order <- c(
-    # 'F, DMSO, WT', 'F, DMSO, het', 'F, DMSO, homo',
-    # 'F, R848, WT', 'F, R848, homo',
-    # 'M, DMSO, WT', 'M, DMSO, hemi',
-    # 'M, R848, WT', 'M, R848, hemi'
-    # 'F, NT, WT', 'F, NT, het',
-    # 'F, PBS, WT', 'F, PBS, het',
-    # 'F, TGA, WT', 'F, TGA, het'
-    # 'F, WT', 'F, het', 'F, homo',
-    # 'M, WT', 'M, hemi'
-)
 
 # Start Log
 start_time = Sys.time()
@@ -236,7 +225,8 @@ if (!troubleshooting) {
         tmp[[col]] <- mapply(toJSON, tmp[[col]])
     }
 
-    dirpath <- file.path(wd, opt[['output-dir']], 'data', opt[['metric']])
+    dirpath <- file.path(wd, opt[['output-dir']], 'data',
+        gsub(',', '_', opt[['group-by']]), opt[['metric']])
     if (!dir.exists(dirpath)) {
         dir.create(dirpath, recursive=TRUE)
     }
@@ -281,7 +271,8 @@ for (organ in sort(organs)) {
     )
 
     if (!troubleshooting) {
-        dirpath <- file.path(wd, opt[['output-dir']], 'data', opt[['metric']])  # created above
+        dirpath <- file.path(wd, opt[['output-dir']], 'data',
+            gsub(',', '_', opt[['group-by']]), opt[['metric']])  # created above
         filepath = file.path(dirpath, paste0(organ, '.csv'))
         write.table(tmp, file = filepath, row.names = FALSE, sep = ',')
     }
@@ -313,9 +304,8 @@ for (organ in sort(organs)) {
                 fig=fig,
                 height=opt[['height']], width=opt[['width']],
                 dirpath=file.path(wd, opt[['output-dir']], 'figures',
-                    opt[['metric']], 'overview'),
-                filename=paste('violin', opt[['metric']], 
-                    organ, gsub(',', '_', opt[['group-by']]), sep='-'),
+                    gsub(',', '_', opt[['group-by']]), opt[['metric']], 'overview'),
+                filename=paste(organ, opt[['metric']], sep='-'),
                 save_html=TRUE
             )
         }
@@ -377,14 +367,13 @@ for (idx in 1:nrow(pval_tbl)) {
     if (!troubleshooting) {
         
         dirpath <- file.path(wd, opt[['output-dir']], 'figures',
-            opt[['metric']], organ,
-            paste( opt[['stat']], gsub(',', '_', opt[['group-by']]), sep='-' )
+            gsub(',', '_', opt[['group-by']]), opt[['metric']], organ,
+            opt[['stat']]
         )
         if (!dir.exists(dirpath)) { dir.create(dirpath, recursive=TRUE) }
         
         filepath = file.path(dirpath,
-            paste0(opt[['stat']], '-',
-                gsub(' ', '', tolower(organ)), '-',
+            paste0(gsub(' ', '', tolower(organ)), '-',
                 gsub(' ', '_', tolower(cell_type)), '.svg' )
         )
         withCallingHandlers({
