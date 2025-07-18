@@ -13,6 +13,7 @@ import::from(stringr, 'str_detect')
 import::from(plyr, 'mapvalues')
 import::from(tidyr, 'pivot_longer')
 import::from(ggplot2, 'ggsave')
+
 import::from(file.path(wd, 'R', 'functions', 'preprocessing.R'),
     'preprocess_flowjo_export', 'sort_groups_by_metric', .character_only=TRUE)
 import::from(file.path(wd, 'R', 'tools', 'file_io.R'),
@@ -27,6 +28,8 @@ import::from(file.path(wd, 'R', 'tools', 'plotting.R'),
 import::from(file.path(wd, 'R', 'config', 'flow.R'),
     'id_cols', 'initial_gates', 'cell_type_spell_check', 'cell_type_ignore',
     'mouse_db_ignore', .character_only=TRUE)
+import::from(file.path(wd, 'R', 'config', 'user_input.R'),
+    'custom_group_order', .character_only=TRUE)
 
 
 # ----------------------------------------------------------------------
@@ -91,17 +94,6 @@ if (!(opt[['stat']] %in% c('fishers_lsd', 't_test', 'tukey', 'bonferroni'))) {
 # args
 metadata_cols <- unlist(strsplit(opt[['group-by']], ','))
 
-custom_group_order <- c(
-    # 'F, DMSO, WT', 'F, DMSO, het', 'F, DMSO, homo',
-    # 'F, R848, WT', 'F, R848, homo',
-    # 'M, DMSO, WT', 'M, DMSO, hemi',
-    # 'M, R848, WT', 'M, R848, hemi'
-    # 'F, NT, WT', 'F, NT, het',
-    # 'F, PBS, WT', 'F, PBS, het',
-    # 'F, TGA, WT', 'F, TGA, het',
-    # 'F, WT', 'F, het', 'F, homo',
-    # 'M, WT', 'M, hemi'
-)
 
 # Start Log
 start_time = Sys.time()
@@ -226,7 +218,8 @@ if (!troubleshooting) {
         tmp[[col]] <- mapply(toJSON, tmp[[col]])
     }
 
-    dirpath <- file.path(wd, opt[['output-dir']], 'data', 'pct_cells')
+    dirpath <- file.path(wd, opt[['output-dir']], 'data',
+        gsub(',', '_', opt[['group-by']]), 'pct_cells')
     if (!dir.exists(dirpath)) {
         dir.create(dirpath, recursive=TRUE)
     }
@@ -262,7 +255,8 @@ if ('abs_count' %in% colnames(df)) {
             tmp[[col]] <- mapply(toJSON, tmp[[col]])
         }
 
-        dirpath <- file.path(wd, opt[['output-dir']], 'data', 'abs_count')
+        dirpath <- file.path(wd, opt[['output-dir']], 'data',
+            gsub(',', '_', opt[['group-by']]), 'abs_count')
         if (!dir.exists(dirpath)) {
             dir.create(dirpath, recursive=TRUE)
         }
@@ -309,7 +303,8 @@ for (organ in sort(organs)) {
     )
 
     if (!troubleshooting) {
-        dirpath <- file.path(wd, opt[['output-dir']], 'data', 'pct_cells')  # created above
+        dirpath <- file.path(wd, opt[['output-dir']], 'data',
+            gsub(',', '_', opt[['group-by']]), 'pct_cells')  # created above
         filepath = file.path(dirpath,
             paste0(organ, '.csv')
         )
@@ -342,9 +337,9 @@ for (organ in sort(organs)) {
             save_fig(
                 fig=fig,
                 height=opt[['height']], width=opt[['width']],
-                dirpath=file.path(wd, opt[['output-dir']], 'figures', 'pct_cells', 'overview'),
-                filename=paste('violin-pct_cells', 
-                    organ, gsub(',', '_', opt[['group-by']]), sep='-'),
+                dirpath=file.path(wd, opt[['output-dir']], 'figures',
+                    gsub(',', '_', opt[['group-by']]), 'pct_cells', 'overview'),
+                filename=paste(organ, 'pct_cells', sep='-'),
                 save_html=TRUE
             )
         }
@@ -370,9 +365,9 @@ for (organ in sort(organs)) {
                 save_fig(
                     fig=fig,
                     height=opt[['height']], width=opt[['width']],
-                    dirpath=file.path(wd, opt[['output-dir']], 'figures', 'abs_count', 'overview'),
-                    filename=paste('violin-abs_count', 
-                        organ, gsub(',', '_', opt[['group-by']]), sep='-'),
+                    dirpath=file.path(wd, opt[['output-dir']], 'figures',
+                        gsub(',', '_', opt[['group-by']]), 'abs_count', 'overview'),
+                    filename=paste(organ, 'abs_count', sep='-'),
                     save_html=TRUE
                 )
             }
@@ -435,13 +430,14 @@ for (idx in 1:nrow(pval_tbl)) {
     if (!troubleshooting) {
         
         dirpath <- file.path(wd, opt[['output-dir']], 'figures',
-            'pct_cells', organ,
-            paste( opt[['stat']], gsub(',', '_', opt[['group-by']]), sep='-' )
+            gsub(',', '_', opt[['group-by']]), 'pct_cells', organ,
+            opt[['stat']]
         )
         if (!dir.exists(dirpath)) { dir.create(dirpath, recursive=TRUE) }
         
         filepath = file.path(dirpath,
-            paste0(opt[['stat']], '-', organ, '-', gsub(' ', '_', tolower(cell_type)), '.svg' )
+            paste0(gsub(' ', '', tolower(organ)), '-',
+                gsub(' ', '_', tolower(cell_type)), '.svg' )
         )
         withCallingHandlers({
             ggsave(
@@ -483,15 +479,15 @@ for (idx in 1:nrow(pval_tbl)) {
             # save
             if (!troubleshooting) {
                 
-                dirpath <- file.path(wd, opt[['output-dir']], 'figures', 'abs_count',
+                dirpath <- file.path(wd, opt[['output-dir']], 'figures',
+                    gsub(',', '_', opt[['group-by']]), 'abs_count',
                     paste(organ, 'absolute', sep='-'),
-                    paste( opt[['stat']], gsub(',', '_', opt[['group-by']]), sep='-' )
+                    opt[['stat']]
                 )
                 if (!dir.exists(dirpath)) { dir.create(dirpath, recursive=TRUE) }
                 
                 filepath = file.path(dirpath,
-                    paste0(opt[['stat']], '-',
-                        gsub(' ', '', tolower(organ)), '-',
+                    paste0(gsub(' ', '', tolower(organ)), '-',
                         gsub(' ', '_', tolower(cell_type)), '.svg' )
                 )
 
