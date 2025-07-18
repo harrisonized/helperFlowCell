@@ -449,6 +449,7 @@ plot_multiple_comparisons <- function(
     x,  # 'group_name'
     y,  #'pct_cells'
     xlabel=NULL, ylabel=NULL, title=NULL,
+    ymin=0,
     xaxis_angle=60,
     test='t_test',  # 'fishers_lsd', 't_test', 'tukey', or 'bonferroni'
     show_numbers=FALSE,
@@ -513,9 +514,21 @@ plot_multiple_comparisons <- function(
                 (bracket_params[['left']]-1) %% bracket_params[['dist']]  # alternating correction factor
 
             # compute starting height
-            h_low <- max(aggregate(df[[y]],
-                list(df[[x]]), FUN=function(x) mean(x)+sd(x)
-            )[['x']], na.rm=TRUE) * 1.1
+            tryCatch({
+                withCallingHandlers({
+                    h_low <- max(
+                        aggregate(df_subset[[y]], list(df_subset[[x]]),
+                        FUN=function(x) mean(x)+sd(x)
+                    )[['x']], na.rm=TRUE) * 1.1
+                }, warning = function(w) {
+                    if ( grepl("no non-missing arguments", w) ) {
+                        stop()
+                    }
+                })
+            },
+            error = function(condition) {
+                h_low <<- max(df_subset[[y]], na.rm=TRUE) * 1.1
+            })
             if (h_low < max(df[[y]])) {
                 h_low <- max(df[[y]]) * 1.1
             }
@@ -535,7 +548,7 @@ plot_multiple_comparisons <- function(
         ) +
         scale_x_discrete(guide=guide_axis(angle=xaxis_angle)) +
         scale_y_continuous(
-            limits = c(0, NA),
+            limits = c(ymin, NA),
             expand = expansion(mult = c(0, 0.1)),
             labels = function(x) format(x, scientific=FALSE)
         ) +
@@ -558,11 +571,21 @@ plot_multiple_comparisons <- function(
                     pval <- get_significance_code( pvals[[colname]] )
                 }
 
-                fig <- fig +
-                    showSignificance(
-                        x=c(left+0.1, right-0.1), y=h_low+(level-1)*space, width=-0.001*h_low,
-                        text=pval, textParams=list(size=(if (n_groups <= 6) 3 else 2))
-                    )
+                if (h_low >= 0) {
+                    fig <- fig +
+                        showSignificance(
+                            x=c(left+0.1, right-0.1), y=h_low+(level-1)*space, width=-0.001*h_low,
+                            text=pval, textParams=list(size=(if (n_groups <= 6) 3 else 2))
+                        )
+                }
+                if (h_low < 0) {
+                    fig <- fig +
+                        showSignificance(
+                            x=c(left+0.1, right-0.1), y=h_low-(level+1)*space, width=-0.001*h_low,
+                            text=pval, textParams=list(size=(if (n_groups <= 6) 3 else 2))
+                        )
+                }
+
             }
         }
     }

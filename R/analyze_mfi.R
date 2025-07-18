@@ -106,7 +106,17 @@ if (!(opt[['stat']] %in% c('fishers_lsd', 't_test', 'tukey', 'bonferroni'))) {
 # args
 metadata_cols <- unlist(strsplit(opt[['group-by']], ','))
 
-custom_group_order <- c()
+custom_group_order <- c(
+    # 'F, DMSO, WT', 'F, DMSO, het', 'F, DMSO, homo',
+    # 'F, R848, WT', 'F, R848, homo',
+    # 'M, DMSO, WT', 'M, DMSO, hemi',
+    # 'M, R848, WT', 'M, R848, hemi'
+    # 'F, NT, WT', 'F, NT, het',
+    # 'F, PBS, WT', 'F, PBS, het',
+    # 'F, TGA, WT', 'F, TGA, het'
+    # 'F, WT', 'F, het', 'F, homo',
+    # 'M, WT', 'M, hemi'
+)
 
 # Start Log
 start_time = Sys.time()
@@ -193,7 +203,6 @@ if (!is.null(mouse_db)) {
 
 
 # filter and sort
-# df <- df[(df[['num_cells']]>50), ]
 df <- df[order(df[['cell_type']], df[['organ']], df[['group_name']]), ]  # sort rows
 group_names <- sort(unique( df[['group_name']] ))
 
@@ -346,15 +355,23 @@ for (idx in 1:nrow(pval_tbl)) {
         custom_group_order
     )
 
-    fig <- plot_multiple_comparisons(
-        df_subset[, c("organ", "cell_type", "group_name", opt[['metric']])],
-        x='group_name', y=opt[['metric']],
-        ylabel=opt[['metric']],
-        title=paste(toupper(organ), cell_type),
-        test=opt[['stat']],
-        show_numbers=opt[['show-numbers']],
-        custom_group_order=custom_group_order  # manual input
-    )
+    withCallingHandlers({
+        fig <- plot_multiple_comparisons(
+            df_subset[, c("organ", "cell_type", "group_name", opt[['metric']])],
+            x='group_name', y=opt[['metric']],
+            ymin=min( df_subset[, opt[['metric']]]*1.1, 0 ),
+            ylabel=opt[['metric']],
+            title=paste(toupper(organ), cell_type),
+            test=opt[['stat']],
+            show_numbers=opt[['show-numbers']],
+            custom_group_order=custom_group_order  # manual input
+        )
+    }, warning = function(w) {
+        if ( any(grepl("containing non-finite values", w),
+                 grepl("outside the scale range", w)) ) {
+            invokeRestart("muffleWarning")
+        }
+    })
 
     # save
     if (!troubleshooting) {
@@ -377,7 +394,8 @@ for (idx in 1:nrow(pval_tbl)) {
                 height=5000, width=5000, dpi=500, units='px', scaling=2 
             )
         }, warning = function(w) {
-            if ( any(grepl("rows containing non-finite values", w),
+            if ( any(grepl("containing non-finite values", w),
+                     grepl("outside the scale range", w),
                      grepl("fewer than two data points", w),
                      grepl("argument is not numeric or logical: returning NA", w)) ) {
                 invokeRestart("muffleWarning")
