@@ -10,6 +10,8 @@ import::here(file.path(wd, 'R', 'tools', 'list_tools.R'),
 ## tukey_multiple_comparisons
 ## bonferroni_multiple_comparisons
 ## apply_multiple_comparisons
+## total_variation_distance
+## generate_gaussian_data
 
 
 #' Unpaired T Test
@@ -364,4 +366,43 @@ apply_multiple_comparisons <- function(
     res <- res[do.call(order, res[index_cols]), ]    # sort rows in original order
 
     return(res)
+}
+
+
+#' Total Variation Distance
+#'
+#' Returns a value between 0 and 1 that quantifies 1-overlap
+#' Can be interpreted as dissimilarity between two distributions
+#' 
+total_variation_distance <- function(mean1, sd1, mu2, sd2) {
+
+    # Define Gaussians
+    p <- function(x) dnorm(x, mean = mean1, sd = sd1)
+    q <- function(x) dnorm(x, mean = mean2, sd = sd2)
+
+    # Select the minimum of the two Gaussians
+    min_pdf <- function(x) pmin(p(x), q(x))
+
+    # Get area under the curve of the overlap
+    # Set integral limit at 10*sd in each direction
+    lower <- min(mean1 - 10 * sd1, mean2 - 10 * sd2)
+    upper <- max(mean1 + 10 * sd1, mean2 + 10 * sd2)
+    overlap <- integrate(min_pdf, lower, upper)$value
+
+    dissimiliarity <- 1 - overlap
+    return(dissimiliarity)
+}
+
+
+#' Generate Gaussian Data
+#' 
+#' Generate a dataframe of random values drawn from a normal distribution
+#' Use this as the input to plot_biex_histogram
+#' 
+generate_gaussian_data <- function(
+    n=1000, mean=200, sd=100,
+    group_name="group"
+) {
+    df <- data.frame(group=group_name, value=rnorm(n, mean=mean, sd=sd))
+    return(df)
 }

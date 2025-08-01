@@ -1,13 +1,14 @@
 # import::here(rlang, 'sym')
 import::here(magrittr, '%>%')
 import::here(dplyr, 'group_by', 'summarize')
-import::here(tidyr, 'pivot_wider')
+import::here(tidyr, 'pivot_wider', 'unnest')
 import::here(ggplot2,
-    'ggplot', 'aes', 'theme', 'labs',
-    'geom_boxplot', 'geom_jitter', 'element_text',
-    'stat_summary', 'scale_fill_brewer', 'scale_fill_manual',
-    'scale_x_discrete', 'scale_y_continuous',
+    'ggplot', 'aes', 'theme', 'labs', 'theme_minimal',
+    'geom_boxplot', 'geom_jitter', 'geom_col', 'geom_line', 'element_text',
+    'stat_summary', 'scale_fill_brewer', 'scale_fill_manual', 'scale_color_manual',
+    'scale_x_continuous', 'scale_x_discrete', 'scale_y_continuous',
     'guide_axis', 'expansion', 'ggtitle')
+import::here(flowCore, 'logicleTransform')
 import::here(RColorBrewer, 'brewer.pal')
 import::here(ggprism, 'theme_prism')
 import::here(superb, 'showSignificance')
@@ -18,7 +19,7 @@ import::here(file.path(wd, 'R', 'tools', 'list_tools.R'),
     'items_in_a_not_b', .character_only=TRUE)
 import::here(file.path(wd, 'R', 'tools', 'math.R'),
     'unpaired_t_test', 'fishers_lsd', 'tukey_multiple_comparisons',
-    'bonferroni_multiple_comparisons',
+    'bonferroni_multiple_comparisons', 'generate_gaussian_data',
     .character_only=TRUE)
 
 ## Functions
@@ -30,6 +31,7 @@ import::here(file.path(wd, 'R', 'tools', 'math.R'),
 ## generate_base_level
 ## get_significance_code
 ## plot_multiple_comparisons
+## plot_modal_histograms
 
 
 #' Save Figure
@@ -591,4 +593,96 @@ plot_multiple_comparisons <- function(
     }
 
     return(fig)
+}
+
+
+#' Plot Biex Histograms
+#' 
+#' Mimics Flowjo's histogram function
+#' Use [generate_gaussian_data()] to generate the input
+#' 
+plot_modal_histograms <- function(df,
+    group='group', value='value',
+    xlabel=NULL, ylabel=NULL, title=NULL,
+    colors=c(),  # c("#7F7F7F", "#ACF53B")
+    show_bins=FALSE,
+    w=2.25, t=10000, m=4.5, a=0  # logicalTransform parameters
+) {
+
+    if ( w > m/2 ) {
+        w <- m/2
+    }
+    # Logicle transform
+    logicle <- logicleTransform(w=w, t=t, m=m, a=a)  # default options
+    df[['logicle_value']] <- logicle(df[[value]])
+
+    # Histogram binning
+    bins <- 100
+    breaks <- pretty(range(df[['logicle_value']]), n = bins)
+
+    # Compute normalized histogram
+    hist_data <- df %>%
+        group_by(group) %>%
+        summarise(
+            counts = list(hist(logicle_value, breaks = breaks, plot = FALSE)$counts),
+            mids = list(hist(logicle_value, breaks = breaks, plot = FALSE)$mids)
+        ) %>%
+        unnest(cols = c(counts, mids)) %>%
+        group_by(group) %>%
+        mutate(norm_counts = counts / max(counts))
+    
+    # Smoothed and clamped interpolation
+    interp_data <- hist_data %>%
+        group_by(group) %>%
+        reframe({
+            fit <- smooth.spline(mids, norm_counts, spar = 0.7)
+            x_vals <- seq(min(mids), max(mids), length.out = 2000)
+            y_vals <- predict(fit, x = x_vals)$y
+            tibble(x = x_vals, y = pmax(y_vals, 0), group = first(group))
+        })
+
+    # Logicle axis ticks
+    # This might not be accurate, need to figure this part out
+    raw_breaks <- c(0, 10, 50, 100, 200, 500, 1000)
+    transformed_breaks <- logicle(raw_breaks)
+
+    # repeat last color value if not enough colors
+    n_groups <- n_distinct(df[[group]])
+    n_colors <- length(colors)
+    if ((n_colors > 0) & (n_colors < n_groups)) {
+        colors <- c(colors, rep(colors[length(colors)], n_groups-n_colors))
+    }
+
+    # plot
+    fig <- ggplot() +
+        (if (show_bins) {
+            geom_col(data = hist_data, aes(x = mids, y = norm_counts, fill = group),
+                     position = "identity", alpha = 0.4, width = diff(breaks)[1])  # area
+        } else {
+            geom_area(data = interp_data, aes(x = x, y = y, fill = group), alpha = 0.4, position = "identity")
+        }) +
+        geom_line(data = interp_data, aes(x = x, y = y, color = group), size = 1.2) +  # line
+        (if (length(colors) == n_groups) { scale_fill_manual(values = colors) } else NULL) +  # area
+        (if (length(colors) == n_groups) { scale_color_manual(values = colors) } else NULL) +  # line
+        scale_x_continuous(breaks = transformed_breaks, labels = raw_breaks) +
+        labs(title = title, x = xlabel, y = ylabel) +
+        theme_minimal(base_size = 14)
+
+    return(fig)
+}
+
+
+# temporary test code
+if (FALSE) {
+    df1 <- generate_gaussian_data(mean=200, group_name="Mean 200")
+    df2 <- generate_gaussian_data(mean=500, group_name="Mean 500")
+    df3 <- generate_gaussian_data(mean=700, group_name="Mean 700")
+    df <- rbind(df1, df2, df3)
+
+    plot_modal_histograms(df,
+        xlabel ="Comp-GFP-A :: mNeonGreen",
+        ylabel = "Normalized to Mode",
+        title = "Simulated Data",
+        colors = c("#7F7F7F", "#ACF53B")
+    )
 }
