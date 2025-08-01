@@ -10,12 +10,14 @@ library('optparse')
 import::from(progress, 'progress_bar')
 import::from(jsonlite, 'toJSON')
 import::from(stringr, 'str_detect')
-import::from(plyr, 'mapvalues')
 import::from(tidyr, 'pivot_longer')
 import::from(ggplot2, 'ggsave')
 
 import::from(file.path(wd, 'R', 'functions', 'preprocessing.R'),
     'preprocess_flowjo_export', 'sort_groups_by_metric', .character_only=TRUE)
+import::from(file.path(wd, 'R', 'functions', 'file_io.R'),
+    'import_flowjo_export', 'import_flow_metadata', .character_only=TRUE)
+
 import::from(file.path(wd, 'R', 'tools', 'file_io.R'),
     'append_many_csv', .character_only=TRUE)
 import::from(file.path(wd, 'R', 'tools', 'list_tools.R'),
@@ -26,7 +28,6 @@ import::from(file.path(wd, 'R', 'tools', 'math.R'),
 import::from(file.path(wd, 'R', 'tools', 'plotting.R'),
     'save_fig', 'plot_violin', 'plot_multiple_comparisons', .character_only=TRUE)
 import::from(file.path(wd, 'R', 'config', 'flow.R'),
-    'id_cols', 'initial_gates', 'cell_type_spell_check', 'cell_type_ignore',
     'mouse_db_ignore', .character_only=TRUE)
 import::from(file.path(wd, 'R', 'config', 'user_input.R'),
     'custom_group_order', .character_only=TRUE)
@@ -108,56 +109,20 @@ log_print(paste('Script started at:', start_time))
 log_print(paste(Sys.time(), 'Reading data...'))
 
 # Read counts data exported from flowjo
-counts <- append_many_csv(file.path(wd, opt[['input-dir']]), recursive=TRUE)
-if (is.null(counts)) {
-    msg <- paste("No counts data found. Please check", opt[['input-dir']], '...')
-    stop(msg)
-}
-counts <- preprocess_flowjo_export(counts)
-# colnames(counts)[[4]] <- 'Ungated'
+df <- import_flowjo_export(file.path(wd, opt[['input-dir']]), metric_name='num_cells')
+df[['pct_cells']] <- round(df[['num_cells']] /
+    df[['Cells/Single Cells/Single Cells/Live Cells']] * 100, 4)
 
 # reference files
-flow_metadata <- append_many_csv(
-    file.path(wd, opt[['metadata-dir']]), recursive=TRUE, include_filepath=FALSE)
-if (is.null(flow_metadata)) {
-    msg <- paste("No metadata found. Please check", opt[['metadata-dir']], '...')
-    stop(msg)
-}
-# single value column with only 'F' causes R to interpret this as FALSE
-if ('sex' %in% colnames(flow_metadata)) {
-    if ( typeof(flow_metadata[['sex']])=='logical' ) {
-        flow_metadata[['sex']] <- mapvalues(
-            flow_metadata[['sex']],
-            from = c(FALSE, TRUE),
-            to = c('F', 'T'),
-            warn_missing=FALSE
-        )
-    }
-}
-
+flow_metadata <- import_flow_metadata(file.path(wd, opt[['metadata-dir']]))
 mouse_db <- append_many_csv(
-    file.path(wd, opt[['ref-dir']]), recursive=TRUE, include_filepath=FALSE)
+    file.path(wd, opt[['ref-dir']]),recursive=TRUE, include_filepath=FALSE)
 
 
 # ----------------------------------------------------------------------
 # Preprocessing
 
 log_print(paste(Sys.time(), 'Preprocessing...'))
-
-# Reshape so each row is a gate in each sample
-df <- pivot_longer(counts,
-    names_to = "gate", values_to = "num_cells",
-    cols=items_in_a_not_b(colnames(counts), c(id_cols, 'Count', initial_gates)),
-    values_drop_na = TRUE
-)
-df[['cell_type']] <- unlist(lapply(strsplit(df[['gate']], '/'), function(x) x[length(x)]))
-df[['cell_type']] <- multiple_replacement(df[['cell_type']], cell_type_spell_check)
-# filter ignored cell types
-for (cell_type in c(cell_type_ignore, 'mNeonGreen+')) {
-    df <- df[!str_detect(df[['cell_type']], cell_type), ]
-}
-df[['pct_cells']] <- round(df[['num_cells']] /
-    df[['Cells/Single Cells/Single Cells/Live Cells']] * 100, 4)
 
 # inner join flow metadata
 df <- merge(df, flow_metadata,

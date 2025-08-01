@@ -10,7 +10,7 @@
 ## overestimate the representative value due to the logarithmic nature of flow
 ## cytometry data.
 ## This script treats all three kinds of MFI equally, however, you can rename it on
-## graph using the -x option
+## graph using the -y option
 
 wd = dirname(this.path::here())  # wd = '~/github/R/helperFlowCell'
 suppressPackageStartupMessages(library('dplyr'))
@@ -19,12 +19,14 @@ library('optparse')
 import::from(progress, 'progress_bar')
 import::from(jsonlite, 'toJSON')
 import::from(stringr, 'str_detect')
-import::from(plyr, 'mapvalues')
 import::from(tidyr, 'pivot_longer')
 import::from(ggplot2, 'ggsave')
 
 import::from(file.path(wd, 'R', 'functions', 'preprocessing.R'),
-    'preprocess_flowjo_export', 'sort_groups_by_metric', .character_only=TRUE)
+    'sort_groups_by_metric', .character_only=TRUE)
+import::from(file.path(wd, 'R', 'functions', 'file_io.R'),
+    'import_flowjo_export', 'import_flow_metadata', .character_only=TRUE)
+
 import::from(file.path(wd, 'R', 'tools', 'file_io.R'),
     'append_many_csv', .character_only=TRUE)
 import::from(file.path(wd, 'R', 'tools', 'list_tools.R'),
@@ -35,7 +37,6 @@ import::from(file.path(wd, 'R', 'tools', 'math.R'),
 import::from(file.path(wd, 'R', 'tools', 'plotting.R'),
     'save_fig', 'plot_violin', 'plot_multiple_comparisons', .character_only=TRUE)
 import::from(file.path(wd, 'R', 'config', 'flow.R'),
-    'id_cols', 'cell_type_spell_check', 'cell_type_ignore',
     'mouse_db_ignore', .character_only=TRUE)
 import::from(file.path(wd, 'R', 'config', 'user_input.R'),
     'custom_group_order', .character_only=TRUE)
@@ -49,6 +50,10 @@ option_list = list(
     make_option(c("-i", "--input-dir"), default='data/flow-gmfi',
                 metavar='data/flow-gmfi', type="character",
                 help="input directory, all csv files will be read in"),
+
+    make_option(c("-d", "--sdev"), default='data/flow-sdev',
+                metavar='data/flow-sdev', type="character",
+                help="secondary input directory"),
 
     make_option(c("-o", "--output-dir"), default="output",
                 metavar="output", type="character",
@@ -70,7 +75,7 @@ option_list = list(
                 metavar='fishers_lsd', type="character",
                 help="Choose 'fishers_lsd', 't_test', 'tukey', or 'bonferroni'"),
 
-    make_option(c("-x", "--metric"), default="gmfi",
+    make_option(c("-y", "--metric"), default="gmfi",
                 metavar="gmfi", type="character",
                 help="metric name, eg. opt[['metric']] or 'mode'"),
 
@@ -119,36 +124,10 @@ log_print(paste('Script started at:', start_time))
 
 log_print(paste(Sys.time(), 'Reading data...'))
 
-# Read data exported from flowjo
-flowjo_export <- append_many_csv(
-    file.path(wd, opt[['input-dir']]),
-    recursive=TRUE, na_strings=c('n/a')
-)
-if (is.null(flowjo_export)) {
-    msg <- paste("No flowjo data found. Please check", opt[['input-dir']], '...')
-    stop(msg)
-}
-flowjo_export <- preprocess_flowjo_export(flowjo_export)
+df <- import_flowjo_export(file.path(wd, opt[['input-dir']]), metric=opt[['metric']])
 
 # reference files
-flow_metadata <- append_many_csv(
-    file.path(wd, opt[['metadata-dir']]), recursive=TRUE, include_filepath=FALSE)
-if (is.null(flow_metadata)) {
-    msg <- paste("No metadata found. Please check", opt[['metadata-dir']], '...')
-    stop(msg)
-}
-# single value column with only 'F' causes R to interpret this as FALSE
-if ('sex' %in% colnames(flow_metadata)) {
-    if ( typeof(flow_metadata[['sex']])=='logical' ) {
-        flow_metadata[['sex']] <- mapvalues(
-            flow_metadata[['sex']],
-            from = c(FALSE, TRUE),
-            to = c('F', 'T'),
-            warn_missing=FALSE
-        )
-    }
-}
-
+flow_metadata <- import_flow_metadata(file.path(wd, opt[['metadata-dir']]))
 mouse_db <- append_many_csv(
     file.path(wd, opt[['ref-dir']]), recursive=TRUE, include_filepath=FALSE)
 
@@ -157,20 +136,6 @@ mouse_db <- append_many_csv(
 # Preprocessing
 
 log_print(paste(Sys.time(), 'Preprocessing...'))
-
-# Reshape so each row is a gate in each sample
-df <- pivot_longer(flowjo_export,
-    names_to = "gate", values_to = opt[['metric']],
-    cols=items_in_a_not_b(colnames(flowjo_export), id_cols),
-    values_drop_na = TRUE
-)
-df[['cell_type']] <- unlist(lapply(strsplit(df[['gate']], '/'), function(x) x[length(x)]))
-df[['cell_type']] <- multiple_replacement(df[['cell_type']], cell_type_spell_check)
-# filter ignored cell types
-for (cell_type in c(cell_type_ignore, 'mNeonGreen+')) {
-    df <- df[!str_detect(df[['cell_type']], cell_type), ]
-}
-
 
 # inner join flow metadata
 df <- merge(df, flow_metadata,

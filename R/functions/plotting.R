@@ -1,3 +1,4 @@
+import::here(dplyr, 'vars')
 import::here(zeallot, '%<-%')
 import::here(magrittr, '%>%')
 import::here(ggplot2,

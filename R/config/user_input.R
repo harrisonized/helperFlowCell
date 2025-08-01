@@ -1,4 +1,7 @@
-custom_group_order <- c()
+custom_group_order <- c(
+    'F, WT', 'F, het', 'F, homo',
+    'M, WT', 'M, hemi'
+)
 
 
 # ----------------------------------------------------------------------
