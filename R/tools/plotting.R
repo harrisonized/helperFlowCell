@@ -1,6 +1,6 @@
 # import::here(rlang, 'sym')
 import::here(magrittr, '%>%')
-import::here(dplyr, 'group_by', 'summarize', 'summarise', 'mutate', 'reframe', 'first', 'n_distinct')
+import::here(dplyr, 'group_by', 'summarize', 'summarise', 'mutate', 'reframe', 'first', 'n_distinct', 'arrange')
 import::here(tidyr, 'pivot_wider', 'unnest')
 import::here(tibble, 'tibble')
 import::here(ggplot2,
@@ -605,14 +605,15 @@ plot_multiple_comparisons <- function(
 plot_modal_histograms <- function(df,
     group='group', value='value',
     xlabel=NULL, ylabel=NULL, title=NULL,
-    colors=c(),  # c("#7F7F7F", "#ACF53B")
+    colors=c(),  # c("mNeonGreen"="#ACF53B", "gray"="#B0B0B0")
     nbins=100,
+    spar = 0.4,  # smoothing parameter, 0.5 looks realistic
     show_bins=FALSE,
-    max_scale=2621.44,  # top of the scale data value
+    max_scale=8289.7211,  # top of the scale data value
     pos_decades=4.5,  # logicleTransform m param, full width of transformed display
     lin_width=2.25,  # logicleTransform w param, linearization width
     extra_neg=0,  # only works if pos_decades - 2*lin_width > 0
-    width_basis=0.2  # determines how much of the left side is shown
+    width_basis=0.25  # determines how much of the left side is shown
 ) {
 
     # Clamp lin_width to valid range
@@ -672,7 +673,7 @@ plot_modal_histograms <- function(df,
     interp_data <- hist_data %>%
         group_by(group) %>%
         reframe({
-            fit <- smooth.spline(mids, norm_counts, spar = 0.5)
+            fit <- smooth.spline(mids, norm_counts, spar = spar)
             x_vals <- seq(min(mids), max(mids), length.out = 1000)
             y_vals <- predict(fit, x = x_vals)$y
             tibble(
@@ -694,20 +695,39 @@ plot_modal_histograms <- function(df,
         colors <- c(colors, rep(colors[length(colors)], n_groups-n_colors))
     }
 
+    # set group orders
+    df[[group]] <- factor(df[[group]], levels = unique(df[[group]]))
+
+    hist_data$group <- factor(hist_data$group, levels = levels(df[[group]]))
+    hist_data <- hist_data %>% arrange(group)
+
+    interp_data$group <- factor(interp_data$group, levels = levels(df[[group]]))
+    interp_data <- interp_data %>% arrange(group)
+
     # Plot
     fig <- ggplot() +
-        (if (show_bins) {
-            geom_col(data = hist_data, aes(x = mids, y = norm_counts, fill = group),
-                     position = "identity", alpha = 0.4, width = diff(breaks)[1])  # area
-        } else {
-            geom_area(data = interp_data, aes(x = x, y = y, fill = group), alpha = 0.4, position = "identity")
-        }) +
-        geom_line(data = interp_data, aes(x = x, y = y, color = group), linewidth = 1.2) +  # line
         (if (length(colors) == n_groups) { scale_fill_manual(values = colors) } else NULL) +  # area
         (if (length(colors) == n_groups) { scale_color_manual(values = colors) } else NULL) +  # line
         scale_x_continuous(limits = transformed_range, breaks = transformed_breaks, labels = raw_breaks) +
         labs(title = title, x = xlabel, y = ylabel) +
         theme_minimal(base_size = 14)
+
+    groups_ordered <- levels(df[[group]])  # first in back, last in front
+
+    for (g in groups_ordered) {
+
+        hist_sub <- hist_data[(hist_data[[group]]==g), ]
+        interp_sub <- interp_data[(interp_data[[group]]==g), ]
+        
+        fig <- fig +
+            (if (show_bins) {
+                geom_col(data = hist_sub, aes(x = mids, y = norm_counts, fill = group),
+                         position = "identity", alpha = 0.4, width = diff(breaks)[1], inherit.aes=FALSE)  # area
+            } else {
+                geom_area(data = interp_sub, aes(x = x, y = y, fill = group), alpha = 0.4, position = "identity", inherit.aes=FALSE)
+            }) +
+            geom_line(data = interp_sub, aes(x = x, y = y, color = group), linewidth = 1.2, inherit.aes=FALSE) # line
+    }
 
     return(fig)
 }
