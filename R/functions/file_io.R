@@ -4,11 +4,10 @@ import::here(file.path(wd, 'R', 'functions', 'preprocessing.R'),
     'preprocess_flowjo_export', .character_only=TRUE)
 import::here(file.path(wd, 'R', 'tools', 'file_io.R'),
     'append_many_csv', .character_only=TRUE)
+import::here(file.path(wd, 'R', 'tools', 'df_tools.R'),
+    'reset_index', .character_only=TRUE)
 import::here(file.path(wd, 'R', 'tools', 'list_tools.R'),
     'items_in_a_not_b', .character_only=TRUE)
-import::here(file.path(wd, 'R', 'config', 'flow.R'),
-    'id_cols', 'initial_gates', 'cell_type_spell_check', 'cell_type_ignore',
-    .character_only=TRUE)
 
 ## Functions
 ## import_flowjo_export
@@ -18,36 +17,24 @@ import::here(file.path(wd, 'R', 'config', 'flow.R'),
 #' Import Flowjo Export
 #' 
 #' Read data exported from flowjo, use this to import counts, gmfi, or sdev
-#' TODO: change this to pivot before append
+#' If metric=='count', the import will include the Single Cells and Live Cells gates
 #'
 import_flowjo_export <- function(
     dirpath,
-    metric_name='num_cells',  # num_cells, gmfi, or rsdev
+    metric='count',  # count, mfi
+    metric_name='num_cells',
     import_error=TRUE
 ) {
-
-    raw_table <- append_many_csv(dirpath, recursive=TRUE, na_strings=c('n/a'))
+    raw_tables <- append_many_csv(dirpath, recursive=TRUE, na_strings=c('n/a'), return_list=TRUE)
     if (import_error) {
-        if (is.null(raw_table)) {
+        if (is.null(raw_tables)) {
                 msg <- paste("No data found. Please check", dirpath, '...')
                 stop(msg)
             }
     }
-    raw_table <- preprocess_flowjo_export(raw_table)
-
-    # Reshape so each row is a gate in each sample
-    df <- pivot_longer(raw_table,
-        names_to = "gate", values_to = metric_name,
-        cols=items_in_a_not_b(colnames(raw_table), c(id_cols, 'Count', initial_gates)),
-        values_drop_na = TRUE
-    )
-    df[['cell_type']] <- unlist(lapply(strsplit(df[['gate']], '/'), function(x) x[length(x)]))
-    df[['cell_type']] <- multiple_replacement(df[['cell_type']], cell_type_spell_check)
-    
-    # filter ignored cell types
-    for (cell_type in c(cell_type_ignore, 'mNeonGreen+')) {
-        df <- df[!str_detect(df[['cell_type']], cell_type), ]
-    }
+    dfs <- lapply(raw_tables, function(x) preprocess_flowjo_export(x, metric=metric, metric_name=metric_name))
+    df <- do.call(rbind, dfs)
+    df <- reset_index(df, drop=TRUE)
 
     return(df)
 }

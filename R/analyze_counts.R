@@ -109,7 +109,7 @@ log_print(paste('Script started at:', start_time))
 log_print(paste(Sys.time(), 'Reading data...'))
 
 # Read counts data exported from flowjo
-df <- import_flowjo_export(file.path(wd, opt[['input-dir']]), metric_name='num_cells')
+df <- import_flowjo_export(file.path(wd, opt[['input-dir']]), metric='count', metric_name='num_cells')
 df[['pct_cells']] <- round(df[['num_cells']] /
     df[['Cells/Single Cells/Single Cells/Live Cells']] * 100, 4)
 

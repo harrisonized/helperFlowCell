@@ -10,6 +10,9 @@ import::here(file.path(wd, 'R', 'tools', 'text_tools.R'),
     'title_to_snake_case', .character_only=TRUE)
 import::here(file.path(wd, 'R', 'tools', 'list_tools.R'),
     'multiple_replacement', 'find_first_match_index', .character_only=TRUE)
+import::here(file.path(wd, 'R', 'config', 'flow.R'),
+    'id_cols', 'initial_gates', 'cell_type_spell_check', 'cell_type_ignore',
+    .character_only=TRUE)
 
 ## Functions
 ## preprocess_flowjo_export
@@ -20,11 +23,14 @@ import::here(file.path(wd, 'R', 'tools', 'list_tools.R'),
 ## parse_flowjo_metadata
 
 
-#' Preprocess Flowjo Export
+#' Preprocess Each Flowjo Export
 #' 
-preprocess_flowjo_export <- function(df) {
+preprocess_flowjo_export <- function(raw_table,
+    metric='count',
+    metric_name='num_cells'  # num_cells, gmfi, or rsdev
+) {
 
-    df <- rename_columns(df,
+    raw_table <- rename_columns(raw_table,
         c('X1'='fcs_name',
           'Count'='Ungated',
           'Mean (Comp-Alexa Fluor 488-A)'='Ungated',  # find a better solution
@@ -32,10 +38,26 @@ preprocess_flowjo_export <- function(df) {
           'Geometric Mean (Comp-Alexa Fluor 488-A)'='Ungated'
         )
     )
-    colnames(df) <- unname(sapply(colnames(df), function(x) strsplit(x, ' \\| ')[[1]][1]))
-    df <- df[!(df[['fcs_name']] %in% c('Mean', 'SD')), ]  # drop summary statistics
-    df <- df[!str_detect(df[['fcs_name']], 'unstained'), ]  # drop unstained cells
-    df <- reset_index(df, drop=TRUE)
+    colnames(raw_table) <- unname(sapply(colnames(raw_table), function(x) strsplit(x, ' \\| ')[[1]][1]))
+    raw_table <- raw_table[!(raw_table[['fcs_name']] %in% c('Mean', 'SD')), ]  # drop summary statistics
+    raw_table <- raw_table[!str_detect(raw_table[['fcs_name']], 'unstained'), ]  # drop unstained cells
+    raw_table <- reset_index(raw_table, drop=TRUE)
+
+    # Reshape so each row is a gate in each sample
+    df <- pivot_longer(raw_table,
+        names_to = "gate", values_to = metric_name,
+        cols=items_in_a_not_b(colnames(raw_table), c(id_cols, 'Count', if (metric=='count') {initial_gates} else {NULL} )),
+        values_drop_na = TRUE
+    )
+    df[['cell_type']] <- unlist(lapply(strsplit(df[['gate']], '/'), function(x) x[length(x)]))
+    df[['cell_type']] <- multiple_replacement(df[['cell_type']], cell_type_spell_check)
+    
+    # filter ignored cell types
+    for (cell_type in c(cell_type_ignore, 'mNeonGreen+')) {
+        df <- df[!str_detect(df[['cell_type']], cell_type), ]
+    }
+
+    return(df)
 }
 
 

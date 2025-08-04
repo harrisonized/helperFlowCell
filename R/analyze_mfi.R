@@ -124,7 +124,7 @@ log_print(paste('Script started at:', start_time))
 
 log_print(paste(Sys.time(), 'Reading data...'))
 
-df <- import_flowjo_export(file.path(wd, opt[['input-dir']]), metric=opt[['metric']])
+df <- import_flowjo_export(file.path(wd, opt[['input-dir']]), metric='mfi', metric_name=opt[['metric']])
 
 # reference files
 flow_metadata <- import_flow_metadata(file.path(wd, opt[['metadata-dir']]))
