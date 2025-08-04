@@ -12,6 +12,7 @@ import::here(file.path(wd, 'R', 'tools', 'list_tools.R'),
 ## apply_multiple_comparisons
 ## total_variation_distance
 ## generate_gaussian_data
+## generate_lognormal_data
 
 
 #' Unpaired T Test
@@ -397,12 +398,32 @@ total_variation_distance <- function(mean1, sd1, mu2, sd2) {
 #' Generate Gaussian Data
 #' 
 #' Generate a dataframe of random values drawn from a normal distribution
-#' Use this as the input to plot_biex_histogram
+#' Use this as an input to plot_modal_histograms
 #' 
 generate_gaussian_data <- function(
     n=1000, mean=200, sd=100,
     group_name="group"
 ) {
     df <- data.frame(group=group_name, value=rnorm(n, mean=mean, sd=sd))
+    return(df)
+}
+
+
+#' Generate Log Normal Data
+#' 
+#' Generate a dataframe of random values drawn from a lognormal distribution
+#' Use this as an input to plot_modal_histograms
+#' 
+generate_lognormal_data <- function(
+    n=1000, mean=200, sd=100,
+    group_name="group"
+) {
+    # log transform
+    sdlog <- sqrt(log(1 + (sd / mean)^2))
+    meanlog <- log(mean) - (sdlog^2) / 2
+
+    values <- rlnorm(n, meanlog = meanlog, sdlog = sdlog)  # generate values
+    df <- data.frame(group = group_name, value = values)  # collect
+
     return(df)
 }

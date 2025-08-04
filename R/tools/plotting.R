@@ -20,7 +20,7 @@ import::here(file.path(wd, 'R', 'tools', 'list_tools.R'),
     'items_in_a_not_b', .character_only=TRUE)
 import::here(file.path(wd, 'R', 'tools', 'math.R'),
     'unpaired_t_test', 'fishers_lsd', 'tukey_multiple_comparisons',
-    'bonferroni_multiple_comparisons', 'generate_gaussian_data',
+    'bonferroni_multiple_comparisons', 'generate_lognormal_data',
     .character_only=TRUE)
 
 ## Functions
@@ -620,8 +620,11 @@ plot_modal_histograms <- function(df,
         lin_width <- 0
         warning(sprintf("lin_width (%.2f) is negative; clamping to 0", lin_width))
     }
-    if (lin_width >= pos_decades/2) {
-        lin_width <- pos_decades/2-1e-6
+    if (lin_width == pos_decades/2) {
+        lin_width <- pos_decades/2 - 1e-6
+    }
+    if (lin_width > pos_decades/2) {
+        lin_width <- pos_decades/2 - 1e-6
         warning(sprintf("lin_width (%.2f) is too large; clamping to %.2f", lin_width, pos_decades/2))
     }
 
@@ -712,9 +715,9 @@ plot_modal_histograms <- function(df,
 
 # temporary test code
 if (FALSE) {
-    df1 <- generate_gaussian_data(mean=200, group_name="Mean 200")
-    df2 <- generate_gaussian_data(mean=500, group_name="Mean 500")
-    df3 <- generate_gaussian_data(mean=700, group_name="Mean 700")
+    df1 <- generate_lognormal_data(n=1000, mean=200, sd=100, group_name="Mean 200")
+    df2 <- generate_lognormal_data(n=100, mean=500, sd=100, group_name="Mean 500")
+    df3 <- generate_lognormal_data(n=50, mean=700, sd=100, group_name="Mean 700")
     df <- rbind(df1, df2, df3)
 
     plot_modal_histograms(df,
