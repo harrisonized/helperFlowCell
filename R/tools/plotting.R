@@ -4,10 +4,10 @@ import::here(dplyr, 'group_by', 'summarize', 'summarise', 'mutate', 'reframe', '
 import::here(tidyr, 'pivot_wider', 'unnest')
 import::here(tibble, 'tibble')
 import::here(ggplot2,
-    'ggplot', 'aes', 'theme', 'labs', 'theme_minimal',
+    'ggplot', 'aes', 'theme', 'labs', 'theme', 'theme_minimal',
     'geom_boxplot', 'geom_jitter', 'geom_col', 'geom_line', 'geom_area', 'element_text',
     'stat_summary', 'scale_fill_brewer', 'scale_fill_manual', 'scale_color_manual',
-    'scale_x_continuous', 'scale_x_discrete', 'scale_y_continuous',
+    'scale_x_continuous', 'scale_x_discrete', 'scale_y_continuous', 'ylim',
     'guide_axis', 'expansion', 'ggtitle')
 import::here(flowCore, 'logicleTransform')
 import::here(RColorBrewer, 'brewer.pal')
@@ -707,6 +707,9 @@ plot_modal_histograms <- function(df,
     if ((n_colors > 0) & (n_colors < n_groups)) {
         colors <- c(colors, rep(colors[length(colors)], n_groups-n_colors))
     }
+    if (n_colors > n_groups) {
+        colors <- colors[1:n_groups]
+    }
 
     # set group orders
     df[[group]] <- factor(df[[group]], levels = unique(df[[group]]))
@@ -720,8 +723,10 @@ plot_modal_histograms <- function(df,
         (if (length(colors) == n_groups) { scale_fill_manual(values = colors) } else NULL) +  # area
         (if (length(colors) == n_groups) { scale_color_manual(values = colors) } else NULL) +  # line
         scale_x_continuous(limits = transformed_range, breaks = transformed_breaks, labels = raw_breaks) +
+        ylim(0, 1) +
         labs(title = title, x = xlabel, y = ylabel) +
-        theme_minimal(base_size = 14)
+        theme_minimal(base_size = 12) + 
+        theme(text = element_text(family = "Arial"))
 
     groups_ordered <- levels(df[[group]])  # first in front, last in back
     for (g in groups_ordered) {

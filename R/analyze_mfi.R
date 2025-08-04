@@ -33,9 +33,11 @@ import::from(file.path(wd, 'R', 'tools', 'list_tools.R'),
     'items_in_a_not_b', 'multiple_replacement', 'move_list_items_to_front',
     .character_only=TRUE)
 import::from(file.path(wd, 'R', 'tools', 'math.R'),
-    'apply_unpaired_t_test', 'apply_multiple_comparisons', .character_only=TRUE)
+    'apply_unpaired_t_test', 'apply_multiple_comparisons',
+    'generate_lognormal_data', .character_only=TRUE)
 import::from(file.path(wd, 'R', 'tools', 'plotting.R'),
-    'save_fig', 'plot_violin', 'plot_multiple_comparisons', .character_only=TRUE)
+    'save_fig', 'plot_violin', 'plot_multiple_comparisons',
+    'plot_modal_histograms', .character_only=TRUE)
 import::from(file.path(wd, 'R', 'config', 'flow.R'),
     'mouse_db_ignore', .character_only=TRUE)
 import::from(file.path(wd, 'R', 'config', 'user_input.R'),
@@ -51,6 +53,10 @@ option_list = list(
                 metavar='data/flow-gmfi', type="character",
                 help="input directory, all csv files will be read in"),
 
+    make_option(c("-o", "--output-dir"), default="output",
+                metavar="output", type="character",
+                help="output directory for the data"),
+
     make_option(c("-d", "--sdev-dir"), default='data/flow-sdev',
                 metavar='data/flow-sdev', type="character",
                 help="standard deviations"),
@@ -58,10 +64,6 @@ option_list = list(
     make_option(c("-c", "--counts-dir"), default='data/flow-counts',
                 metavar='data/flow-counts', type="character",
                 help="counts"),
-
-    make_option(c("-o", "--output-dir"), default="output",
-                metavar="output", type="character",
-                help="output directory for the data"),
 
     make_option(c("-m", "--metadata-dir"), default="data/flow-metadata",
                 metavar="data/flow-metadata", type="character",
@@ -75,21 +77,25 @@ option_list = list(
                 metavar='treatment', type="character",
                 help="enter a column or comma-separated list of columns, no spaces"),
 
-    make_option(c("-s", "--stat"), default='fishers_lsd',
-                metavar='fishers_lsd', type="character",
-                help="Choose 'fishers_lsd', 't_test', 'tukey', or 'bonferroni'"),
+    make_option(c("-p", "--plotly-overview"), default=FALSE, action="store_true",
+                metavar="FALSE", type="logical",
+                help="generate overview interactive violin plot"),
 
     make_option(c("-y", "--metric"), default="gmfi",
                 metavar="gmfi", type="character",
                 help="metric name, eg. opt[['metric']] or 'mode'"),
 
-    make_option(c("-p", "--plotly-overview"), default=FALSE, action="store_true",
-                metavar="FALSE", type="logical",
-                help="generate overview interactive violin plot"),
+    make_option(c("-s", "--stat"), default='fishers_lsd',
+                metavar='fishers_lsd', type="character",
+                help="Choose 'fishers_lsd', 't_test', 'tukey', or 'bonferroni'"),
 
     make_option(c("-n", "--show-numbers"), default=FALSE, action="store_true",
                 metavar="FALSE", type="logical",
                 help="in violin with significance, show all numbers instead of stars"),
+
+    make_option(c("-f", "--fluorescence"), default="zygosity",
+                metavar="zygosity", type="character",
+                help="use this to split out the fluorescence column from the group by"),
 
     make_option(c("-l", "--height"), default=500,
                 metavar="500", type="integer",
@@ -133,6 +139,7 @@ df <- import_flowjo_export(file.path(wd, opt[['input-dir']]), metric_name=opt[['
 # left join sdev
 sdev_df <- import_flowjo_export(file.path(wd, opt[['sdev-dir']]), metric_name='sdev')
 if (!is.null(sdev_df)) {
+    log_print(paste(Sys.time(), 'sdev files found...'))
     df <- merge(df, sdev_df,
         by=c("fcs_name", "gate", "cell_type"),
         all.x=TRUE, all.y=FALSE, suffixes=c('', '_'))
@@ -140,7 +147,8 @@ if (!is.null(sdev_df)) {
 
 # left join counts
 counts_df <- import_flowjo_export(file.path(wd, opt[['counts-dir']]), metric_name='num_cells')
-if (!is.null(sdev_df)) {
+if (!is.null(counts_df)) {
+    log_print(paste(Sys.time(), 'counts files found...'))
     df <- merge(df, counts_df,
         by=c("fcs_name", "gate", "cell_type"),
         all.x=TRUE, all.y=FALSE, suffixes=c('', '_'))
@@ -163,6 +171,9 @@ df <- merge(df, flow_metadata,
 df <- df[(df[['is_unstained']]==FALSE), ]  # drop unstained cells
 if (length(metadata_cols) > 1) {
     df[['group_name']] <- apply( df[ , metadata_cols ] , 1 , paste , collapse = ", " )
+    df[['subgroup_name']] <- apply(
+        df[ , items_in_a_not_b(metadata_cols, opt[['fluorescence']]) ],
+        1 , paste , collapse = ", " )
 } else {
     df[['group_name']] <- df[[metadata_cols]]
 }
@@ -269,7 +280,7 @@ for (organ in sort(organs)) {
     if (opt[['plotly-overview']]) {
 
         # ----------------------------------------------------------------------
-        # Percent Cells
+        # MFI
 
         fig <- plot_violin(
             tmp,
@@ -307,6 +318,9 @@ log_print(paste(Sys.time(), paste(
 )
 
 log_print(paste(Sys.time(), paste('Plotting mulitple comparisons using', opt[['stat']])))
+if (!is.null(sdev_df)) {
+    log_print(paste(Sys.time(), 'Plotting fluorescence histograms...'))
+}
 
 pbar <- progress_bar$new(total = nrow(pval_tbl))
 for (idx in 1:nrow(pval_tbl)) {
@@ -317,13 +331,14 @@ for (idx in 1:nrow(pval_tbl)) {
     df_subset <- df[
         (df[['organ']] == organ) & (df[['cell_type']] == cell_type),
         unique(intersect(
-                c('organ', 'cell_type', 'group_name', opt[['metric']], 'abs_count'),
+                c('mouse_id', 'organ', 'cell_type', 'group_name', 'subgroup_name', opt[['fluorescence']],
+                opt[['metric']], 'sdev', 'num_cells', 'abs_count'),
                 colnames(df)
         ))
     ]
 
     # ----------------------------------------------------------------------
-    # MFI
+    # MFI Violin Plot
 
     custom_group_order <- move_list_items_to_front(
         unique(df_subset[['group_name']]),
@@ -350,7 +365,6 @@ for (idx in 1:nrow(pval_tbl)) {
 
     # save
     if (!troubleshooting) {
-        
         dirpath <- file.path(wd, opt[['output-dir']], 'figures',
             gsub(',', '_', opt[['group-by']]), opt[['metric']], organ,
             opt[['stat']]
@@ -363,7 +377,7 @@ for (idx in 1:nrow(pval_tbl)) {
         )
         withCallingHandlers({
             ggsave(
-                filepath,  
+                filepath,
                 plot=fig,
                 height=5000, width=5000, dpi=500, units='px', scaling=2 
             )
@@ -376,6 +390,72 @@ for (idx in 1:nrow(pval_tbl)) {
             }
         })
     }
+
+
+    # ----------------------------------------------------------------------
+    # Histograms
+
+    if (!is.null(sdev_df)) {
+
+        subgroups <- unique(df_subset[['subgroup_name']])
+        for (subgroup in subgroups) {
+
+            df_subsubset <- df_subset[
+                (df_subset['subgroup_name'] == subgroup),
+                unique(intersect(
+                        c('mouse_id', 'group_name', 'subgroup_name', 'zygosity', 'num_cells', 'gmfi', 'sdev'),
+                        colnames(df_subset)
+                ))
+            ]
+            df_subsubset <- df_subsubset [!duplicated(df_subsubset[c('mouse_id', 'group_name')]), ]
+            df_subsubset[['color']] <- multiple_replacement(
+                df_subsubset[['zygosity']],
+                c('homo'='#ACF53B', 'het'='#ACF53B', 'hemi'='#ACF53B', 'WT'='#B0B0B0')
+            )
+
+            sim_fluors <- Map(
+                generate_lognormal_data,
+                n = min(df_subsubset[['num_cells']], 1000),
+                mean = df_subsubset[['gmfi']],
+                sd = df_subsubset[['sdev']],
+                group_name = apply(
+                    df_subsubset[ , c('group_name', 'mouse_id') ],
+                    1 , paste , collapse = ", " )
+            )
+            sim_fluor <- do.call(rbind, sim_fluors)
+
+            fig <- plot_modal_histograms(sim_fluor,
+                xlabel ="Comp-GFP-A :: mNeonGreen",
+                ylabel = "Normalized to Mode",
+                title = paste(toupper(organ), cell_type, subgroup),
+                spar = 0.4,
+                colors = df_subsubset[['color']],  # autogenerate this
+                x_ticks = c(1, 250, 500, 1000, 2000, 4000, 8000)
+            )
+
+            # save
+            if (!troubleshooting) {
+                dirpath <- file.path(wd, opt[['output-dir']], 'figures',
+                    gsub(',', '_', opt[['group-by']]), opt[['metric']], organ,
+                    'histograms'
+                )
+                if (!dir.exists(dirpath)) { dir.create(dirpath, recursive=TRUE) }
+                
+                filepath = file.path(dirpath,
+                    paste0(gsub(' ', '', tolower(organ)), '-',
+                        gsub(' ', '_', tolower(cell_type)), '-',
+                        gsub(', ', '_', subgroup), '.png' )
+                )
+                ggsave(
+                    filepath,
+                    plot=fig, bg='white',
+                    height=1500, width=3000, dpi=200, units='px', scaling=2 
+                )
+            }
+        }
+    }
+
+
 
     pbar$tick()
 }
