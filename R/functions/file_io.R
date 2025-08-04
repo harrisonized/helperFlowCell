@@ -21,18 +21,18 @@ import::here(file.path(wd, 'R', 'tools', 'list_tools.R'),
 #'
 import_flowjo_export <- function(
     dirpath,
-    metric='count',  # count, mfi
     metric_name='num_cells',
-    import_error=TRUE
+    include_initial_gates=FALSE
 ) {
-    raw_tables <- append_many_csv(dirpath, recursive=TRUE, na_strings=c('n/a'), return_list=TRUE)
-    if (import_error) {
-        if (is.null(raw_tables)) {
-                msg <- paste("No data found. Please check", dirpath, '...')
-                stop(msg)
-            }
+    raw_tables <- append_many_csv(dirpath, recursive=TRUE,
+        na_strings=c('n/a'), include_filepath=FALSE, return_list=TRUE)
+    if (length(raw_tables)==0) {
+        return(NULL)
     }
-    dfs <- lapply(raw_tables, function(x) preprocess_flowjo_export(x, metric=metric, metric_name=metric_name))
+
+    dfs <- lapply(raw_tables, function(x) preprocess_flowjo_export(
+        x, metric_name=metric_name, include_initial_gates=include_initial_gates
+    ))
     df <- do.call(rbind, dfs)
     df <- reset_index(df, drop=TRUE)
 

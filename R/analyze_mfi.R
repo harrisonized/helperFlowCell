@@ -51,9 +51,13 @@ option_list = list(
                 metavar='data/flow-gmfi', type="character",
                 help="input directory, all csv files will be read in"),
 
-    make_option(c("-d", "--sdev"), default='data/flow-sdev',
+    make_option(c("-d", "--sdev-dir"), default='data/flow-sdev',
                 metavar='data/flow-sdev', type="character",
-                help="secondary input directory"),
+                help="standard deviations"),
+
+    make_option(c("-c", "--counts-dir"), default='data/flow-counts',
+                metavar='data/flow-counts', type="character",
+                help="counts"),
 
     make_option(c("-o", "--output-dir"), default="output",
                 metavar="output", type="character",
@@ -124,7 +128,23 @@ log_print(paste('Script started at:', start_time))
 
 log_print(paste(Sys.time(), 'Reading data...'))
 
-df <- import_flowjo_export(file.path(wd, opt[['input-dir']]), metric='mfi', metric_name=opt[['metric']])
+df <- import_flowjo_export(file.path(wd, opt[['input-dir']]), metric_name=opt[['metric']])
+
+# left join sdev
+sdev_df <- import_flowjo_export(file.path(wd, opt[['sdev-dir']]), metric_name='sdev')
+if (!is.null(sdev_df)) {
+    df <- merge(df, sdev_df,
+        by=c("fcs_name", "gate", "cell_type"),
+        all.x=TRUE, all.y=FALSE, suffixes=c('', '_'))
+}
+
+# left join counts
+counts_df <- import_flowjo_export(file.path(wd, opt[['counts-dir']]), metric_name='num_cells')
+if (!is.null(sdev_df)) {
+    df <- merge(df, counts_df,
+        by=c("fcs_name", "gate", "cell_type"),
+        all.x=TRUE, all.y=FALSE, suffixes=c('', '_'))
+}
 
 # reference files
 flow_metadata <- import_flow_metadata(file.path(wd, opt[['metadata-dir']]))

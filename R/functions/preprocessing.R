@@ -26,8 +26,8 @@ import::here(file.path(wd, 'R', 'config', 'flow.R'),
 #' Preprocess Each Flowjo Export
 #' 
 preprocess_flowjo_export <- function(raw_table,
-    metric='count',
-    metric_name='num_cells'  # num_cells, gmfi, or rsdev
+    metric_name='num_cells',  # num_cells, gmfi, or rsdev
+    include_initial_gates=FALSE  # turn on for analyze_counts
 ) {
 
     raw_table <- rename_columns(raw_table,
@@ -46,7 +46,7 @@ preprocess_flowjo_export <- function(raw_table,
     # Reshape so each row is a gate in each sample
     df <- pivot_longer(raw_table,
         names_to = "gate", values_to = metric_name,
-        cols=items_in_a_not_b(colnames(raw_table), c(id_cols, 'Count', if (metric=='count') {initial_gates} else {NULL} )),
+        cols=items_in_a_not_b(colnames(raw_table), c(id_cols, 'Count', if (include_initial_gates) {initial_gates} else {NULL} )),
         values_drop_na = TRUE
     )
     df[['cell_type']] <- unlist(lapply(strsplit(df[['gate']], '/'), function(x) x[length(x)]))
