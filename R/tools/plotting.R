@@ -1,10 +1,11 @@
 # import::here(rlang, 'sym')
 import::here(magrittr, '%>%')
-import::here(dplyr, 'group_by', 'summarize')
+import::here(dplyr, 'group_by', 'summarize', 'summarise', 'mutate', 'reframe', 'first', 'n_distinct')
 import::here(tidyr, 'pivot_wider', 'unnest')
+import::here(tibble, 'tibble')
 import::here(ggplot2,
     'ggplot', 'aes', 'theme', 'labs', 'theme_minimal',
-    'geom_boxplot', 'geom_jitter', 'geom_col', 'geom_line', 'element_text',
+    'geom_boxplot', 'geom_jitter', 'geom_col', 'geom_line', 'geom_area', 'element_text',
     'stat_summary', 'scale_fill_brewer', 'scale_fill_manual', 'scale_color_manual',
     'scale_x_continuous', 'scale_x_discrete', 'scale_y_continuous',
     'guide_axis', 'expansion', 'ggtitle')
@@ -596,64 +597,101 @@ plot_multiple_comparisons <- function(
 }
 
 
-#' Plot Biex Histograms
+#' Plot Modal Histograms
 #' 
-#' Mimics Flowjo's histogram function
+#' Mimics Flowjo's histogram plots
 #' Use [generate_gaussian_data()] to generate the input
 #' 
 plot_modal_histograms <- function(df,
     group='group', value='value',
     xlabel=NULL, ylabel=NULL, title=NULL,
     colors=c(),  # c("#7F7F7F", "#ACF53B")
+    nbins=100,
     show_bins=FALSE,
-    w=2.25, t=10000, m=4.5, a=0  # logicalTransform parameters
+    max_scale=2621.44,  # top of the scale data value
+    pos_decades=4.5,  # logicleTransform m param, full width of transformed display
+    lin_width=2.25,  # logicleTransform w param, linearization width
+    extra_neg=0,  # only works if pos_decades - 2*lin_width > 0
+    width_basis=0.2  # determines how much of the left side is shown
 ) {
 
-    if ( w > m/2 ) {
-        w <- m/2
+    # Clamp lin_width to valid range
+    if (lin_width < 0) {
+        lin_width <- 0
+        warning(sprintf("lin_width (%.2f) is negative; clamping to 0", lin_width))
     }
-    # Logicle transform
-    logicle <- logicleTransform(w=w, t=t, m=m, a=a)  # default options
+    if (lin_width >= pos_decades/2) {
+        lin_width <- pos_decades/2-1e-6
+        warning(sprintf("lin_width (%.2f) is too large; clamping to %.2f", lin_width, pos_decades/2))
+    }
+
+    # Clamp extra_neg to valid range
+    if (extra_neg < 0) {
+        extra_neg <- 0
+        warning(sprintf("extra_neg (%.2f) is negative; clamping to 0", lin_width))
+    }
+    max_extra_neg <- pos_decades - 2 * lin_width
+    if (extra_neg > max_extra_neg) {
+        warning(sprintf("extra_neg (%.2f) is too large; clamping to %.2f", extra_neg, max_extra_neg))
+        extra_neg <- max_extra_neg
+    }
+
+    # Logicle transform the data
+    logicle <- logicleTransform(w=lin_width, t=max_scale, m=pos_decades, a=extra_neg)  # default options
     df[['logicle_value']] <- logicle(df[[value]])
 
-    # Histogram binning
-    bins <- 100
-    breaks <- pretty(range(df[['logicle_value']]), n = bins)
+    # Range calculations
+    raw_min <- max_scale / 10^(pos_decades + extra_neg)  # Calculate lower limit
+    transformed_min <- logicle(raw_min)
+    transformed_max <- logicle(max_scale)
+    pad <- width_basis * (transformed_max - transformed_min)  # add padding to min side
+    transformed_range <- c(transformed_min - pad, transformed_max)
 
-    # Compute normalized histogram
+    # Compute clamped histogram
+    breaks <- pretty(transformed_range, n = nbins)
     hist_data <- df %>%
-        group_by(group) %>%
-        summarise(
-            counts = list(hist(logicle_value, breaks = breaks, plot = FALSE)$counts),
-            mids = list(hist(logicle_value, breaks = breaks, plot = FALSE)$mids)
-        ) %>%
-        unnest(cols = c(counts, mids)) %>%
-        group_by(group) %>%
-        mutate(norm_counts = counts / max(counts))
-    
+      group_by(group) %>%
+      summarise(
+        counts = list({
+          x_clamped <- pmin(pmax(logicle_value, min(breaks)), max(breaks))
+          hist(x_clamped, breaks = breaks, plot = FALSE)$counts
+        }),
+        mids = list({
+          x_clamped <- pmin(pmax(logicle_value, min(breaks)), max(breaks))
+          hist(x_clamped, breaks = breaks, plot = FALSE)$mids
+        })
+      ) %>%
+      unnest(cols = c(counts, mids)) %>%
+      group_by(group) %>%
+      mutate(norm_counts = counts / max(counts))
+
     # Smoothed and clamped interpolation
     interp_data <- hist_data %>%
         group_by(group) %>%
         reframe({
-            fit <- smooth.spline(mids, norm_counts, spar = 0.7)
-            x_vals <- seq(min(mids), max(mids), length.out = 2000)
+            fit <- smooth.spline(mids, norm_counts, spar = 0.5)
+            x_vals <- seq(min(mids), max(mids), length.out = 1000)
             y_vals <- predict(fit, x = x_vals)$y
-            tibble(x = x_vals, y = pmax(y_vals, 0), group = first(group))
+            tibble(
+              x = pmin(pmax(x_vals, transformed_range[1]), transformed_range[2]),
+              y = pmax(y_vals, 0),
+              group = first(group)
+            )
         })
 
-    # Logicle axis ticks
-    # This might not be accurate, need to figure this part out
-    raw_breaks <- c(0, 10, 50, 100, 200, 500, 1000)
+    # Generate axis breaks on raw scale up to max_scale, from raw_min
+    raw_breaks <- 10^seq(floor(log10(raw_min)), ceiling(log10(max_scale)), by = 1)
+    raw_breaks <- raw_breaks[raw_breaks >= raw_min & raw_breaks <= max_scale]
     transformed_breaks <- logicle(raw_breaks)
 
-    # repeat last color value if not enough colors
+    # Expand colors if needed
     n_groups <- n_distinct(df[[group]])
     n_colors <- length(colors)
     if ((n_colors > 0) & (n_colors < n_groups)) {
         colors <- c(colors, rep(colors[length(colors)], n_groups-n_colors))
     }
 
-    # plot
+    # Plot
     fig <- ggplot() +
         (if (show_bins) {
             geom_col(data = hist_data, aes(x = mids, y = norm_counts, fill = group),
@@ -661,10 +699,10 @@ plot_modal_histograms <- function(df,
         } else {
             geom_area(data = interp_data, aes(x = x, y = y, fill = group), alpha = 0.4, position = "identity")
         }) +
-        geom_line(data = interp_data, aes(x = x, y = y, color = group), size = 1.2) +  # line
+        geom_line(data = interp_data, aes(x = x, y = y, color = group), linewidth = 1.2) +  # line
         (if (length(colors) == n_groups) { scale_fill_manual(values = colors) } else NULL) +  # area
         (if (length(colors) == n_groups) { scale_color_manual(values = colors) } else NULL) +  # line
-        scale_x_continuous(breaks = transformed_breaks, labels = raw_breaks) +
+        scale_x_continuous(limits = transformed_range, breaks = transformed_breaks, labels = raw_breaks) +
         labs(title = title, x = xlabel, y = ylabel) +
         theme_minimal(base_size = 14)
 
