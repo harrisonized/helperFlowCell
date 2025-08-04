@@ -605,9 +605,10 @@ plot_multiple_comparisons <- function(
 plot_modal_histograms <- function(df,
     group='group', value='value',
     xlabel=NULL, ylabel=NULL, title=NULL,
+    x_ticks = c(10, 250, 500, 1000, 2000, 4000, 8000),
     colors=c(),  # c("mNeonGreen"="#ACF53B", "gray"="#B0B0B0")
     nbins=100,
-    spar = 0.4,  # smoothing parameter, 0.5 looks realistic
+    spar=0.33,  # smoothing parameter, 0.33 looks good
     show_bins=FALSE,
     max_scale=8289.7211,  # top of the scale data value
     pos_decades=4.5,  # logicleTransform m param, full width of transformed display
@@ -640,12 +641,20 @@ plot_modal_histograms <- function(df,
         extra_neg <- max_extra_neg
     }
 
+    # Adjust scale
+    raw_min <- max_scale / 10^(pos_decades + extra_neg)  # default positive min
+    if (min(x_ticks) < raw_min) {
+        raw_min <- min(x_ticks)
+    }
+    if (max(x_ticks) > max_scale) {
+        max_scale <- max(x_ticks)
+    } 
+
     # Logicle transform the data
     logicle <- logicleTransform(w=lin_width, t=max_scale, m=pos_decades, a=extra_neg)  # default options
     df[['logicle_value']] <- logicle(df[[value]])
 
     # Range calculations
-    raw_min <- max_scale / 10^(pos_decades + extra_neg)  # Calculate lower limit
     transformed_min <- logicle(raw_min)
     transformed_max <- logicle(max_scale)
     pad <- width_basis * (transformed_max - transformed_min)  # add padding to min side
@@ -654,20 +663,20 @@ plot_modal_histograms <- function(df,
     # Compute clamped histogram
     breaks <- pretty(transformed_range, n = nbins)
     hist_data <- df %>%
-      group_by(group) %>%
-      summarise(
-        counts = list({
-          x_clamped <- pmin(pmax(logicle_value, min(breaks)), max(breaks))
-          hist(x_clamped, breaks = breaks, plot = FALSE)$counts
-        }),
-        mids = list({
-          x_clamped <- pmin(pmax(logicle_value, min(breaks)), max(breaks))
-          hist(x_clamped, breaks = breaks, plot = FALSE)$mids
-        })
-      ) %>%
-      unnest(cols = c(counts, mids)) %>%
-      group_by(group) %>%
-      mutate(norm_counts = counts / max(counts))
+        group_by(group) %>%
+        summarise(
+            counts = list({
+                x_clamped <- pmin(pmax(logicle_value, min(breaks)), max(breaks))
+                hist(x_clamped, breaks = breaks, plot = FALSE)$counts
+            }),
+            mids = list({
+                x_clamped <- pmin(pmax(logicle_value, min(breaks)), max(breaks))
+                hist(x_clamped, breaks = breaks, plot = FALSE)$mids
+            })
+        ) %>%
+        unnest(cols = c(counts, mids)) %>%
+        group_by(group) %>%
+        mutate(norm_counts = counts / max(counts))
 
     # Smoothed and clamped interpolation
     interp_data <- hist_data %>%
@@ -677,15 +686,19 @@ plot_modal_histograms <- function(df,
             x_vals <- seq(min(mids), max(mids), length.out = 1000)
             y_vals <- predict(fit, x = x_vals)$y
             tibble(
-              x = pmin(pmax(x_vals, transformed_range[1]), transformed_range[2]),
-              y = pmax(y_vals, 0),
-              group = first(group)
+                x = pmin(pmax(x_vals, transformed_range[1]), transformed_range[2]),
+                y = pmax(y_vals, 0),
+                group = first(group)
             )
         })
 
-    # Generate axis breaks on raw scale up to max_scale, from raw_min
-    raw_breaks <- 10^seq(floor(log10(raw_min)), ceiling(log10(max_scale)), by = 1)
-    raw_breaks <- raw_breaks[raw_breaks >= raw_min & raw_breaks <= max_scale]
+    # Generate axis breaks
+    if (is.null(x_ticks)) {
+        raw_breaks <- 10^seq(floor(log10(abs(raw_min))), ceiling(log10(max_scale)), by = 1)
+        raw_breaks <- raw_breaks[(raw_breaks >= raw_min) & (raw_breaks <= max_scale)]
+    } else {
+        raw_breaks <- x_ticks[(x_ticks >= raw_min) & (x_ticks <= max_scale)]
+    }
     transformed_breaks <- logicle(raw_breaks)
 
     # Expand colors if needed
@@ -697,11 +710,9 @@ plot_modal_histograms <- function(df,
 
     # set group orders
     df[[group]] <- factor(df[[group]], levels = unique(df[[group]]))
-
     hist_data$group <- factor(hist_data$group, levels = levels(df[[group]]))
-    hist_data <- hist_data %>% arrange(group)
-
     interp_data$group <- factor(interp_data$group, levels = levels(df[[group]]))
+    hist_data <- hist_data %>% arrange(group)
     interp_data <- interp_data %>% arrange(group)
 
     # Plot
@@ -712,21 +723,26 @@ plot_modal_histograms <- function(df,
         labs(title = title, x = xlabel, y = ylabel) +
         theme_minimal(base_size = 14)
 
-    groups_ordered <- levels(df[[group]])  # first in back, last in front
-
+    groups_ordered <- levels(df[[group]])  # first in front, last in back
     for (g in groups_ordered) {
-
         hist_sub <- hist_data[(hist_data[[group]]==g), ]
         interp_sub <- interp_data[(interp_data[[group]]==g), ]
-        
         fig <- fig +
             (if (show_bins) {
-                geom_col(data = hist_sub, aes(x = mids, y = norm_counts, fill = group),
-                         position = "identity", alpha = 0.4, width = diff(breaks)[1], inherit.aes=FALSE)  # area
+                # histograms
+                geom_col(data = hist_data[(hist_data[[group]]==g), ],
+                         aes(x = mids, y = norm_counts, fill = group),
+                         position = "identity", alpha = 0.4, width = diff(breaks)[1],
+                         inherit.aes=FALSE)
             } else {
-                geom_area(data = interp_sub, aes(x = x, y = y, fill = group), alpha = 0.4, position = "identity", inherit.aes=FALSE)
+                # shaded area
+                geom_area(data = interp_data[(interp_data[[group]]==g), ],
+                          aes(x = x, y = y, fill = group),
+                          alpha = 0.4, position = "identity", inherit.aes=FALSE)
             }) +
-            geom_line(data = interp_sub, aes(x = x, y = y, color = group), linewidth = 1.2, inherit.aes=FALSE) # line
+            geom_line(data = interp_data[(interp_data[[group]]==g), ],
+                      aes(x = x, y = y, color = group),
+                      linewidth = 1.2, inherit.aes=FALSE)  # boundary
     }
 
     return(fig)
@@ -735,15 +751,20 @@ plot_modal_histograms <- function(df,
 
 # temporary test code
 if (FALSE) {
-    df1 <- generate_lognormal_data(n=1000, mean=200, sd=100, group_name="Mean 200")
-    df2 <- generate_lognormal_data(n=100, mean=500, sd=100, group_name="Mean 500")
-    df3 <- generate_lognormal_data(n=50, mean=700, sd=100, group_name="Mean 700")
-    df <- rbind(df1, df2, df3)
+    df1 <- generate_lognormal_data(n=1000, mean=921, sd=386, group_name="1")
+    df2 <- generate_lognormal_data(n=1000, mean=772, sd=321, group_name="2")
+    df3 <- generate_lognormal_data(n=1000, mean=847, sd=336, group_name="3")
+    df4 <- generate_lognormal_data(n=1000, mean=641, sd=427, group_name="4")
+    df5 <- generate_lognormal_data(n=1000, mean=636, sd=513, group_name="5")
+    df6 <- generate_lognormal_data(n=1000, mean=774, sd=922, group_name="6")
+    df <- rbind(df1, df2, df3, df4, df5, df6)
 
     plot_modal_histograms(df,
         xlabel ="Comp-GFP-A :: mNeonGreen",
         ylabel = "Normalized to Mode",
         title = "Simulated Data",
-        colors = c("#7F7F7F", "#ACF53B")
+        spar = 0.4,
+        colors = c("#ACF53B", "#ACF53B", "#ACF53B", "#B0B0B0", "#B0B0B0", "#B0B0B0"),
+        x_ticks = c(10, 250, 500, 1000, 2000, 4000, 8000)
     )
 }
