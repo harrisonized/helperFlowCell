@@ -4,11 +4,12 @@ import::here(dplyr, 'group_by', 'summarize', 'summarise', 'mutate', 'reframe', '
 import::here(tidyr, 'pivot_wider', 'unnest')
 import::here(tibble, 'tibble')
 import::here(ggplot2,
-    'ggplot', 'aes', 'theme', 'labs', 'theme', 'theme_minimal',
+    'ggplot', 'aes', 'labs', 'theme', 'theme_minimal', 'margin',
     'geom_boxplot', 'geom_jitter', 'geom_col', 'geom_line', 'geom_area', 'element_text',
     'stat_summary', 'scale_fill_brewer', 'scale_fill_manual', 'scale_color_manual',
     'scale_x_continuous', 'scale_x_discrete', 'scale_y_continuous', 'ylim',
-    'guide_axis', 'expansion', 'ggtitle')
+    'guides', 'guide_legend', 'guide_axis', 'expansion', 'ggtitle')
+import::here(cowplot, 'plot_grid', 'get_plot_component')
 import::here(flowCore, 'logicleTransform')
 import::here(RColorBrewer, 'brewer.pal')
 import::here(ggprism, 'theme_prism')
@@ -719,14 +720,7 @@ plot_modal_histograms <- function(df,
     interp_data <- interp_data %>% arrange(group)
 
     # Plot
-    fig <- ggplot() +
-        (if (length(colors) == n_groups) { scale_fill_manual(values = colors) } else NULL) +  # area
-        (if (length(colors) == n_groups) { scale_color_manual(values = colors) } else NULL) +  # line
-        scale_x_continuous(limits = transformed_range, breaks = transformed_breaks, labels = raw_breaks) +
-        ylim(0, 1) +
-        labs(title = title, x = xlabel, y = ylabel) +
-        theme_minimal(base_size = 12) + 
-        theme(text = element_text(family = "Arial"))
+    fig <- ggplot()
 
     groups_ordered <- levels(df[[group]])  # first in front, last in back
     for (g in groups_ordered) {
@@ -750,12 +744,26 @@ plot_modal_histograms <- function(df,
                       linewidth = 1.2, inherit.aes=FALSE)  # boundary
     }
 
+    fig <- fig +
+        (if (length(colors) == n_groups) { scale_fill_manual(values = colors) } else NULL) +  # area
+        (if (length(colors) == n_groups) { scale_color_manual(values = colors) } else NULL) +  # line
+        scale_x_continuous(limits = transformed_range, breaks = transformed_breaks, labels = raw_breaks) +
+        ylim(0, 1) +
+        labs(title = title, x = xlabel, y = ylabel) +
+        theme_minimal(base_size = 12)
+
+    # split then recombine with define widths
+    legend <- get_plot_component(fig, "guide-box", return_all=TRUE)[[1]]  # silence warning
+    fig <- fig + theme(legend.position="none")
+    fig <- plot_grid(fig, legend, ncol = 2, rel_widths = c(3, 1))
+
     return(fig)
 }
 
 
-# temporary test code
 if (FALSE) {
+
+    # code to test plot_modal_histograms
     df1 <- generate_lognormal_data(n=1000, mean=921, sd=386, group_name="1")
     df2 <- generate_lognormal_data(n=1000, mean=772, sd=321, group_name="2")
     df3 <- generate_lognormal_data(n=1000, mean=847, sd=336, group_name="3")
