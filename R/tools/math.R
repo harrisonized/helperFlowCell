@@ -412,18 +412,32 @@ generate_gaussian_data <- function(
 #' Generate Log Normal Data
 #' 
 #' Generate a dataframe of random values drawn from a lognormal distribution
-#' Use this as an input to plot_modal_histograms
+#' Flowjo gives the mean as log-transformed, but gives the sd as untransformed
 #' 
 generate_lognormal_data <- function(
-    n=1000, mean=200, sd=100,
-    group_name="group"
+  n = 1000, mean=200, sd=100, group_name = "group"
 ) {
-    # log transform
-    sdlog <- sqrt(log(1 + (sd / mean)^2))
-    meanlog <- log(mean) - (sdlog^2) / 2
 
-    values <- rlnorm(n, meanlog = meanlog, sdlog = sdlog)  # generate values
-    df <- data.frame(group = group_name, value = values)  # collect
+    if (mean <= 0) {
+        meanlog <- mean  # mean is on a log scale, sd is on original scale
+        delta <- 1 + 4*(sd^2) / exp(2*abs(meanlog))
+        z <- (1 + sqrt(delta)) / 2
+        sdlog <- sqrt(log(z))
+
+    } else {
+
+        # both are on original scales
+        sdlog <- sqrt(log(1 + (sd / (mean+1))^2))
+        meanlog <- log(mean+1) - (sdlog^2) / 2
+    }
+
+    # clamp mean to prevent errors
+    if (meanlog < -372.5666) {
+        meanlog <- -372.5666
+    }
+
+    values <- rlnorm(n, meanlog = meanlog, sdlog = sdlog)
+    df <- data.frame(group = group_name, value = values)
 
     return(df)
 }

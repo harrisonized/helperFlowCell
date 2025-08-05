@@ -49,7 +49,7 @@ import::from(file.path(wd, 'R', 'config', 'user_input.R'),
 
 # args
 option_list = list(
-    make_option(c("-i", "--input-dir"), default='data/flow-gmfi',
+    make_option(c("-i", "--input-dir"), default='data/flow-mfi',
                 metavar='data/flow-gmfi', type="character",
                 help="input directory, all csv files will be read in"),
 
@@ -143,6 +143,7 @@ if (!is.null(sdev_df)) {
     df <- merge(df, sdev_df,
         by=c("fcs_name", "gate", "cell_type"),
         all.x=TRUE, all.y=FALSE, suffixes=c('', '_'))
+    df[(is.na(df[['sdev']])), 'sdev'] <- 0  # fillna
 }
 
 # left join counts
@@ -403,7 +404,8 @@ for (idx in 1:nrow(pval_tbl)) {
             df_subsubset <- df_subset[
                 (df_subset['subgroup_name'] == subgroup),
                 unique(intersect(
-                        c('mouse_id', 'group_name', 'subgroup_name', 'zygosity', 'num_cells', 'gmfi', 'sdev'),
+                        c('organ', 'mouse_id', 'group_name', 'subgroup_name', 'zygosity',
+                          'num_cells', 'gmfi', 'sdev'),
                         colnames(df_subset)
                 ))
             ]
