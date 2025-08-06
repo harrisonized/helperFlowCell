@@ -97,6 +97,10 @@ option_list = list(
                 metavar="zygosity", type="character",
                 help="use this to split out the fluorescence column from the group by"),
 
+    make_option(c("-x", "--xlabel"), default="Comp-GFP-A :: mNeonGreen",
+                metavar="Comp-GFP-A :: mNeonGreen", type="character",
+                help="x-axis label for histograms"),
+
     make_option(c("-l", "--height"), default=500,
                 metavar="500", type="integer",
                 help="height in px"),
@@ -135,6 +139,9 @@ log_print(paste('Script started at:', start_time))
 log_print(paste(Sys.time(), 'Reading data...'))
 
 df <- import_flowjo_export(file.path(wd, opt[['input-dir']]), metric_name=opt[['metric']])
+if (is.null(df)) {
+    stop(paste('No files found in', file.path(wd, opt[['input-dir']])))
+}
 
 # left join sdev
 sdev_df <- import_flowjo_export(file.path(wd, opt[['sdev-dir']]), metric_name='sdev')
@@ -417,7 +424,7 @@ for (idx in 1:nrow(pval_tbl)) {
 
             sim_fluors <- Map(
                 generate_lognormal_data,
-                n = min(df_subsubset[['num_cells']], 1000),
+                n = min(df_subsubset[['num_cells']], 1000, na.rm=TRUE),
                 mean = df_subsubset[['gmfi']],
                 sd = df_subsubset[['sdev']],
                 group_name = apply(
@@ -427,7 +434,7 @@ for (idx in 1:nrow(pval_tbl)) {
             sim_fluor <- do.call(rbind, sim_fluors)
 
             fig <- plot_modal_histograms(sim_fluor,
-                xlabel ="Comp-GFP-A :: mNeonGreen",
+                xlabel = opt[['xlabel']],
                 ylabel = "Normalized to Mode",
                 title = paste(toupper(organ), cell_type, subgroup),
                 spar = 0.4,
