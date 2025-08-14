@@ -409,34 +409,32 @@ generate_gaussian_data <- function(
 }
 
 
-#' Generate Log Normal Data
+#' New Generate Lognormal Data
 #' 
-#' Generate a dataframe of random values drawn from a lognormal distribution
-#' Flowjo gives the mean as log-transformed, but gives the sd as untransformed
+#' Check this: https://msalganik.wordpress.com/2017/01/21/making-sense-of-the-rlnorm-function-in-r/
+#' Use the signed_log transform to transform negative values into 1/x
 #' 
 generate_lognormal_data <- function(
-  n = 1000, mean=200, sd=100, group_name = "group"
+  n=1000, mean=200, sd=100, group_name = "group"
 ) {
 
-    if (mean <= 0) {
-        meanlog <- mean  # mean is on a log scale, sd is on original scale
-        delta <- 1 + 4*(sd^2) / exp(2*abs(meanlog))
-        z <- (1 + sqrt(delta)) / 2
-        sdlog <- sqrt(log(z))
-
+    if (mean==0) {
+        adj_mean <- 1
     } else {
-
-        # both are on original scales
-        sdlog <- sqrt(log(1 + (sd / (mean+1))^2))
-        meanlog <- log(mean+1) - (sdlog^2) / 2
+        signed_log <- sign(mean) * log10(1 + abs(mean))
+        adj_mean <- 10^signed_log
+        # note: this is close enough
     }
+
+    location <- log(adj_mean^2 / sqrt(sd^2 + adj_mean^2))
+    shape <- sqrt(log(1 + (sd / adj_mean)^2))
 
     # clamp mean to prevent errors
-    if (meanlog < -372.5666) {
-        meanlog <- -372.5666
+    if (location < -372.5666) {
+        location <- -372.5666
     }
 
-    values <- rlnorm(n, meanlog = meanlog, sdlog = sdlog)
+    values <- rlnorm(n, meanlog = location, sdlog = shape)
     df <- data.frame(group = group_name, value = values)
 
     return(df)

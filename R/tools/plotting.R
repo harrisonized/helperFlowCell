@@ -759,25 +759,3 @@ plot_modal_histograms <- function(df,
 
     return(fig)
 }
-
-
-if (FALSE) {
-
-    # code to test plot_modal_histograms
-    df1 <- generate_lognormal_data(n=1000, mean=921, sd=386, group_name="1")
-    df2 <- generate_lognormal_data(n=1000, mean=772, sd=321, group_name="2")
-    df3 <- generate_lognormal_data(n=1000, mean=847, sd=336, group_name="3")
-    df4 <- generate_lognormal_data(n=1000, mean=641, sd=427, group_name="4")
-    df5 <- generate_lognormal_data(n=1000, mean=636, sd=513, group_name="5")
-    df6 <- generate_lognormal_data(n=1000, mean=774, sd=922, group_name="6")
-    df <- rbind(df1, df2, df3, df4, df5, df6)
-
-    plot_modal_histograms(df,
-        xlabel ="Comp-GFP-A :: mNeonGreen",
-        ylabel = "Normalized to Mode",
-        title = "Simulated Data",
-        spar = 0.4,
-        colors = c("#ACF53B", "#ACF53B", "#ACF53B", "#B0B0B0", "#B0B0B0", "#B0B0B0"),
-        x_ticks = c(10, 250, 500, 1000, 2000, 4000, 8000)
-    )
-}
