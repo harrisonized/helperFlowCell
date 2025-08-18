@@ -439,7 +439,7 @@ for (idx in 1:nrow(pval_tbl)) {
                 title = paste(toupper(organ), cell_type, subgroup),
                 spar = 0.4,
                 colors = df_subsubset[['color']],  # autogenerate this
-                x_ticks = c(-500, -200, 0, 200, 500, 1000, 2000, 4000, 8000),
+                x_ticks = c(0, 250, 500, 1000, 2500, 5000, 10000),
                 show_bins=FALSE
             )
 
