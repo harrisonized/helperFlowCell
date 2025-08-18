@@ -409,10 +409,21 @@ generate_gaussian_data <- function(
 }
 
 
-#' New Generate Lognormal Data
+#' Generate Lognormal Data
 #' 
-#' Check this: https://msalganik.wordpress.com/2017/01/21/making-sense-of-the-rlnorm-function-in-r/
-#' Use the signed_log transform to transform negative values into 1/x
+#' Use this function to simulate data for building fluorescence histograms
+#' 
+#' Flow intensity data is lognormal
+#' See this blog post on how to correctly use the rlnorm function
+#' https://msalganik.wordpress.com/2017/01/21/making-sense-of-the-rlnorm-function-in-r/
+#' 
+#' Special care had to be used to handle negative MFI values
+#' When Flowjo reports a negative MFI, the actual intensity is 1/abs(MFI)
+#' To correct for this, I convert the MFI values using the following formula:
+#' adj_mean <- 10^(sign(MFI) * log10(1 + abs(MFI)))
+#' This formula was chosen so that values in the range -1 < MFI < 1 are smooth and continuous
+#' For very large positive values of MFI, the formula approaches adj_mean = MFI
+#' For very negative values of MFI, the formula approaches adj_mean <- 1/MFI
 #' 
 generate_lognormal_data <- function(
   n=1000, mean=200, sd=100, group_name = "group"
@@ -421,13 +432,14 @@ generate_lognormal_data <- function(
     if (mean==0) {
         adj_mean <- 1
     } else {
+        # make the mean continuous
         signed_log <- sign(mean) * log10(1 + abs(mean))
         adj_mean <- 10^signed_log
-        # note: this is close enough
+        adj_sd <- abs(sd/mean) * adj_mean
     }
 
-    location <- log(adj_mean^2 / sqrt(sd^2 + adj_mean^2))
-    shape <- sqrt(log(1 + (sd / adj_mean)^2))
+    location <- log(adj_mean^2 / sqrt(adj_sd^2 + adj_mean^2))
+    shape <- sqrt(log(1 + (sd / mean)^2))
 
     # clamp mean to prevent errors
     if (location < -372.5666) {
