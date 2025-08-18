@@ -10,9 +10,10 @@ import::here(file.path(wd, 'R', 'tools', 'list_tools.R'),
 ## tukey_multiple_comparisons
 ## bonferroni_multiple_comparisons
 ## apply_multiple_comparisons
-## total_variation_distance
-## generate_gaussian_data
+## generate_normal_data
 ## generate_lognormal_data
+## compute_normal_tvd
+## compute_lognormal_tvd
 
 
 #' Unpaired T Test
@@ -370,37 +371,12 @@ apply_multiple_comparisons <- function(
 }
 
 
-#' Total Variation Distance
-#'
-#' Returns a value between 0 and 1 that quantifies 1-overlap
-#' Can be interpreted as dissimilarity between two distributions
-#' 
-total_variation_distance <- function(mean1, sd1, mu2, sd2) {
-
-    # Define Gaussians
-    p <- function(x) dnorm(x, mean = mean1, sd = sd1)
-    q <- function(x) dnorm(x, mean = mean2, sd = sd2)
-
-    # Select the minimum of the two Gaussians
-    min_pdf <- function(x) pmin(p(x), q(x))
-
-    # Get area under the curve of the overlap
-    # Set integral limit at 10*sd in each direction
-    lower <- min(mean1 - 10 * sd1, mean2 - 10 * sd2)
-    upper <- max(mean1 + 10 * sd1, mean2 + 10 * sd2)
-    overlap <- integrate(min_pdf, lower, upper)$value
-
-    dissimiliarity <- 1 - overlap
-    return(dissimiliarity)
-}
-
-
-#' Generate Gaussian Data
+#' Generate Normal Data
 #' 
 #' Generate a dataframe of random values drawn from a normal distribution
 #' Use this as an input to plot_modal_histograms
 #' 
-generate_gaussian_data <- function(
+generate_normal_data <- function(
     n=1000, mean=200, sd=100,
     group_name="group"
 ) {
@@ -435,11 +411,11 @@ generate_lognormal_data <- function(
         # make the mean continuous
         signed_log <- sign(mean) * log10(1 + abs(mean))
         adj_mean <- 10^signed_log
-        adj_sd <- abs(sd/mean) * adj_mean
     }
+    adj_sd <- abs(sd/mean) * adj_mean
 
     location <- log(adj_mean^2 / sqrt(adj_sd^2 + adj_mean^2))
-    shape <- sqrt(log(1 + (sd / mean)^2))
+    shape <- sqrt(log(1 + (adj_sd / adj_mean)^2))
 
     # clamp mean to prevent errors
     if (location < -372.5666) {
@@ -450,4 +426,82 @@ generate_lognormal_data <- function(
     df <- data.frame(group = group_name, value = values)
 
     return(df)
+}
+
+
+#' Compute Normal Total Variation Distance
+#'
+#' Returns a value between 0 and 1 that quantifies 1-overlap
+#' Can be interpreted as dissimilarity between two distributions
+#' 
+compute_normal_tvd <- function(mean1, sd1, mean2, sd2) {
+
+    if (sd1==0 | sd2==0) {
+        return(NA)
+    }
+
+    p <- function(x) dnorm(x, mean = mean1, sd = sd1)
+    q <- function(x) dnorm(x, mean = mean2, sd = sd2)
+    min_pdf <- function(x) pmin(p(x), q(x))  # Select minimum of two curves
+
+    # Get area under the curve of the overlap
+    # Set integral limit at 10*sd in each direction
+    lower <- min(mean1 - 10 * sd1, mean2 - 10 * sd2)
+    upper <- max(mean1 + 10 * sd1, mean2 + 10 * sd2)
+    overlap <- integrate(min_pdf, lower, upper)$value
+
+    dissimiliarity <- 1 - overlap
+    return(dissimiliarity)
+}
+
+
+#' Compute Lognormal Total Variation Distance
+#' 
+#' Returns a value between 0 and 1 that quantifies 1-overlap
+#' Can be interpreted as dissimilarity between two distributions
+#' Unfortunately, this function does not perform well on means < 100
+#' Recommend using compute_normal_tvd instead
+#' 
+compute_lognormal_tvd <- function(mean1, sd1, mean2, sd2) {
+
+    if (sd1==0 | sd2==0) {
+        return(NA)
+    }
+
+    means <- c(mean1, mean2)
+    sds <- c(sd1, sd2)
+
+    curves <- list()
+    for (idx in c(1, 2)) {
+
+        mean <- means[[idx]]
+        sd <- sds[[idx]]
+
+        if (mean==0) {
+            adj_mean <- 1
+        } else {
+            # make the mean continuous
+            signed_log <- sign(mean) * log10(1 + abs(mean))
+            adj_mean <- 10^signed_log
+        }
+        adj_sd <- abs(sd/mean) * adj_mean
+
+        location <- log(adj_mean^2 / sqrt(adj_sd^2 + adj_mean^2))
+        shape <- sqrt(log(1 + (adj_sd / adj_mean)^2))
+
+        curves[[idx]] <- local({
+            loc <- location
+            shp <- shape
+            function(x) dlnorm(x, meanlog = loc, sdlog = shp)
+        })
+    }
+
+    overlap <- integrate(
+        function(x) pmin(curves[[1]](x), curves[[2]](x)),
+        lower = 0, upper = max(mean1 + 10 * sd1, mean2 + 10 * sd2),
+        rel.tol = 1e-8
+    )$value
+
+    dissimiliarity <- 1 - overlap
+    return(dissimiliarity)
 }
