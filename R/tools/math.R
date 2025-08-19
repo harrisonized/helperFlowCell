@@ -431,8 +431,14 @@ generate_lognormal_data <- function(
 
 #' Compute Normal Total Variation Distance
 #'
-#' Returns a value between 0 and 1 that quantifies 1-overlap
-#' Can be interpreted as dissimilarity between two distributions
+#' Returns a value between 0 and 1 that quantifies 1-overlap. This can be
+#' interpreted as dissimilarity between two distributions. To log
+#' transform a lognormal distribution to a normal distribution, use the
+#' following: mean=meanlog/log(10) and sd=sdlog/log(10). However, since
+#' both mean and sd are scaled by the same factor, the overlap metric
+#' remains the same. Therefore, the overlap metric computed using this
+#' function accurately describes the overlap of a lognormal distribution
+#' when projected onto a linear space.
 #' 
 compute_normal_tvd <- function(mean1, sd1, mean2, sd2) {
 
@@ -457,10 +463,11 @@ compute_normal_tvd <- function(mean1, sd1, mean2, sd2) {
 
 #' Compute Lognormal Total Variation Distance
 #' 
-#' Returns a value between 0 and 1 that quantifies 1-overlap
-#' Can be interpreted as dissimilarity between two distributions
-#' Unfortunately, this function does not perform well on means < 100
-#' Recommend using compute_normal_tvd instead
+#' Returns a value between 0 and 1 that quantifies 1-overlap. This can be
+#' interpreted as dissimilarity between two distributions. Since this is
+#' NOT computed on linear space, this tends to magnify differences when
+#' one mean is large and the other is small. Therefore, compute_normal_tvd
+#' is a better metric for measuring overlap for fluorescence data.
 #' 
 compute_lognormal_tvd <- function(mean1, sd1, mean2, sd2) {
 
