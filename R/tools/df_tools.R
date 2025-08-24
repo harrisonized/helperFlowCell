@@ -1,3 +1,4 @@
+import::here(tidyr, 'pivot_wider')
 import::here(file.path(wd, 'R', 'tools', 'list_tools.R'),
     'items_in_a_not_b', 'replace_specific_items', .character_only=TRUE)
 
@@ -5,9 +6,11 @@ import::here(file.path(wd, 'R', 'tools', 'list_tools.R'),
 ## append_dataframe
 ## dataframe_row_from_named_list
 ## fillna
+## group_by_agg
 ## rename_columns
 ## reset_index
 ## stranspose
+## pivot_then_collapse
 
 
 #' Appends df1 with df2
@@ -83,6 +86,18 @@ fillna <- function(df, cols, val=0, inplace=FALSE) {
 }
 
 
+#' Group by agg
+#' 
+#' Uses base R instead of dplyr
+#' 
+group_by_agg <- function(df, groups, values, agg_func=mean) {
+    x <- as.call(c(quote(cbind), lapply(values, as.name)))
+    by <- Reduce(function(x, y) call("+", x, y), lapply(groups, as.name))
+    tbl <- aggregate(as.formula(call("~", x, by)), data = df, FUN = agg_func)
+    return(tbl)
+}
+
+
 #' Rename dataframe columns
 #' 
 #' @description This is a thin wrapper around replace_specific_items that acts on dataframe columns
@@ -150,4 +165,39 @@ stranspose <- function(df, colname=NULL) {
         tdf <- tdf[items_in_a_not_b(rownames(tdf), colname), ]
     }
     return(tdf)
+}
+
+
+
+#' Pivot then Collapse
+#' 
+#' @description Pivots the groups into columns, then collapses the metrics into a list
+#' 
+pivot_then_collapse <- function(
+    df,
+    index_cols,  # c('organ', 'cell_type')
+    group_name,  # 'group_name'
+    metric,  # 'pct_cells' or 'abs_count'
+    custom_group_order=c()
+) {
+
+    if (length(custom_group_order)>=1) {
+        group_names <- intersect( custom_group_order, unique(df[[group_name]]) )
+    } else {
+        group_names <- sort(unique( df[[group_name]] ))
+    }
+
+    # Collect values into list columns
+    res <- pivot_wider(
+        df[, c(index_cols, group_name, metric)],
+        names_from = group_name,
+        values_from = metric,
+        values_fn = list,  # suppress warning
+        names_glue = "{.name}"
+    )
+    res[['metric']] <- metric
+    res <- res[do.call(order, res[rev(index_cols)]), ]  # sort rows
+    res <- res[, c(index_cols, 'metric', group_names)]  # sort cols
+
+    return(res)
 }

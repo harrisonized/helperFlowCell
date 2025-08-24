@@ -1,4 +1,7 @@
 import::here(tidyr, 'pivot_wider')
+import::here(file.path(wd, 'R', 'tools', 'df_tools.R'),
+    'pivot_then_collapse',
+    .character_only=TRUE)
 import::here(file.path(wd, 'R', 'tools', 'list_tools.R'),
     'collect_matrix_cols', 'matrix2list', 'fill_missing_keys',
     .character_only=TRUE)
@@ -86,17 +89,16 @@ apply_unpaired_t_test <- function(
         return(NaN)
     }
     
-    # Collect values into list columns
-    res <- pivot_wider(
-        df[, c(index_cols, group_name, metric)],
-        names_from = group_name,
-        values_from = metric,
-        values_fn = list,  # suppress warning
-        names_glue = "{.name}"
+    # mfi_tbl <- pivot_then_collapse(
+    #     df,
+    #     index_cols=c('organ', 'cell_type'),
+    #     group_name='group_name',
+    #     metric=opt[['metric']]
+    # )
+    res <- pivot_then_collapse(
+        df, index_cols, group_name,
+        metric, custom_group_order
     )
-    res[['metric']] <- metric
-    res <- res[do.call(order, res[index_cols]), ]  # sort rows
-    res <- res[, c(index_cols, 'metric', group_names)]  # sort cols
 
     # iterate through all pairs of columns
     # collect results directly in pval_col
@@ -312,25 +314,11 @@ apply_multiple_comparisons <- function(
     correction='fishers_lsd',  # 'fishers_lsd', 'tukey', or 'bonferroni'
     custom_group_order=c()
 ) {
-    
-    if (length(custom_group_order)>=1) {
-        group_names <- intersect( custom_group_order, unique(df[[group_name]]) )
-    } else {
-        group_names <- sort(unique( df[[group_name]] ))
-    }
 
-    # Collect values into list columns
-    res <- pivot_wider(
-        df[, c(index_cols, group_name, metric)],
-        names_from = group_name,
-        values_from = metric,
-        values_fn = list,  # suppress warning
-        names_glue = "{.name}"
+    res <- pivot_then_collapse(
+        df, index_cols, group_name,
+        metric, custom_group_order
     )
-    res[['metric']] <- metric
-    res <- res[do.call(order, res[rev(index_cols)]), ]  # sort rows
-    res <- res[, c(index_cols, 'metric', group_names)]  # sort cols
-    
 
     # split dataframe to fit expected input
     df_list <- split(
@@ -432,18 +420,35 @@ generate_lognormal_data <- function(
 #' Compute Normal Total Variation Distance
 #'
 #' Returns a value between 0 and 1 that quantifies 1-overlap. This can be
-#' interpreted as dissimilarity between two distributions. To log
-#' transform a lognormal distribution to a normal distribution, use the
-#' following: mean=meanlog/log(10) and sd=sdlog/log(10). However, since
-#' both mean and sd are scaled by the same factor, the overlap metric
-#' remains the same. Therefore, the overlap metric computed using this
-#' function accurately describes the overlap of a lognormal distribution
-#' when projected onto a linear space.
+#' interpreted as dissimilarity between two distributions. To enable this 
+#' function handle to negative MFI values, the same log transform used for
+#' generate_lognormal_data has been added. This reduces the differences
+#' when negative MFI values are compared.
 #' 
-compute_normal_tvd <- function(mean1, sd1, mean2, sd2) {
+compute_normal_tvd <- function(mean1, sd1, mean2, sd2, log_transform=FALSE) {
+
+    if (is.vector(mean1) || is.list(mean1)) {
+        mean1 <- mean(mean1)
+    }
+    if (is.vector(sd1) || is.list(sd1)) {
+        sd1 <- mean(unlist(sd1))
+    }
+    if (is.vector(mean2) || is.list(mean2)) {
+        mean2 <- mean(unlist(mean2))
+    }
+    if (is.vector(sd2) || is.list(sd2)) {
+        sd2 <- mean(unlist(sd2))
+    }
 
     if (sd1==0 | sd2==0) {
         return(NA)
+    }
+
+    if (log_transform) {
+        mean1 <- 10^(sign(mean1)*log10(1+abs(mean1))) /log(10)
+        sd1 <- sd1/log(10)
+        mean2 <- 10^(sign(mean2)*log10(1+abs(mean2))) /log(10)
+        sd2<- sd2/log(10)
     }
 
     p <- function(x) dnorm(x, mean = mean1, sd = sd1)

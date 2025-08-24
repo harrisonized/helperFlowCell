@@ -27,6 +27,9 @@ import::from(file.path(wd, 'R', 'functions', 'preprocessing.R'),
 import::from(file.path(wd, 'R', 'functions', 'file_io.R'),
     'import_flowjo_export', 'import_flow_metadata', .character_only=TRUE)
 
+import::from(file.path(wd, 'R', 'tools', 'df_tools.R'),
+    'group_by_agg', 'rename_columns',
+    .character_only=TRUE)
 import::from(file.path(wd, 'R', 'tools', 'file_io.R'),
     'append_many_csv', .character_only=TRUE)
 import::from(file.path(wd, 'R', 'tools', 'list_tools.R'),
@@ -34,7 +37,8 @@ import::from(file.path(wd, 'R', 'tools', 'list_tools.R'),
     .character_only=TRUE)
 import::from(file.path(wd, 'R', 'tools', 'math.R'),
     'apply_unpaired_t_test', 'apply_multiple_comparisons',
-    'generate_lognormal_data', .character_only=TRUE)
+    'generate_lognormal_data', 'compute_normal_tvd',
+    .character_only=TRUE)
 import::from(file.path(wd, 'R', 'tools', 'plotting.R'),
     'save_fig', 'plot_violin', 'plot_multiple_comparisons',
     'plot_modal_histograms', .character_only=TRUE)
@@ -138,7 +142,11 @@ log_print(paste('Script started at:', start_time))
 
 log_print(paste(Sys.time(), 'Reading data...'))
 
-df <- import_flowjo_export(file.path(wd, opt[['input-dir']]), metric_name=opt[['metric']])
+df <- import_flowjo_export(
+    file.path(wd, opt[['input-dir']]),
+    metric_name=opt[['metric']],
+    include_initial_gates=FALSE
+)
 if (is.null(df)) {
     stop(paste('No files found in', file.path(wd, opt[['input-dir']])))
 }
@@ -154,9 +162,31 @@ if (!is.null(sdev_df)) {
 }
 
 # left join counts
-counts_df <- import_flowjo_export(file.path(wd, opt[['counts-dir']]), metric_name='num_cells')
+counts_df <- import_flowjo_export(
+    file.path(wd, opt[['counts-dir']]),
+    metric_name='num_cells',
+    include_initial_gates=TRUE
+)
 if (!is.null(counts_df)) {
     log_print(paste(Sys.time(), 'counts files found...'))
+    # counts_df[['pct_cells']] <- round(counts_df[['num_cells']] /
+    #     counts_df[['Cells/Single Cells/Single Cells/Live Cells']] * 100, 4)
+    counts_df <- counts_df[, c("fcs_name", "gate", "cell_type",  "num_cells")]
+
+    ss_df <- import_flowjo_export(
+        file.path(wd, opt[['counts-dir']]),
+        metric_name='num_cells',
+        include_initial_gates=FALSE
+    )
+    ss_df <- ss_df[
+        ((ss_df[['gate']]=='Cells/Single Cells/Single Cells') |
+         (ss_df[['gate']]=='Cells/Single Cells/Single Cells/Live Cells')),
+        c("fcs_name", "gate", "cell_type",  "num_cells")
+    ]
+    # ss_df[['pct_cells']] = 1  # don't really need this
+
+    counts_df <- rbind(counts_df, ss_df)
+
     df <- merge(df, counts_df,
         by=c("fcs_name", "gate", "cell_type"),
         all.x=TRUE, all.y=FALSE, suffixes=c('', '_'))
@@ -240,14 +270,96 @@ if (!troubleshooting) {
 
 
 # ----------------------------------------------------------------------
+# Compute Total Variation Distances
+
+log_print(paste(Sys.time(), 'Computing total variation distances...'))
+
+if (!is.null(sdev_df)) {
+
+    group_cols <- c('organ', 'gate', 'cell_type', metadata_cols)
+    val_cols <- c('gmfi', 'sdev')
+    tvd_df <- df[
+        ((df[opt[['fluorescence']]]!='WT') &
+         (df[['sdev']] > 0) & (df[['num_cells']] > 5)),
+        c('mouse_id', 'fcs_name', group_cols, 'num_cells', val_cols)]
+
+    # left join WT median MFI
+    wt_df <- group_by_agg(
+        df[((df[opt[['fluorescence']]]=='WT') &
+            (df[['sdev']] > 0) & (df[['num_cells']] > 5)),
+           c(group_cols, val_cols)],
+        group_cols, val_cols, mean
+    )
+    wt_df <- rename_columns(wt_df, c('gmfi'='wt_gmfi', 'sdev'='wt_sdev'))
+    
+    tvd_df <- merge(
+        tvd_df, wt_df,
+        by=items_in_a_not_b(group_cols, opt[['fluorescence']]),
+        all.x=TRUE, all.y=FALSE, suffixes=c('', '_'))[,
+        c('mouse_id', 'fcs_name', group_cols,
+          'num_cells', val_cols, 'wt_gmfi', 'wt_sdev')
+    ]
+    tvd_df[['group_name']] <- apply(
+        tvd_df[ , metadata_cols ] , 1 , paste , collapse = ", " )
+
+    tvd_df[['tvd']] <- mapply(
+        compute_normal_tvd,
+        mean1 = tvd_df[['gmfi']],
+        sd1   = tvd_df[['sdev']],
+        mean2 = tvd_df[['wt_gmfi']],
+        sd2   = tvd_df[['wt_sdev']],
+        log_transform=TRUE
+    )
+
+    # save
+    if (!troubleshooting) {
+        tmp <- tvd_df
+        dirpath <- file.path(wd, opt[['output-dir']], 'data',
+            gsub(',', '_', opt[['group-by']]), opt[['metric']])  # created above
+        write.table(tvd_df, file = file.path(dirpath, 'tvd.csv'), row.names = FALSE,  sep = ',' )
+    }
+
+    organs <- sort(unique(tvd_df[['organ']]))
+    for (organ in sort(organs)) {
+
+        fig <- plot_violin(
+            tvd_df,
+            x='cell_type', y='tvd', group_by='group_name',
+            ylabel='TVD', title=organ,
+            ymin=0, ymax=1,
+            hover_data=unique(intersect(
+                    c('mouse_id', 'group_name', metadata_cols,
+                      'sex', 'treatment', 'weeks_old', 
+                      'Cells', 'num_cells', 'fcs_name'),
+                    colnames(df)
+            ))
+        )
+
+        if (!troubleshooting) {
+            dirpath <- file.path(wd, opt[['output-dir']], 'figures',
+                gsub(',', '_', opt[['group-by']]), opt[['metric']], 'overview')
+            if (!dir.exists(dirpath)) {
+                dir.create(dirpath, recursive=TRUE)
+            }
+            save_fig(
+                fig=fig,
+                height=opt[['height']], width=opt[['width']],
+                dirpath=dirpath,
+                filename=paste(organ, 'tvd', sep='-'),
+                save_html=TRUE
+            )
+        }
+    }
+}
+
+
+# ----------------------------------------------------------------------
 # Data overview
 
 organs <- sort(unique(df[['organ']]))
 log_print(paste(Sys.time(), 'Groups found...', paste(organs, collapse = ', ')))
-
-
 log_print(paste(Sys.time(), 
-    (if (opt[['plotly-overview']]) 'Exporting data with plots...' else 'Exporting data...' )
+    (if (opt[['plotly-overview']]) {'Exporting data with plots...'} else {'Exporting data...'} )
 ))
 
 for (organ in sort(organs)) {
@@ -339,8 +451,9 @@ for (idx in 1:nrow(pval_tbl)) {
     df_subset <- df[
         (df[['organ']] == organ) & (df[['cell_type']] == cell_type),
         unique(intersect(
-                c('mouse_id', 'organ', 'cell_type', 'group_name', 'subgroup_name', opt[['fluorescence']],
-                opt[['metric']], 'sdev', 'num_cells', 'abs_count'),
+                c('mouse_id', 'organ', 'cell_type', 'group_name',
+                  'subgroup_name', opt[['fluorescence']],
+                   opt[['metric']], 'sdev', 'num_cells', 'abs_count'),
                 colnames(df)
         ))
     ]
