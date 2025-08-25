@@ -348,13 +348,13 @@ if (!is.null(sdev_df)) {
     # ------------------------------------------------------------
     # Plot
 
-    log_print(paste(Sys.time(), 'Plotting total variation distances...'))
-
     organs <- sort(unique(tvd_df[['organ']]))
     for (organ in sort(organs)) {
 
+        log_print(paste(Sys.time(), 'Plotting', organ, 'tvd...'))
+
         fig <- plot_violin(
-            tvd_df,
+            tvd_df[(tvd_df[['organ']]==organ), ],
             x='cell_type', y='tvd', group_by='group_name',
             ylabel='TVD', title=organ,
             ymin=0, ymax=1,

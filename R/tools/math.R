@@ -440,9 +440,11 @@ compute_normal_tvd <- function(mean1, sd1, mean2, sd2, log_transform=FALSE) {
         sd2 <- mean(unlist(sd2))
     }
 
-    if (sd1==0 | sd2==0) {
-        return(NA)
-    }
+    if (is.na(sd1) & is.na(sd2)) { return(NA) }
+    if (!is.na(sd1) & is.na(sd2)) { sd2 <- sd1 }
+    if (is.na(sd1) & !is.na(sd2)) { sd1 <- sd2 }
+    if (sd1==0 | sd2==0) { return(NA) }
+    if (is.na(mean2)) { mean2 <- 0 }
 
     if (log_transform) {
         mean1 <- 10^(sign(mean1)*log10(1+abs(mean1))) /log(10)
@@ -476,9 +478,11 @@ compute_normal_tvd <- function(mean1, sd1, mean2, sd2, log_transform=FALSE) {
 #' 
 compute_lognormal_tvd <- function(mean1, sd1, mean2, sd2) {
 
-    if (sd1==0 | sd2==0) {
-        return(NA)
-    }
+    if (is.na(sd1) & is.na(sd2)) { return(NA) }
+    if (!is.na(sd1) & is.na(sd2)) { sd2 <- sd1 }
+    if (is.na(sd1) & !is.na(sd2)) { sd1 <- sd2 }
+    if (sd1==0 | sd2==0) { return(NA) }
+    if (is.na(mean2)) { mean2 <- 0 }
 
     means <- c(mean1, mean2)
     sds <- c(sd1, sd2)
