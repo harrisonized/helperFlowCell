@@ -150,7 +150,7 @@ fishers_lsd <- function(
 
     # exit if only one group
     if (n_groups==1) {
-        return(NaN)
+        return(NA)
     }
 
 
@@ -200,7 +200,7 @@ fishers_lsd <- function(
         pvals[ pval_cols[idx] ] <- pval
     }
 
-    return(unlist(pvals))
+    return(pvals)
 }
 
 
@@ -233,7 +233,7 @@ tukey_multiple_comparisons <- function(
 
     # exit if only one group
     if (n_groups==1) {
-        return(NaN)
+        return(NA)
     }
 
     formula <- as.formula(
@@ -285,7 +285,7 @@ bonferroni_multiple_comparisons <- function(
 
     # exit if only one group
     if (n_groups==1) {
-        return(NaN)
+        return(NA)
     }
 
     pvals_mat <- pairwise.t.test(
@@ -293,8 +293,8 @@ bonferroni_multiple_comparisons <- function(
         p.adjust.method = "bonferroni"
     )[['p.value']]
     pvals <- matrix2list(pvals_mat)  # flatten
-    pvals <- Filter(Negate(is.na), pvals)  # filter NA
-    
+    # pvals <- Filter(Negate(is.na), pvals)  # filter NA
+
     return(pvals)
 }
 
@@ -328,17 +328,17 @@ apply_multiple_comparisons <- function(
     )
 
     if (correction=='fishers_lsd') {
-        pvals <- mapply(
+        pval_list <- mapply(
             function(x) fishers_lsd(x, group=group_name, metric=metric),
             df_list, SIMPLIFY=FALSE
         )
     } else if (correction=='tukey') {
-        pvals <- mapply(
+        pval_list <- mapply(
             function(x) tukey_multiple_comparisons(x, group=group_name, metric=metric),
             df_list, SIMPLIFY=FALSE
         )
     } else if (correction=='bonferroni') {
-        pvals <- mapply(
+        pval_list <- mapply(
             function(x) bonferroni_multiple_comparisons(x, group=group_name, metric=metric),
             df_list, SIMPLIFY=FALSE
         )
@@ -347,13 +347,19 @@ apply_multiple_comparisons <- function(
     }
 
     # convert to matrix
-    if (is.null(dim(pvals))) {
-        colnames <- unique(unlist(lapply(pvals, names)))
-        pvals  <- mapply(function(x) fill_missing_keys(x, colnames), pvals)
+    colnames <- unique(unlist(lapply(pval_list, names)))  # get all column names
+    if (length(colnames)==1) {
+        pvals <- matrix(pval_list, nrow=1, dimnames=list(colnames, names(pval_list)))
+        pvals <- matrix(
+            sapply(pvals, function(x) x[[1]] ),
+            nrow = 1, ncol = ncol(pvals), dimnames = dimnames(pvals)
+        )
+    } else {
+        pvals <- mapply(function(x) fill_missing_keys(x, colnames), pvals)
     }
 
     res <- cbind(res, t(pvals))  # res and pvals are sorted for the same order
-    res <- res[do.call(order, res[index_cols]), ]    # sort rows in original order
+    res <- res[do.call(order, res[index_cols]), ]  # sort rows in original order
 
     return(res)
 }
