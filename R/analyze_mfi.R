@@ -203,7 +203,7 @@ df <- df[(df[['is_unstained']]==FALSE), ]  # drop unstained cells
 if (length(metadata_cols) > 1) {
     df[['group_name']] <- apply( df[ , metadata_cols ] , 1 , paste , collapse = ", " )
     df[['subgroup_name']] <- apply(
-        df[ , items_in_a_not_b(metadata_cols, opt[['fluorescence']]) ],
+        df[ , items_in_a_not_b(metadata_cols, opt[['fluorescence']]) , drop=FALSE],
         1 , paste , collapse = ", " )
 } else {
     df[['group_name']] <- df[[metadata_cols]]

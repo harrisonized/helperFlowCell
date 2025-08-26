@@ -235,7 +235,7 @@ if ('abs_count' %in% colnames(df)) {
 
 
 # ----------------------------------------------------------------------
-# Data overview
+# Data Overview
 
 organs <- sort(unique(df[['organ']]))
 log_print(paste(Sys.time(), 'Groups found...', paste(organs, collapse = ', ')))
@@ -300,7 +300,7 @@ for (organ in sort(organs)) {
             fig=fig,
             height=opt[['height']], width=opt[['width']],
             dirpath=file.path(wd, opt[['output-dir']], 'figures',
-                gsub(',', '_', opt[['group-by']]), 'pct_cells', 'overview'),
+                gsub(',', '_', opt[['group-by']]), 'pct_cells', 'interactive'),
             filename=paste(organ, 'pct_cells', sep='-'),
             save_html=TRUE
         )
@@ -328,7 +328,7 @@ for (organ in sort(organs)) {
                 fig=fig,
                 height=opt[['height']], width=opt[['width']],
                 dirpath=file.path(wd, opt[['output-dir']], 'figures',
-                    gsub(',', '_', opt[['group-by']]), 'abs_count', 'overview'),
+                    gsub(',', '_', opt[['group-by']]), 'abs_count', 'interactive'),
                 filename=paste(organ, 'abs_count', sep='-'),
                 save_html=TRUE
             )
