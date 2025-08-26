@@ -452,6 +452,7 @@ for (idx in 1:nrow(pval_tbl)) {
         unique(df_subset[['group_name']]),
         custom_group_order
     )
+    n_groups <- length(unique(custom_group_order))
 
     withCallingHandlers({
         fig <- plot_multiple_comparisons(
@@ -487,7 +488,8 @@ for (idx in 1:nrow(pval_tbl)) {
             ggsave(
                 filepath,
                 plot=fig,
-                height=5000, width=5000, dpi=500, units='px', scaling=2 
+                height=5000, width=5000, dpi=500, units='px',
+                scaling=(if (n_groups==2) {1} else 2)
             )
         }, warning = function(w) {
             if ( any(grepl("containing non-finite values", w),
@@ -558,7 +560,7 @@ for (idx in 1:nrow(pval_tbl)) {
                 ggsave(
                     filepath,
                     plot=fig, bg='white',
-                    height=1500, width=3000, dpi=200, units='px', scaling=2 
+                    height=1500, width=3000, dpi=200, units='px', scaling=2
                 )
             }
         }

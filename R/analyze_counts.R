@@ -62,10 +62,6 @@ option_list = list(
                 metavar='fishers_lsd', type="character",
                 help="Choose 'fishers_lsd', 't_test', 'tukey', or 'bonferroni'"),
 
-    make_option(c("-p", "--plotly-overview"), default=FALSE, action="store_true",
-                metavar="FALSE", type="logical",
-                help="generate plotly overview interactive violin plot"),
-
     make_option(c("-n", "--show-numbers"), default=FALSE, action="store_true",
                 metavar="FALSE", type="logical",
                 help="in violin with significance, show all numbers instead of stars"),
@@ -243,12 +239,7 @@ if ('abs_count' %in% colnames(df)) {
 
 organs <- sort(unique(df[['organ']]))
 log_print(paste(Sys.time(), 'Groups found...', paste(organs, collapse = ', ')))
-
-if (opt[['plotly-overview']]) {
-    log_print(paste(Sys.time(), 'Exporting data with plots...'))
-} else {
-    log_print(paste(Sys.time(), 'Exporting data...'))
-}
+log_print(paste(Sys.time(), 'Exporting data...'))
 
 for (organ in sort(organs)) {
 
@@ -287,16 +278,43 @@ for (organ in sort(organs)) {
     # ----------------------------------------------------------------------
     # Plot
 
-    if (opt[['plotly-overview']]) {
 
-        # ----------------------------------------------------------------------
-        # Percent Cells
+    # ------------------------------------------------------------
+    # Percent Cells
 
+    fig <- plot_violin(
+        tmp,
+        x='cell_type', y='pct_cells', group_by='group_name',
+        ylabel='Percent of Live Cells', title=organ,
+        ymin=0, ymax=100,
+        hover_data=unique(intersect(
+                c('mouse_id', 'group_name', metadata_cols,
+                  'sex', 'treatment', 'weeks_old',
+                  'Cells', 'num_cells', 'fcs_name'),
+                colnames(df)
+        ))
+    )
+
+    if (!troubleshooting) {
+        save_fig(
+            fig=fig,
+            height=opt[['height']], width=opt[['width']],
+            dirpath=file.path(wd, opt[['output-dir']], 'figures',
+                gsub(',', '_', opt[['group-by']]), 'pct_cells', 'overview'),
+            filename=paste(organ, 'pct_cells', sep='-'),
+            save_html=TRUE
+        )
+    }
+
+    # ------------------------------------------------------------
+    # Absolute Counts
+
+    if ('abs_count' %in% colnames(df)) {
         fig <- plot_violin(
             tmp,
-            x='cell_type', y='pct_cells', group_by='group_name',
-            ylabel='Percent of Live Cells', title=organ,
-            ymin=0, ymax=100,
+            x='cell_type', y='abs_count', group_by='group_name',
+            ylabel='Absolute Count', title=organ,
+            ymin=0,
             hover_data=unique(intersect(
                     c('mouse_id', 'group_name', metadata_cols,
                       'sex', 'treatment', 'weeks_old', 
@@ -310,39 +328,10 @@ for (organ in sort(organs)) {
                 fig=fig,
                 height=opt[['height']], width=opt[['width']],
                 dirpath=file.path(wd, opt[['output-dir']], 'figures',
-                    gsub(',', '_', opt[['group-by']]), 'pct_cells', 'overview'),
-                filename=paste(organ, 'pct_cells', sep='-'),
+                    gsub(',', '_', opt[['group-by']]), 'abs_count', 'overview'),
+                filename=paste(organ, 'abs_count', sep='-'),
                 save_html=TRUE
             )
-        }
-
-        # ----------------------------------------------------------------------
-        # Absolute Counts
-
-        if ('abs_count' %in% colnames(df)) {
-            fig <- plot_violin(
-                tmp,
-                x='cell_type', y='abs_count', group_by='group_name',
-                ylabel='Absolute Count', title=organ,
-                ymin=0,
-                hover_data=unique(intersect(
-                        c('mouse_id', 'group_name', metadata_cols,
-                          'sex', 'treatment', 'weeks_old', 
-                          'Cells', 'num_cells', 'fcs_name'),
-                        colnames(df)
-                ))
-            )
-
-            if (!troubleshooting) {
-                save_fig(
-                    fig=fig,
-                    height=opt[['height']], width=opt[['width']],
-                    dirpath=file.path(wd, opt[['output-dir']], 'figures',
-                        gsub(',', '_', opt[['group-by']]), 'abs_count', 'overview'),
-                    filename=paste(organ, 'abs_count', sep='-'),
-                    save_html=TRUE
-                )
-            }
         }
     }
 }
@@ -379,6 +368,7 @@ for (idx in 1:nrow(pval_tbl)) {
         unique(df_subset[['group_name']]),
         custom_group_order
     )
+    n_groups <- length(unique(custom_group_order))
     
     withCallingHandlers({
         fig <- plot_multiple_comparisons(
@@ -415,7 +405,8 @@ for (idx in 1:nrow(pval_tbl)) {
             ggsave(
                 filepath,  
                 plot=fig,
-                height=5000, width=5000, dpi=500, units='px', scaling=2 
+                height=5000, width=5000, dpi=500, units='px',
+                scaling=(if (n_groups==2) {1} else 2)
             )
         }, warning = function(w) {
             if ( any(grepl("rows containing non-finite values", w),
@@ -468,7 +459,8 @@ for (idx in 1:nrow(pval_tbl)) {
                     ggsave(
                         filepath,  
                         plot=fig,
-                        height=5000, width=5000, dpi=500, units='px', scaling=2 
+                        height=5000, width=5000, dpi=500, units='px',
+                        scaling=(if (n_groups==2) {1} else 2)
                     )
                 }, warning = function(w) {
                     if ( any(grepl("rows containing non-finite values", w),
