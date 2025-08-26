@@ -42,8 +42,8 @@ option_list = list(
                 metavar='data/flow-counts', type="character",
                 help="input directory, all csv files will be read in"),
 
-    make_option(c("-o", "--output-dir"), default="output",
-                metavar="output", type="character",
+    make_option(c("-o", "--output-dir"), default="hfc-output",
+                metavar="hfc-output", type="character",
                 help="output directory for the data"),
 
     make_option(c("-m", "--metadata-dir"), default="data/flow-metadata",

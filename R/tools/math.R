@@ -294,7 +294,7 @@ bonferroni_multiple_comparisons <- function(
     )[['p.value']]
     pvals <- matrix2list(pvals_mat)  # flatten
     pvals <- Filter(Negate(is.na), pvals)  # filter NA
-
+    
     return(pvals)
 }
 
@@ -330,17 +330,17 @@ apply_multiple_comparisons <- function(
     if (correction=='fishers_lsd') {
         pvals <- mapply(
             function(x) fishers_lsd(x, group=group_name, metric=metric),
-            df_list
+            df_list, SIMPLIFY=FALSE
         )
     } else if (correction=='tukey') {
         pvals <- mapply(
             function(x) tukey_multiple_comparisons(x, group=group_name, metric=metric),
-            df_list
+            df_list, SIMPLIFY=FALSE
         )
     } else if (correction=='bonferroni') {
         pvals <- mapply(
             function(x) bonferroni_multiple_comparisons(x, group=group_name, metric=metric),
-            df_list
+            df_list, SIMPLIFY=FALSE
         )
     } else {
         stop("Choose correction='fishers_lsd', 'tukey' or 'bonferroni'")
