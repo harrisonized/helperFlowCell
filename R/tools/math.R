@@ -447,6 +447,7 @@ compute_normal_tvd <- function(mean1, sd1, mean2, sd2, log_transform=FALSE) {
     }
 
     if (is.na(sd1) & is.na(sd2)) { return(NA) }
+    if (is.na(mean2) & is.na(sd2)) { return(NA) }
     if (!is.na(sd1) & is.na(sd2)) { sd2 <- sd1 }
     if (is.na(sd1) & !is.na(sd2)) { sd1 <- sd2 }
     if (sd1==0 | sd2==0) { return(NA) }
@@ -485,6 +486,7 @@ compute_normal_tvd <- function(mean1, sd1, mean2, sd2, log_transform=FALSE) {
 compute_lognormal_tvd <- function(mean1, sd1, mean2, sd2) {
 
     if (is.na(sd1) & is.na(sd2)) { return(NA) }
+    if (is.na(mean2) & is.na(sd2)) { return(NA) }
     if (!is.na(sd1) & is.na(sd2)) { sd2 <- sd1 }
     if (is.na(sd1) & !is.na(sd2)) { sd1 <- sd2 }
     if (sd1==0 | sd2==0) { return(NA) }

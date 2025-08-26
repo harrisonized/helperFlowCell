@@ -37,7 +37,7 @@ import::from(file.path(wd, 'R', 'tools', 'list_tools.R'),
     .character_only=TRUE)
 import::from(file.path(wd, 'R', 'tools', 'math.R'),
     'apply_unpaired_t_test', 'apply_multiple_comparisons',
-    'generate_lognormal_data', 'compute_normal_tvd',
+    'generate_lognormal_data', 'compute_normal_tvd', # 'compute_lognormal_tvd',
     .character_only=TRUE)
 import::from(file.path(wd, 'R', 'tools', 'plotting.R'),
     'save_fig', 'plot_violin', 'plot_multiple_comparisons',
@@ -326,7 +326,8 @@ if (!is.null(sdev_df)) {
           'num_cells', val_cols, 'wt_gmfi', 'wt_sdev')
     ]
     tvd_df[['group_name']] <- apply(
-        tvd_df[ , metadata_cols ] , 1 , paste , collapse = ", " )
+        tvd_df[ , metadata_cols , drop = FALSE] , 1 , paste , collapse = ", "
+    )
 
     tvd_df[['tvd']] <- mapply(
         compute_normal_tvd,
