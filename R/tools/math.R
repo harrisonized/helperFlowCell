@@ -350,13 +350,13 @@ apply_multiple_comparisons <- function(
     colnames <- unique(unlist(lapply(pval_list, names)))  # get all column names
     if (length(colnames)==1) {
         pvals <- matrix(pval_list, nrow=1, dimnames=list(colnames, names(pval_list)))
-        pvals <- matrix(
-            sapply(pvals, function(x) x[[1]] ),
-            nrow = 1, ncol = ncol(pvals), dimnames = dimnames(pvals)
-        )
-    } else {
-        pvals <- mapply(function(x) fill_missing_keys(x, colnames), pvals)
+    } else if (is.null(dim(pval_list))) {
+        pvals <- mapply(function(x) fill_missing_keys(x, colnames), pval_list)
     }
+    pvals <- matrix(
+        sapply(pvals, function(x) x[[1]] ),
+        nrow = nrow(pvals), ncol = ncol(pvals), dimnames = dimnames(pvals)
+    )
 
     res <- cbind(res, t(pvals))  # res and pvals are sorted for the same order
     res <- res[do.call(order, res[index_cols]), ]  # sort rows in original order
