@@ -106,7 +106,7 @@ plot_scatter <- function(
     yaxis_type='linear',
     color='#1f77b4',
     color_discrete_map=NULL,
-    hover_data=c()
+    hovertext=c()
 ) {
 
     if (is.null(ymin)) {
@@ -214,7 +214,8 @@ plot_violin <- function(
     color_discrete_map=NULL,
     hover_data=c(),
     sort=TRUE,
-    descending=TRUE
+    descending=TRUE,
+    violinmode='group'  # overlay
 ) {
 
     if (is.null(ymin)) {
@@ -344,7 +345,7 @@ plot_violin <- function(
             range = yrange,
             type = yaxis_type
         ),
-        violinmode = 'group',
+        violinmode = violinmode,
         plot_bgcolor = 'rgba(0,0,0,0)',
         showlegend = ifelse(is.null(group_by), FALSE, TRUE),
         hovermode = 'closest'

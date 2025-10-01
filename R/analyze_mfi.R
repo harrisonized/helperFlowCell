@@ -18,8 +18,6 @@ suppressPackageStartupMessages(library('logr'))
 library('optparse')
 import::from(progress, 'progress_bar')
 import::from(jsonlite, 'toJSON')
-import::from(stringr, 'str_detect')
-import::from(tidyr, 'pivot_longer')
 import::from(ggplot2, 'ggsave')
 
 import::from(file.path(wd, 'R', 'functions', 'preprocessing.R'),

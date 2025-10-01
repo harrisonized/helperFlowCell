@@ -470,7 +470,7 @@ compute_normal_tvd <- function(mean1, sd1, mean2, sd2, log_transform=FALSE) {
     upper <- max(mean1 + 10 * sd1, mean2 + 10 * sd2)
     overlap <- integrate(min_pdf, lower, upper)$value
 
-    dissimiliarity <- 1 - overlap
+    dissimiliarity <- sign(mean1-mean2)* (1 - overlap)
     return(dissimiliarity)
 }
 
@@ -526,6 +526,6 @@ compute_lognormal_tvd <- function(mean1, sd1, mean2, sd2) {
         rel.tol = 1e-8
     )$value
 
-    dissimiliarity <- 1 - overlap
+    dissimiliarity <- sign(mean1-mean2)* (1 - overlap)
     return(dissimiliarity)
 }
