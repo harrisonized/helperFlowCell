@@ -10,14 +10,15 @@ import::from(broom, 'tidy')
 import::from(magrittr, '%>%')
 import::from(tibble, 'tibble')
 import::from(tidyr, 'pivot_longer')
-import::here(survival, 'survfit', 'Surv')
-
-import::here(ggplot2,
+import::from(survival, 'survfit', 'Surv')
+import::from(ggplot2,
     'ggplot', 'aes', 'geom_step', 'geom_ribbon',
     'labs', 'xlim', 'ylim', 'ggsave'
 )
-import::here(ggprism, 'theme_prism')
+import::from(ggprism, 'theme_prism')
 
+import::from(file.path(wd, 'R', 'tools', 'plotting.R'),
+    'plot_scatter', 'save_fig', .character_only=TRUE)
 import::from(file.path(wd, 'R', 'tools', 'file_io.R'),
     'read_excel_or_csv', .character_only=TRUE)
 
@@ -45,13 +46,16 @@ troubleshooting = opt[['troubleshooting']]
 
 # Start Log
 start_time = Sys.time()
-log <- log_open(paste0("plot_spectra-",
+log <- log_open(paste0("analyze_survival-",
     strftime(start_time, format="%Y%m%d_%H%M%S"), '.log'))
 log_print(paste('Script started at:', start_time))
 
 
 # ----------------------------------------------------------------------
 # Read file
+
+
+log_print(paste(Sys.time(), 'Reading data...'))
 
 input_file <- file.path(wd, opt[['input-file']])
 weight_tbl <- read_excel_or_csv(input_file)
@@ -70,6 +74,8 @@ weight_tbl <- weight_tbl[(!is.na(weight_tbl[['mouse_id']])), ]
 
 # ----------------------------------------------------------------------
 # Preprocessing
+
+log_print(paste(Sys.time(), 'Reshaping data...'))
 
 df = pivot_longer(
     data=weight_tbl,
@@ -100,6 +106,13 @@ df[['day']] <- as.numeric(difftime(
     units = "days"
 ))
 
+df[['week']] <- as.numeric(difftime(
+    as.Date(df[['date']], format = "%m/%d/%y"),
+    as.Date(df[['date_start']], format = "%m/%d/%y"),
+    units = "weeks"
+))
+
+
 df[['pct_weight']] <- df[['weight']] / df[['weight_start']]
 df[['is_dead']] <- as.numeric(is.na(df[['pct_weight']]))
 
@@ -127,33 +140,36 @@ df <- df %>%
 # ----------------------------------------------------------------------
 # Plot survival
 
+
+log_print(paste(Sys.time(), 'Plotting survival...'))
+
 # Get the last day per mouse (your original step)
 
 events <- df %>%
   group_by(mouse_id) %>%
   slice_max(day, with_ties = FALSE) %>%
   ungroup() %>%
-  select(mouse_id, genotype, day, died)
+  select(mouse_id, genotype, week, died)
 
 # Add dummy row with day=0, died=0 for each genotype group
 events <- events %>%
   group_by(genotype) %>%
-  group_modify(~ bind_rows(tibble(day = 0, died = 0), .x)) %>%
+  group_modify(~ bind_rows(tibble(week = 0, died = 0), .x)) %>%
   ungroup()
 
 # Find first death day per genotype group
 first_deaths <- events[(events[['died']]==1), ] %>%
   group_by(genotype) %>%
-  summarise(first_death = min(day)) %>%
+  summarise(first_death = min(week)) %>%
   ungroup()
 
 # Create dummy rows for day = 0 and day just before first death
 dummy_rows <- first_deaths %>%
   mutate(
-    day_before = first_death - 0.001
+    week_before = first_death - 0.001
   ) %>%
-  select(genotype, day_before) %>%
-  pivot_longer(cols = c(day_before), names_to = "time_type", values_to = "day") %>%
+  select(genotype, week_before) %>%
+  pivot_longer(cols = c(week_before), names_to = "time_type", values_to = "week") %>%
   # Add day=0 rows for each genotype as well
   bind_rows(
     tibble(
@@ -162,27 +178,28 @@ dummy_rows <- first_deaths %>%
     )
   ) %>%
   distinct() %>%  # remove duplicates in case day_before = 0
-  arrange(genotype, day) %>%
+  arrange(genotype, week) %>%
   mutate(
     mouse_id = NA_integer_,
     died = 0
   ) %>%
-  select(mouse_id, genotype, day, died)
+  select(mouse_id, genotype, week, died)
 
 # Bind dummy rows to events and arrange
 events_extended <- events %>%
   bind_rows(dummy_rows) %>%
-  arrange(genotype, day)
+  arrange(genotype, week)
 
 # Fit survival model
-fit <- survfit(Surv(day, died) ~ genotype, data = events_extended)
+fit <- survfit(Surv(week, died) ~ genotype, data = events_extended)
 surv_data <- tidy(fit)
+surv_data[['strata']] <- gsub('genotype=', '', surv_data[['strata']])
 
 fig <- ggplot(surv_data, aes(x = time, y = estimate, color = strata)) +
     geom_step(linewidth = 1) +
     geom_ribbon(aes(ymin = conf.low, ymax = conf.high, fill = strata), alpha = 0.2, color = NA) +
     labs(
-        x = "Time (days)",
+        x = "Time (weeks)",
         y = "Survival probability",
         color = "Genotype",
         fill = "Genotype",
@@ -199,11 +216,38 @@ if (!troubleshooting) {
     ggsave(
         file.path(dirpath, 'survival-curve.png'),  
         plot=fig,
-        height=2000, width=4000, dpi=250, units='px',
+        height=2000, width=3000, dpi=250, units='px',
         scaling=2
     )
 }
 
+
+
+# ----------------------------------------------------------------------
+# Plot weights
+
+
+log_print(paste(Sys.time(), 'Plotting weights...'))
+
+fig <- plot_scatter(
+    data.frame(df),
+    x='week', y='pct_weight', group_by='mouse_id',
+    xlabel='Time (week)', ylabel='Percent Weight', title='Weight Curves',
+    mode='lines+markers'
+)
+
+# save
+if (!troubleshooting) {
+    dirpath <- file.path(wd, opt[['output-dir']], 'weight-curve')
+    if (!dir.exists(dirpath)) { dir.create(dirpath, recursive=TRUE) }
+    save_fig(
+        fig=fig,
+        height=2000, width=4000,
+        dirpath=dirpath,
+        filename='weight-curve',
+        save_html=TRUE
+    )
+}
 
 
 end_time = Sys.time()

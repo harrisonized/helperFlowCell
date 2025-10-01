@@ -106,7 +106,8 @@ plot_scatter <- function(
     yaxis_type='linear',
     color='#1f77b4',
     color_discrete_map=NULL,
-    hovertext=c()
+    hovertext=c(),
+    mode='markers'
 ) {
 
     if (is.null(ymin)) {
@@ -134,7 +135,7 @@ plot_scatter <- function(
         color_discrete_map <- list2env(as.list(color_discrete_map))
     }
 
-    fig <- plot_ly(type='scatter', mode='markers')
+    fig <- plot_ly(type='scatter', mode=mode)
 
     if (is.null(group_by)) {
 
@@ -151,7 +152,7 @@ plot_scatter <- function(
 
             # hoverdata
             hovertext <- ''
-            for (field in c(x, y, hover_data)) {
+            for (field in c(x, y, hovertext)) {
                 if (!is.null(field)) {
                     hovertext <- paste0(hovertext, field, "=", df[(df[[group_by]] == group), field], "<br>")
                 }

@@ -110,7 +110,7 @@ df <- import_flowjo_export(
     metric_name='num_cells', include_initial_gates=TRUE
 )
 if (length(df)==0) {
-    msg <- paste("No data found. Please check", dirpath, '...')
+    msg <- paste("No data found. Please check", file.path(wd, opt[['input-dir']]), '...')
     stop(msg)
 }
 df[['pct_cells']] <- round(df[['num_cells']] /
