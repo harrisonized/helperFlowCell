@@ -23,6 +23,8 @@ import::here(file.path(wd, 'R', 'tools', 'math.R'),
     'unpaired_t_test', 'fishers_lsd', 'tukey_multiple_comparisons',
     'bonferroni_multiple_comparisons', 'generate_lognormal_data',
     .character_only=TRUE)
+import::here(file.path(wd, 'R', 'tools', 'math.R'),
+    'apply_unpaired_t_test', .character_only=TRUE)
 
 ## Functions
 ## save_fig
@@ -106,7 +108,7 @@ plot_scatter <- function(
     yaxis_type='linear',
     color='#1f77b4',
     color_discrete_map=NULL,
-    hovertext=c(),
+    hover_data=c(),
     mode='markers'
 ) {
 
@@ -139,6 +141,7 @@ plot_scatter <- function(
 
     if (is.null(group_by)) {
 
+        hovertext <- ''
         fig <- fig %>%
             add_trace(
                 x = df[[x]],
@@ -152,7 +155,7 @@ plot_scatter <- function(
 
             # hoverdata
             hovertext <- ''
-            for (field in c(x, y, hovertext)) {
+            for (field in c(x, y, hover_data)) {
                 if (!is.null(field)) {
                     hovertext <- paste0(hovertext, field, "=", df[(df[[group_by]] == group), field], "<br>")
                 }
@@ -464,6 +467,8 @@ plot_multiple_comparisons <- function(
     custom_group_order=c()
 ) {
 
+    df <- df[(!is.na(df[[y]])), ]
+
     if (length(custom_group_order)>=1) {
         group_names <- intersect( custom_group_order, unique(df[[x]]) )
         df <- df[(df[[x]] %in% group_names), ]
@@ -523,7 +528,7 @@ plot_multiple_comparisons <- function(
             tryCatch({
                 withCallingHandlers({
                     h_low <- max(
-                        aggregate(df_subset[[y]], list(df_subset[[x]]),
+                        aggregate(df[[y]], list(df[[x]]),
                         FUN=function(x) mean(x)+sd(x)
                     )[['x']], na.rm=TRUE) * 1.1
                 }, warning = function(w) {
@@ -533,10 +538,10 @@ plot_multiple_comparisons <- function(
                 })
             },
             error = function(condition) {
-                h_low <<- max(df_subset[[y]], na.rm=TRUE) * 1.1
+                h_low <<- max(df[[y]], na.rm=TRUE) * 1.1
             })
-            if (h_low < max(df[[y]])) {
-                h_low <- max(df[[y]]) * 1.1
+            if (h_low < max(df[[y]], na.rm=TRUE)) {
+                h_low <- max(df[[y]], na.rm=TRUE) * 1.1
             }
             space <- h_low / 10
         }

@@ -18,7 +18,7 @@ import::from(ggplot2,
 import::from(ggprism, 'theme_prism')
 
 import::from(file.path(wd, 'R', 'tools', 'plotting.R'),
-    'plot_scatter', 'save_fig', .character_only=TRUE)
+    'plot_scatter', 'plot_multiple_comparisons', 'save_fig', .character_only=TRUE)
 import::from(file.path(wd, 'R', 'tools', 'file_io.R'),
     'read_excel_or_csv', .character_only=TRUE)
 
@@ -28,8 +28,8 @@ import::from(file.path(wd, 'R', 'tools', 'file_io.R'),
 
 # args
 option_list = list(
-    make_option(c("-i", "--input-file"), default='data/weights.csv',
-                metavar='data/weights.csv', type="character",
+    make_option(c("-i", "--input-file"), default='data/weights.xlsx',
+                metavar='data/weights.xlsx', type="character",
                 help="specify input file"),
 
     make_option(c("-o", "--output-dir"), default="figures/time",
@@ -127,14 +127,9 @@ df <- df %>%
     ) %>%
     ungroup()
 
-# drop
-df <- df %>%
-  group_by(mouse_id) %>%
-  mutate(first_one_index = match(1, died)) %>%
-  filter(row_number() <= first_one_index) %>%
-  select(-first_one_index) %>%
-  ungroup()
+df[['died']] <- lead(df[['died']])
 
+df <- data.frame(df)
 
 
 # ----------------------------------------------------------------------
@@ -143,9 +138,17 @@ df <- df %>%
 
 log_print(paste(Sys.time(), 'Plotting survival...'))
 
-# Get the last day per mouse (your original step)
 
-events <- df %>%
+# drop
+df_subs <- df %>%
+  group_by(mouse_id) %>%
+  mutate(first_one_index = match(1, died)) %>%
+  filter(row_number() <= first_one_index) %>%
+  select(-first_one_index) %>%
+  ungroup()
+
+
+events <- df_subs %>%
   group_by(mouse_id) %>%
   slice_max(day, with_ties = FALSE) %>%
   ungroup() %>%
@@ -226,28 +229,194 @@ if (!troubleshooting) {
 # ----------------------------------------------------------------------
 # Plot weights
 
+df <- data.frame(df)
+df[['group_name']] <- paste(df[['mouse_id']], df[['genotype']], sep=', ')
+
+
+# set colors
+color_map <- data.frame(unique(df[c('mouse_id', 'genotype', 'group_name')]))
+color_map[['color']] <- lapply(
+    color_map[['genotype']],
+    function(x) if (x=='WT') {
+        '#FF7F0E'  # orange
+    } else {
+        'rgba(23,190,207,1)'  # sea green
+    }
+)
+color_discrete_map <- setNames(color_map[['color']], color_map[['group_name']])
 
 log_print(paste(Sys.time(), 'Plotting weights...'))
 
 fig <- plot_scatter(
-    data.frame(df),
-    x='week', y='pct_weight', group_by='mouse_id',
+    df,
+    x='week', y='pct_weight', group_by='group_name',
+    ymin=0,
     xlabel='Time (week)', ylabel='Percent Weight', title='Weight Curves',
-    mode='lines+markers'
+    mode='lines+markers',
+    color_discrete_map=color_discrete_map,
+    hover_data=c('sex', 'genotype', 'dob', 'day', 'week')
 )
 
 # save
 if (!troubleshooting) {
-    dirpath <- file.path(wd, opt[['output-dir']], 'weight-curve')
+    dirpath <- file.path(wd, opt[['output-dir']], 'weight-curves')
     if (!dir.exists(dirpath)) { dir.create(dirpath, recursive=TRUE) }
     save_fig(
         fig=fig,
-        height=2000, width=4000,
+        height=350, width=750,
         dirpath=dirpath,
-        filename='weight-curve',
+        filename='pct_weight',
         save_html=TRUE
     )
 }
+
+
+fig <- plot_scatter(
+    df,
+    x='week', y='weight', group_by='group_name',
+    ymin=0,
+    xlabel='Time (week)', ylabel='Mouse Weight (g)', title='Weight Curves',
+    mode='lines+markers',
+    color_discrete_map=color_discrete_map,
+    hover_data=c('sex', 'genotype', 'dob', 'day', 'week')
+)
+
+# save
+if (!troubleshooting) {
+    save_fig(
+        fig=fig,
+        height=350, width=750,
+        dirpath=dirpath,
+        filename='weight',
+        save_html=TRUE
+    )
+}
+
+
+fig <- plot_multiple_comparisons(
+    weight_tbl,
+    x='genotype', y='spleen_weight',
+    ymin=0,
+    ylabel="Spleen Weight (mg)",
+    title='Spleen Weight',
+    show_numbers=FALSE,
+    test='fishers_lsd',
+    custom_group_order=c('WT', 'KO')
+)
+
+
+# save
+if (!troubleshooting) {
+    withCallingHandlers({
+        ggsave(
+            file.path(wd, opt[['output-dir']], 'spleen_weight.png'),
+            plot=fig,
+            height=2000, width=2400, dpi=300, units='px',
+            scaling=1
+        )
+    }, warning = function(w) {
+        if ( any(grepl("containing non-finite values", w),
+                 grepl("outside the scale range", w),
+                 grepl("fewer than two data points", w),
+                 grepl("argument is not numeric or logical: returning NA", w)) ) {
+            invokeRestart("muffleWarning")
+        }
+    })
+}
+
+
+
+fig <- plot_scatter(
+    weight_tbl[(!is.na(weight_tbl[['spleen_weight']])), ],
+    x='45884', y='spleen_weight', group_by='genotype',
+    ymin=0,
+    xlabel='Mouse Starting Weight (g)', ylabel='Spleen Weight (mg)', title='Spleen Weight vs. Mouse Weight',
+    mode='markers',
+    # color_discrete_map=color_discrete_map,
+    hover_data=c('sex', 'genotype')
+)
+
+
+# save
+if (!troubleshooting) {
+    save_fig(
+        fig=fig,
+        height=350, width=500,
+        dirpath=dirpath,
+        filename='spleen_vs_mouse_weight',
+        save_html=TRUE
+    )
+}
+
+
+df_subs <- df[(df[['died']]==1) & (!is.na(df[['mouse_id']])), ]
+
+fig <- plot_scatter(
+    df_subs,
+    x='week', y='spleen_weight', group_by='genotype',
+    ymin=0,
+    xlabel='Death Date (weeks)', ylabel='Spleen Weight (mg)',
+    title='Spleen Weight vs. Treatment Duration',
+    mode='markers'
+)
+
+# save
+if (!troubleshooting) {
+    save_fig(
+        fig=fig,
+        height=350, width=500,
+        dirpath=dirpath,
+        filename='spleen_weight_vs_treatment_duration',
+        save_html=TRUE
+    )
+}
+
+
+df_subs[['spleen_weight_ratio_start']] <- df_subs[['spleen_weight']] / df_subs[['weight_start']]
+
+fig <- plot_scatter(
+    df_subs,
+    x='week', y='spleen_weight_ratio_start', group_by='genotype',
+    ymin=0,
+    xlabel='Death Date (weeks)', ylabel='[Spleen Weight / Mouse Starting Weight] (mg/g)',
+    title='Spleen Weight Ratio vs. Treatment Duration',
+    mode='markers'
+)
+
+# save
+if (!troubleshooting) {
+    save_fig(
+        fig=fig,
+        height=400, width=600,
+        dirpath=dirpath,
+        filename='spleen_weight_ratio_start_vs_treatment_duration',
+        save_html=TRUE
+    )
+}
+
+
+df_subs[['spleen_weight_ratio_last']] <- df_subs[['spleen_weight']] / df_subs[['weight']]
+
+fig <- plot_scatter(
+    df_subs,
+    x='week', y='spleen_weight_ratio_last', group_by='genotype',
+    ymin=0,
+    xlabel='Death Date (weeks)', ylabel='[Spleen Weight / Mouse Final Weight] (mg/g)',
+    title='Spleen Weight Ratio vs. Treatment Duration',
+    mode='markers'
+)
+
+# save
+if (!troubleshooting) {
+    save_fig(
+        fig=fig,
+        height=400, width=600,
+        dirpath=dirpath,
+        filename='spleen_weight_ratio_final_vs_treatment_duration',
+        save_html=TRUE
+    )
+}
+
 
 
 end_time = Sys.time()
