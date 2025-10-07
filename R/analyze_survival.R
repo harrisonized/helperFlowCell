@@ -21,7 +21,8 @@ import::from(file.path(wd, 'R', 'tools', 'plotting.R'),
     'plot_scatter', 'plot_multiple_comparisons', 'save_fig', .character_only=TRUE)
 import::from(file.path(wd, 'R', 'tools', 'file_io.R'),
     'read_excel_or_csv', .character_only=TRUE)
-
+import::from(file.path(wd, 'R', 'tools', 'df_tools.R'),
+    'append_dataframe', 'fillna', .character_only=TRUE)
 
 # ----------------------------------------------------------------------
 # Pre-script settings
@@ -36,6 +37,10 @@ option_list = list(
                 metavar="figures/time", type="character",
                 help="set the output directory for the data"),
 
+    make_option(c("-g", "--group-by"), default='sex,treatment',
+                metavar='treatment', type="character",
+                help="enter a column or comma-separated list of columns, no spaces"),
+
     make_option(c("-t", "--troubleshooting"), default=FALSE, action="store_true",
                 metavar="FALSE", type="logical",
                 help="enable if troubleshooting to prevent overwriting your files")
@@ -44,11 +49,59 @@ opt_parser = OptionParser(option_list=option_list)
 opt = parse_args(opt_parser)
 troubleshooting = opt[['troubleshooting']]
 
+# args
+metadata_cols <- unlist(strsplit(opt[['group-by']], ','))
+
 # Start Log
 start_time = Sys.time()
 log <- log_open(paste0("analyze_survival-",
     strftime(start_time, format="%Y%m%d_%H%M%S"), '.log'))
 log_print(paste('Script started at:', start_time))
+
+
+
+duration_from_start_date <- function(
+    df,
+    datecol='date',
+    start_datecol='date_start',
+    format="%m/%d/%y"
+) {
+
+    for (duration in c('day', 'week')) {
+        df[[duration]] <- as.numeric(difftime(
+            as.Date(df[[datecol]], format = format),
+            as.Date(df[[start_datecol]], format = format),
+            units = paste0(duration, 's')
+        ))
+    }
+
+    return(df)
+
+}
+
+create_survival_table <- function(df, start_info, end_info) {
+
+    dummy_start <- df %>%
+      group_by(genotype) %>%
+      slice_min(date, with_ties = FALSE) %>%
+      ungroup() %>%
+      select(genotype, date, week, day)
+    dummy_start[['is_dead']] <- 0
+
+    dummy_end <- end_info %>%
+        group_by(genotype) %>%
+        slice_min(order_by = date, n = 1, with_ties = FALSE) %>%
+        ungroup() %>%
+        select(genotype, date, week, day)
+    dummy_end[['week']] <- dummy_end[['week']]-0.001
+    dummy_end[['day']] <- dummy_end[['day']]-0.001
+    dummy_end[['is_dead']] <- 0
+
+    survival <- append_dataframe(end_info, dummy_start)
+    survival <- append_dataframe(survival, dummy_end)
+
+    return(survival)
+}
 
 
 # ----------------------------------------------------------------------
@@ -85,116 +138,47 @@ df = pivot_longer(
     values_drop_na = FALSE  # important
 )
 
+
+# fix dates
 if (ext == 'xlsx') {
     df[['date']] <- as.Date(as.numeric(df[['date']]), origin = "1899-12-30")
 }
 
+# get start_info
 start_info <- df %>%
   group_by(mouse_id) %>%
   slice_min(date, with_ties = FALSE) %>%
   ungroup() %>%
-  select(mouse_id, date, weight)
+  select(mouse_id, genotype, date, weight)
 
-# start_info <- rename_columns(start_info, c('date'='date_start', 'weight'='weight_start'))
-
-df <- merge(df, start_info,
+df <- merge(df,  start_info[, c('mouse_id', 'date', 'weight')],
     by="mouse_id", all.x=TRUE, all.y=TRUE, suffixes=c('', '_start'))
 
-df[['day']] <- as.numeric(difftime(
-    as.Date(df[['date']], format = "%m/%d/%y"),
-    as.Date(df[['date_start']], format = "%m/%d/%y"),
-    units = "days"
-))
 
-df[['week']] <- as.numeric(difftime(
-    as.Date(df[['date']], format = "%m/%d/%y"),
-    as.Date(df[['date_start']], format = "%m/%d/%y"),
-    units = "weeks"
-))
-
-
+df <- duration_from_start_date(df)
 df[['pct_weight']] <- df[['weight']] / df[['weight_start']]
-df[['is_dead']] <- as.numeric(is.na(df[['pct_weight']]))
 
-
-# label died column
-df <- df %>%
+# get end_info
+end_info <- df %>%
+    filter(!is.na(weight)) %>%
     group_by(mouse_id) %>%
-    mutate(
-        died = if (any(is.na(weight))) {
-            as.integer(row_number() == min(row_number()[is.na(weight)]))
-        } else { 0 }
-    ) %>%
-    ungroup()
-
-df[['died']] <- lead(df[['died']])
+    slice_max(order_by = date, n = 1, with_ties = FALSE) %>%
+    ungroup() %>%
+    select(mouse_id, genotype, date, week, day, weight)
+end_info[['is_dead']] <- as.numeric( end_info[['date']] < max(df[['date']]) )
 
 df <- data.frame(df)
+df[['group_name']] <- paste(df[['mouse_id']], df[['genotype']], sep=', ')
+
 
 
 # ----------------------------------------------------------------------
 # Plot survival
 
+survival <- create_survival_table(df, start_info, end_info)
 
-log_print(paste(Sys.time(), 'Plotting survival...'))
-
-
-# drop
-df_subs <- df %>%
-  group_by(mouse_id) %>%
-  mutate(first_one_index = match(1, died)) %>%
-  filter(row_number() <= first_one_index) %>%
-  select(-first_one_index) %>%
-  ungroup()
-
-
-events <- df_subs %>%
-  group_by(mouse_id) %>%
-  slice_max(day, with_ties = FALSE) %>%
-  ungroup() %>%
-  select(mouse_id, genotype, week, died)
-
-# Add dummy row with day=0, died=0 for each genotype group
-events <- events %>%
-  group_by(genotype) %>%
-  group_modify(~ bind_rows(tibble(week = 0, died = 0), .x)) %>%
-  ungroup()
-
-# Find first death day per genotype group
-first_deaths <- events[(events[['died']]==1), ] %>%
-  group_by(genotype) %>%
-  summarise(first_death = min(week)) %>%
-  ungroup()
-
-# Create dummy rows for day = 0 and day just before first death
-dummy_rows <- first_deaths %>%
-  mutate(
-    week_before = first_death - 0.001
-  ) %>%
-  select(genotype, week_before) %>%
-  pivot_longer(cols = c(week_before), names_to = "time_type", values_to = "week") %>%
-  # Add day=0 rows for each genotype as well
-  bind_rows(
-    tibble(
-      genotype = unique(first_deaths$genotype),
-      day = 0
-    )
-  ) %>%
-  distinct() %>%  # remove duplicates in case day_before = 0
-  arrange(genotype, week) %>%
-  mutate(
-    mouse_id = NA_integer_,
-    died = 0
-  ) %>%
-  select(mouse_id, genotype, week, died)
-
-# Bind dummy rows to events and arrange
-events_extended <- events %>%
-  bind_rows(dummy_rows) %>%
-  arrange(genotype, week)
-
-# Fit survival model
-fit <- survfit(Surv(week, died) ~ genotype, data = events_extended)
+# Fit model for confidence intervals
+fit <- survfit(Surv(week, is_dead) ~ genotype, data = survival)
 surv_data <- tidy(fit)
 surv_data[['strata']] <- gsub('genotype=', '', surv_data[['strata']])
 
@@ -227,17 +211,16 @@ if (!troubleshooting) {
 
 
 # ----------------------------------------------------------------------
-# Plot weights
+# Plot weight over time
 
-df <- data.frame(df)
-df[['group_name']] <- paste(df[['mouse_id']], df[['genotype']], sep=', ')
 
+log_print(paste(Sys.time(), 'Plotting weight over time...'))
 
 # set colors
 color_map <- data.frame(unique(df[c('mouse_id', 'genotype', 'group_name')]))
 color_map[['color']] <- lapply(
     color_map[['genotype']],
-    function(x) if (x=='WT') {
+    function(x) if ((x=='WT') | (x=='M')) {
         '#FF7F0E'  # orange
     } else {
         'rgba(23,190,207,1)'  # sea green
@@ -245,13 +228,13 @@ color_map[['color']] <- lapply(
 )
 color_discrete_map <- setNames(color_map[['color']], color_map[['group_name']])
 
-log_print(paste(Sys.time(), 'Plotting weights...'))
 
+# pct_weight
 fig <- plot_scatter(
     df,
-    x='week', y='pct_weight', group_by='group_name',
-    ymin=0,
-    xlabel='Time (week)', ylabel='Percent Weight', title='Weight Curves',
+    x='day', y='pct_weight', group_by='group_name',
+    xlabel='Time (day)', ylabel='Percent Weight', title='Weight Curves',
+    ymin=0.75,
     mode='lines+markers',
     color_discrete_map=color_discrete_map,
     hover_data=c('sex', 'genotype', 'dob', 'day', 'week')
@@ -270,12 +253,11 @@ if (!troubleshooting) {
     )
 }
 
-
+# raw_weight
 fig <- plot_scatter(
     df,
-    x='week', y='weight', group_by='group_name',
-    ymin=0,
-    xlabel='Time (week)', ylabel='Mouse Weight (g)', title='Weight Curves',
+    x='day', y='weight', group_by='group_name',
+    xlabel='Time (day)', ylabel='Mouse Weight (g)', title='Weight Curves',
     mode='lines+markers',
     color_discrete_map=color_discrete_map,
     hover_data=c('sex', 'genotype', 'dob', 'day', 'week')
@@ -293,10 +275,16 @@ if (!troubleshooting) {
 }
 
 
+
+# ----------------------------------------------------------------------
+# Plot spleen weight
+
+
+log_print(paste(Sys.time(), 'Plotting spleen weight...'))
+
 fig <- plot_multiple_comparisons(
     weight_tbl,
     x='genotype', y='spleen_weight',
-    ymin=0,
     ylabel="Spleen Weight (mg)",
     title='Spleen Weight',
     show_numbers=FALSE,
@@ -330,12 +318,12 @@ fig <- plot_scatter(
     weight_tbl[(!is.na(weight_tbl[['spleen_weight']])), ],
     x='45884', y='spleen_weight', group_by='genotype',
     ymin=0,
-    xlabel='Mouse Starting Weight (g)', ylabel='Spleen Weight (mg)', title='Spleen Weight vs. Mouse Weight',
+    xlabel='Mouse Starting Weight (g)', ylabel='Spleen Weight (mg)',
+    title='Spleen Weight vs. Mouse Weight',
     mode='markers',
     # color_discrete_map=color_discrete_map,
     hover_data=c('sex', 'genotype')
 )
-
 
 # save
 if (!troubleshooting) {
@@ -416,7 +404,6 @@ if (!troubleshooting) {
         save_html=TRUE
     )
 }
-
 
 
 end_time = Sys.time()
