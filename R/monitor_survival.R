@@ -197,7 +197,15 @@ df[['day']] <- as.numeric(difftime(
 df[['week']] <- df[['day']]/7
 df[['pct_weight']] <- df[['weight']] / df[['weight_start']]
 df <- data.frame(df)
-
+df <- append_dataframe(df,
+    cbind(weight_tbl[, c('mouse_id', 'group')],
+        data.frame(
+            day=max(df[['day']]+1),
+            week=max(df[['week']]+1/7)
+        )
+    )
+)
+df <- df[order(df[['mouse_id']], desc(df[['day']])), ]
 
 # set colors
 # TODO: un-hardcode this
@@ -273,7 +281,7 @@ fig <- plot_multiple_comparisons(
     title='Weight Loss at Time of Death',
     show_numbers=TRUE,
     test='fishers_lsd',
-    custom_group_order=c('WT', 'KO')
+    custom_group_order=intersect(c('WT', 'KO'), unique(weight_tbl[['group']]))
 )
 
 # save
