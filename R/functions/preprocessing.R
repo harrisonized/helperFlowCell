@@ -1,3 +1,5 @@
+import::here(magrittr, '%>%')
+import::here(dplyr, 'group_by', 'slice_min', 'ungroup', 'select', 'all_of')
 import::here(stringr, 'str_detect')
 import::here(plyr, 'mapvalues')
 import::here(XML, 'xmlOutputDOM')
@@ -5,7 +7,7 @@ import::here(file.path(wd, 'R', 'config', 'replacements.R'),
     'fluorophore_replacements', 'antibody_replacements', 'instr_cfg_colreps', 'ab_inv_colreps',
     .character_only=TRUE)
 import::here(file.path(wd, 'R', 'tools', 'df_tools.R'),
-    'rename_columns', 'reset_index', .character_only=TRUE)
+    'append_dataframe', 'rename_columns', 'reset_index', .character_only=TRUE)
 import::here(file.path(wd, 'R', 'tools', 'text_tools.R'),
     'title_to_snake_case', .character_only=TRUE)
 import::here(file.path(wd, 'R', 'tools', 'list_tools.R'),
@@ -15,12 +17,60 @@ import::here(file.path(wd, 'R', 'config', 'flow.R'),
     .character_only=TRUE)
 
 ## Functions
+## create_survival_table
 ## preprocess_flowjo_export
 ## preprocess_antibody_inventory
 ## preprocess_instrument_config
 ## sort_groups_by_metric
 ## spillover_to_xml
 ## parse_flowjo_metadata
+
+
+#' Create Survival Table
+#' 
+#' Reshape for survfit
+#' Use mouse_id as the id column
+#' 
+create_survival_table <- function(start_info, end_info, end_date) {
+
+    df <- merge(start_info, end_info,
+       by=c("mouse_id", "group"),
+       all.x=TRUE, all.y=TRUE, suffixes=c('_start', '_end'))
+
+    # calculate day from date
+    df[['day']] <- as.numeric(difftime(
+        as.Date(df[['date_end']], format = '%m/%d/%y'),
+        as.Date(df[['date_start']], format = '%m/%d/%y'),
+        units = paste0('day', 's')
+    ))
+    df[['week']] <- df[['day']]/7
+    df[['is_dead']] <- as.numeric( df[['date_end']] < end_date )
+
+    # extend line to experiment start for survfit
+    dummy_start <- data.frame(
+        group = unique(df[["group"]]),
+        date_start = min(df[['date_start']]),
+        date_end = min(df[['date_start']]),
+        day = 0,
+        week = 0,
+        is_dead = 0
+    )
+
+    dummy_end <- df %>%
+        group_by(.data[['group']]) %>%
+        slice_min(order_by = date_end, n = 1, with_ties = FALSE) %>%
+        ungroup() %>%
+        select(all_of(c('group', 'date_end', 'day', 'week')))
+    dummy_end[['date_start']] = min(df[['date_start']])
+    dummy_end[['day']] = dummy_end[['day']] - 0.001
+    dummy_end[['week']] = dummy_end[['week']] - 0.001
+    dummy_end[['is_dead']] = 0
+
+    df <- append_dataframe(df, dummy_start)
+    df <- append_dataframe(df, dummy_end)
+
+    return(df)
+}
 
 
 #' Preprocess Each Flowjo Export
