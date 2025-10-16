@@ -42,8 +42,8 @@ option_list = list(
                 metavar="figures/survival", type="character",
                 help="set the output directory for the data"),
 
-    make_option(c("-g", "--group-by"), default='genotype,treatment',
-                metavar='genotype,treatment', type="character",
+    make_option(c("-g", "--group-by"), default='treatment,genotype',
+                metavar='treatment,genotype', type="character",
                 help="enter a column or comma-separated list of columns, no spaces"),
 
     make_option(c("-w", "--week"), default=FALSE, action="store_true",
@@ -67,7 +67,7 @@ metadata_cols <- unlist(strsplit(opt[['group-by']], ','))
 
 # Start Log
 start_time = Sys.time()
-log <- log_open(paste0("monitor_survival-",
+log <- log_open(paste0("monitor_weights-",
     strftime(start_time, format="%Y%m%d_%H%M%S"), '.log'))
 log_print(paste('Script started at:', start_time))
 
@@ -166,7 +166,7 @@ if (!troubleshooting) {
     ggsave(
         file.path(dirpath, 'survival-curve.png'),  
         plot=fig,
-        height=2000, width=3000, dpi=250, units='px',
+        height=4000, width=6000, dpi=500, units='px',
         scaling=2
     )
 }
@@ -212,7 +212,7 @@ df <- df[order(df[['mouse_id']], desc(df[['day']])), ]
 color_map <- data.frame(unique(df[c('mouse_id', 'group')]))
 color_map[['color']] <- lapply(
     color_map[['group']],
-    function(x) if ((x=='WT') | (x=='M')) {
+    function(x) if ((x=='WT') | (x=='H')) {
         '#FF7F0E'  # orange
     } else {
         'rgba(23,190,207,1)'  # sea green
@@ -226,6 +226,7 @@ fig <- plot_scatter(
     df,
     x=if (opt[['week']]) {'week'} else {'day'},
     y='pct_weight', group_by='group',
+    ymin=0.75,
     xlabel=paste("Time", if (opt[['week']]) {'(weeks)'} else {'(days)'}),
     ylabel='Percent Weight',
     title='Percent Weight Over Time',
@@ -238,7 +239,7 @@ fig <- plot_scatter(
 if (!troubleshooting) {
     save_fig(
         fig=fig,
-        height=350, width=750,
+        height=400, width=750,
         dirpath=dirpath,
         filename='pct_weight',
         save_html=TRUE
@@ -262,7 +263,7 @@ fig <- plot_scatter(
 if (!troubleshooting) {
     save_fig(
         fig=fig,
-        height=350, width=750,
+        height=400, width=600,
         dirpath=dirpath,
         filename='raw_weight',
         save_html=TRUE
@@ -326,16 +327,16 @@ if ('spleen_weight' %in% colnames(weight_tbl)) {
         title='Spleen Weight',
         show_numbers=FALSE,
         test='fishers_lsd',
-        custom_group_order=c('WT', 'KO')
+        custom_group_order=intersect(c('WT', 'KO'), unique(weight_tbl[['group']]))
     )
 
     # save
     if (!troubleshooting) {
         withCallingHandlers({
             ggsave(
-                file.path(wd, opt[['output-dir']], 'spleen-weight', 'spleen_weight.png'),
+                file.path(wd, opt[['output-dir']], 'spleen-weight', 'spleen_weight.svg'),
                 plot=fig,
-                height=2000, width=2400, dpi=300, units='px',
+                height=5000, width=5000, dpi=500, units='px',
                 scaling=1
             )
         }, warning = function(w) {
