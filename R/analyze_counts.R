@@ -163,6 +163,11 @@ df <- df[order(df[['cell_type']], df[['organ']], df[['group_name']]), ]  # sort 
 group_names <- sort(unique( df[['group_name']] ))
 df <- df[(df[['num_cells']]>10), ]
 
+# exclude negative gates
+cell_types <- unique(df[['cell_type']])
+negative_gates <- cell_types[grepl("-$", cell_types)]
+df <- df[((df[['cell_type']] %in% negative_gates)==FALSE), ]
+
 
 # ----------------------------------------------------------------------
 # Compute statistics
