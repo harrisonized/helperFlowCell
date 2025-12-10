@@ -14,7 +14,8 @@ import::from(tidyr, 'pivot_longer')
 import::from(ggplot2, 'ggsave')
 
 import::from(file.path(wd, 'R', 'functions', 'preprocessing.R'),
-    'preprocess_flowjo_export', 'sort_groups_by_metric', .character_only=TRUE)
+    'find_initial_gates', 'preprocess_flowjo_export', 'sort_groups_by_metric',
+    .character_only=TRUE)
 import::from(file.path(wd, 'R', 'functions', 'file_io.R'),
     'import_flowjo_export', 'import_flow_metadata', .character_only=TRUE)
 
@@ -104,17 +105,23 @@ log_print(paste('Script started at:', start_time))
 
 log_print(paste(Sys.time(), 'Reading data...'))
 
+# get last_initial_gate
+last_initial_gate <- 'Live Cells'  # try CD45+
+
 # Read counts data exported from flowjo
 df <- import_flowjo_export(
     file.path(wd, opt[['input-dir']]),
-    metric_name='num_cells', include_initial_gates=TRUE
+    metric_name='num_cells',
+    last_initial_gate=last_initial_gate  # change to CD45+
 )
 if (length(df)==0) {
     msg <- paste("No data found. Please check", file.path(wd, opt[['input-dir']]), '...')
     stop(msg)
 }
+
+divisor <- tail(find_initial_gates(colnames(df), last_initial_gate), 1)[[1]]
 df[['pct_cells']] <- round(df[['num_cells']] /
-    df[['Cells/Single Cells/Single Cells/Live Cells']] * 100, 4)
+    df[[divisor]] * 100, 4)
 
 # reference files
 flow_metadata <- import_flow_metadata(file.path(wd, opt[['metadata-dir']]))
@@ -285,7 +292,7 @@ for (organ in sort(organs)) {
     fig <- plot_violin(
         tmp,
         x='cell_type', y='pct_cells', group_by='group_name',
-        ylabel='Percent of Live Cells', title=organ,
+        ylabel=paste('Percent of', last_initial_gate), title=organ,
         ymin=0, ymax=100,
         hover_data=unique(intersect(
                 c('mouse_id', 'group_name', metadata_cols,

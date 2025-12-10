@@ -1,4 +1,5 @@
 import::here(magrittr, '%>%')
+import::here(tidyr, 'pivot_longer')
 import::here(dplyr, 'group_by', 'slice_min', 'ungroup', 'select', 'all_of')
 import::here(stringr, 'str_detect')
 import::here(plyr, 'mapvalues')
@@ -18,6 +19,7 @@ import::here(file.path(wd, 'R', 'config', 'flow.R'),
 
 ## Functions
 ## create_survival_table
+## find_initial_gates
 ## preprocess_flowjo_export
 ## preprocess_antibody_inventory
 ## preprocess_instrument_config
@@ -73,11 +75,29 @@ create_survival_table <- function(start_info, end_info, end_date) {
 }
 
 
+#' Find Initial Gates
+#' 
+#' Helper function for preprocess_flowjo_export
+#'
+find_initial_gates <- function(cols, name, backup_name="Live Cells") {
+
+    idx <- which(sapply(strsplit(cols, "/"), function(x) tail(x, 1) == name))
+    if (length(idx) == 0 ) {
+        idx <- which(sapply(strsplit(cols, "/"), function(x) tail(x, 1) == backup_name))
+            if (length(idx) == 0 ) {
+                return(NULL)
+            }
+    }
+    initial_gates <- cols[2:idx]
+    return(initial_gates)
+}
+
+
 #' Preprocess Each Flowjo Export
 #' 
 preprocess_flowjo_export <- function(raw_table,
     metric_name='num_cells',  # num_cells, gmfi, or rsdev
-    include_initial_gates=FALSE  # turn on for analyze_counts
+    last_initial_gate=NA   # turn on for analyze_counts
 ) {
 
     raw_table <- rename_columns(raw_table,
@@ -93,10 +113,20 @@ preprocess_flowjo_export <- function(raw_table,
     raw_table <- raw_table[!str_detect(raw_table[['fcs_name']], 'unstained'), ]  # drop unstained cells
     raw_table <- reset_index(raw_table, drop=TRUE)
 
+    # get last_initial_gate
+    if (!is.na(last_initial_gate)) {
+        initial_gates <- find_initial_gates(colnames(raw_table), last_initial_gate)
+        if (length(initial_gates) == 1 && is.null(initial_gates)) {
+            last_initial_gate <- NULL
+        }
+    }
+
     # Reshape so each row is a gate in each sample
     df <- pivot_longer(raw_table,
         names_to = "gate", values_to = metric_name,
-        cols=items_in_a_not_b(colnames(raw_table), c(id_cols, 'Count', if (include_initial_gates) {initial_gates} else {NULL} )),
+        cols=items_in_a_not_b(colnames(raw_table),
+            c(id_cols, 'Ungated', if (!is.null(last_initial_gate)) {initial_gates} else {NULL} )
+        ),
         values_drop_na = TRUE
     )
     df[['cell_type']] <- unlist(lapply(strsplit(df[['gate']], '/'), function(x) x[length(x)]))

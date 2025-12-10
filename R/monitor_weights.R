@@ -214,6 +214,10 @@ color_map[['color']] <- lapply(
     color_map[['group']],
     function(x) if ((x=='WT') | (x=='H')) {
         '#FF7F0E'  # orange
+    } else if (x=='M') {
+        '#377EB8'  # blue
+    } else if (x=='PBS') {
+        '#9467bd'  # purple
     } else {
         'rgba(23,190,207,1)'  # sea green
     }
@@ -232,7 +236,7 @@ fig <- plot_scatter(
     title='Percent Weight Over Time',
     mode='lines+markers',
     color_discrete_map=color_discrete_map,
-    hover_data=c('sex', 'genotype', 'dob', 'day', 'week')
+    hover_data=c('mouse_id', 'sex', 'genotype', 'dob', 'day', 'week')
 )
 
 # save

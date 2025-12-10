@@ -22,7 +22,7 @@ import::here(file.path(wd, 'R', 'tools', 'list_tools.R'),
 import_flowjo_export <- function(
     dirpath,
     metric_name='num_cells',
-    include_initial_gates=FALSE
+    last_initial_gate=NA
 ) {
     raw_tables <- append_many_csv(dirpath, recursive=TRUE,
         na_strings=c('n/a'), include_filepath=FALSE, return_list=TRUE)
@@ -31,7 +31,7 @@ import_flowjo_export <- function(
     }
 
     dfs <- lapply(raw_tables, function(x) preprocess_flowjo_export(
-        x, metric_name=metric_name, include_initial_gates=include_initial_gates
+        x, metric_name=metric_name, last_initial_gate=last_initial_gate
     ))
     df <- do.call(rbind, dfs)
     df <- reset_index(df, drop=TRUE)
