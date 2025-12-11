@@ -376,11 +376,11 @@ for (idx in 1:nrow(pval_tbl)) {
     # ----------------------------------------------------------------------
     # Percent Cells
 
-    custom_group_order <- move_list_items_to_front(
+    final_group_order <- move_list_items_to_front(
         unique(df_subset[['group_name']]),
         custom_group_order
     )
-    n_groups <- length(unique(custom_group_order))
+    n_groups <- length(unique(final_group_order))
     
     withCallingHandlers({
         fig <- plot_multiple_comparisons(
@@ -391,7 +391,7 @@ for (idx in 1:nrow(pval_tbl)) {
             title=paste(toupper(organ), cell_type),
             test=opt[['stat']],
             show_numbers=opt[['show-numbers']],
-            custom_group_order=custom_group_order  # manual input
+            custom_group_order=final_group_order  # manual input
         )
     }, warning = function(w) {
         if ( any(grepl("containing non-finite values", w),
@@ -448,7 +448,7 @@ for (idx in 1:nrow(pval_tbl)) {
                 title=paste(toupper(organ), cell_type),
                 test=opt[['stat']],
                 show_numbers=opt[['show-numbers']],
-                custom_group_order=custom_group_order
+                custom_group_order=final_group_order
             )
 
             # save
