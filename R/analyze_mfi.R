@@ -140,12 +140,11 @@ log_print(paste('Script started at:', start_time))
 
 log_print(paste(Sys.time(), 'Reading data...'))
 
-
 # import mfi
 df <- import_flowjo_export(
     file.path(wd, opt[['input-dir']]),
     metric_name=opt[['metric']],
-    include_initial_gates=FALSE
+    last_initial_gate=NA
 )
 if (is.null(df)) {
     stop(paste('No files found in', file.path(wd, opt[['input-dir']])))
@@ -162,12 +161,13 @@ if (!is.null(sdev_df)) {
     df[(is.na(df[['sdev']])), 'sdev'] <- 0  # fillna
 }
 
+last_initial_gate <- 'Live Cells'  # try CD45+
 
 # left join counts
 counts_df <- import_flowjo_export(
     file.path(wd, opt[['counts-dir']]),
     metric_name='num_cells',
-    include_initial_gates=TRUE
+    last_initial_gate=last_initial_gate
 )
 if (!is.null(counts_df)) {
     log_print(paste(Sys.time(), 'Merging counts data...'))
@@ -178,7 +178,7 @@ if (!is.null(counts_df)) {
     ss_df <- import_flowjo_export(
         file.path(wd, opt[['counts-dir']]),
         metric_name='num_cells',
-        include_initial_gates=FALSE
+        last_initial_gate=NA
     )
     ss_df <- ss_df[
         ((ss_df[['gate']]=='Cells/Single Cells/Single Cells') |
@@ -447,11 +447,11 @@ for (idx in 1:nrow(pval_tbl)) {
     # ----------------------------------------------------------------------
     # MFI Violin Plot
 
-    custom_group_order <- move_list_items_to_front(
+    final_group_order <- move_list_items_to_front(
         unique(df_subset[['group_name']]),
         custom_group_order
     )
-    n_groups <- length(unique(custom_group_order))
+    n_groups <- length(unique(final_group_order))
 
     withCallingHandlers({
         fig <- plot_multiple_comparisons(
@@ -462,7 +462,7 @@ for (idx in 1:nrow(pval_tbl)) {
             title=paste(toupper(organ), cell_type),
             test=opt[['stat']],
             show_numbers=opt[['show-numbers']],
-            custom_group_order=custom_group_order  # manual input
+            custom_group_order=final_group_order  # manual input
         )
     }, warning = function(w) {
         if ( any(grepl("containing non-finite values", w),
