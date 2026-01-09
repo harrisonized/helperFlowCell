@@ -42,21 +42,29 @@ install.packages('superb')
 install.packages('cowplot')
 install.packages('plotly')
 install.packages('htmlwidgets')
+install.packages('pandoc')  # save static plotly images
 install.packages('ggprism')
 install.packages('svglite')
 update.packages('systemfonts')
 ```
 
-In python, create a conda environment ('r-reticulate') and install plotly and kaleido.
+In python, create a conda environment ('r-reticulate') and install plotly and kaleido:
 
-```python
+```bash
 conda create -n r-reticulate python=3.9
-conda install pip
+conda activate r-reticulate
 pip install plotly==5.3.1
 pip3 install -U kaleido==0.2.1
+pip install numpy==1.24.2
 ```
 
-Additionally, to help R find your conda environment, create the `.Renviron` hidden file on in your home directory and include the following three lines:
+If you're on linux, additionally you'll need to install pandoc using the command line:
+
+```bash
+sudo apt install pandoc
+```
+
+To help R find your conda environment, create the `.Renviron` hidden file on in your home directory and include the following three lines:
 
 ```bash
 LD_LIBRARY_PATH="/path/to/miniconda3/envs/r-reticulate/lib/libpython3.9.dylib"
@@ -78,6 +86,15 @@ Backtrace:
       Error in save_image(fig, file = file.path(file.path(dirpath, "png"), paste0(filename, : Calls: save_fig
 ```
 
+Lastly, put this in your bashrc:
+
+```bash
+# mac
+RSTUDIO_PANDOC="/Applications/RStudio.app/Contents/Resources/app/quarto/bin/tools"
+
+# linux
+RSTUDIO_PANDOC="/usr/lib/rstudio/resources/app/bin/quarto/bin/tools/x86_64"
+```
 
 ## Data Requirements
 
@@ -96,9 +113,9 @@ To get the counts, open Flowjo's Table Editor and drag in all the gates you want
 
 To get the mfi and sdev, do the same thing as above in Sublime, but instead, use regex to search and replace this block: `name=.*?rename=""`. For mfi, replace with `name="Geometric Mean : GFP"  identifier="Geometric Mean"  statistic="Geometric Mean"  parameterName="Comp-GFP-A :: GFP"  rename=""`. For sdev, replace with `name="Robust SD : GFP"  identifier="Robust SD"  statistic="Robust SD"  parameterName="Comp-GFP-A :: GFP"  rename=""`. Make sure you name your file so you know what kind of mean you use. For example, I name my mfi files `gmfi.csv` and `rsdev.csv` to denote geometric mean and robust sd, respectively.
 
- 
+
 ## Getting Started
- 
+
 1. All scripts are meant to be run from the command line. For example:
 
     ```bash

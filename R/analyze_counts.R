@@ -33,6 +33,8 @@ import::from(file.path(wd, 'R', 'config', 'flow.R'),
 import::from(file.path(wd, 'R', 'config', 'user_input.R'),
     'custom_group_order', .character_only=TRUE)
 
+reticulate::py_config()  # required on linux to access reticulate
+
 
 # ----------------------------------------------------------------------
 # Pre-script settings
