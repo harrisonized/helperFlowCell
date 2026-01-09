@@ -47,6 +47,38 @@ install.packages('svglite')
 update.packages('systemfonts')
 ```
 
+In python, create a conda environment ('r-reticulate') and install plotly and kaleido.
+
+```python
+conda create -n r-reticulate python=3.9
+conda install pip
+pip install plotly==5.3.1
+pip3 install -U kaleido==0.2.1
+```
+
+Additionally, to help R find your conda environment, create the `.Renviron` hidden file on in your home directory and include the following three lines:
+
+```bash
+LD_LIBRARY_PATH="/path/to/miniconda3/envs/r-reticulate/lib/libpython3.9.dylib"
+RETICULATE_MINICONDA_PATH="/path/to/miniconda3"
+RETICULATE_PYTHON_ENV="/path/to/miniconda3/envs/r-reticulate/"
+```
+
+Note that if you have a higher version of plotly and kaleido in your conda environment, you will see the following entirely unhelpful error. See this [Stack Overflow link](https://stackoverflow.com/questions/71118601/saving-a-plotly-image-not-working-with-kaleido-even-though-it-is-installed) for more details.
+
+```R
+Error in save_image(): ! {reticulate} wasn't able to find a Python environment. ℹ If you have an existing Python installation, use reticulate::use_python() to inform {reticulate} of it. ℹ To have {reticulate} install Python for you, reticulate::install_python().
+Backtrace:
+    ▆ 1. └─save_fig(...)
+      2. ├─base::suppressWarnings(...)
+      3. │ └─base::withCallingHandlers(...)=
+      4. └─plotly::save_image(...)
+      5. └─plotly::kaleido()
+      6. └─rlang::abort(...)
+      Error in save_image(fig, file = file.path(file.path(dirpath, "png"), paste0(filename, : Calls: save_fig
+```
+
+
 ## Data Requirements
 
 Set up the following files and place them in the `ref` directory.
