@@ -36,6 +36,7 @@ import::here(file.path(wd, 'R', 'tools', 'math.R'),
 ## get_significance_code
 ## plot_multiple_comparisons
 ## plot_modal_histograms
+## plot_polar_area
 
 
 #' Save Figure
@@ -764,5 +765,152 @@ plot_modal_histograms <- function(df,
     fig <- fig + theme(legend.position="none")
     fig <- plot_grid(fig, legend, ncol = 2, rel_widths = c(3, 1))
 
+    return(fig)
+}
+
+
+#' Plot Polar Area
+#' 
+#' Angle represents the number of degrees, radius represents size
+#' 
+plot_polar_area <- function(df,
+    x="population_pct", y="radius_value", group='category',
+    title=NULL,
+    show_axes=FALSE,
+    colors = NULL,
+    normalize=TRUE
+) {
+
+    # Normalize to 100%
+    total_pct <- sum(df[[x]])
+    if ((normalize && total_pct != 100) || total_pct > 100) {
+        df[[x]] <- df[[x]] * 100 / total_pct
+    }
+    df[['angle_degrees']] <- df[[x]] * (360 / 100)
+    df[['theta_start']] <- c(0, cumsum(df[['angle_degrees']])[-nrow(df)])
+    df[['theta_center']] <- df[['theta_start']] + df[['angle_degrees']] / 2
+    
+    # Create labels
+    df[['label']] <- paste0(df[[x]], "%\n", df[[y]])
+    
+    # Find max radius value to determine axis range
+    max_radius <- max(df[[y]])
+    
+    # Determine label position based on slice width and radius
+    # For small slices, position just outside the max radius
+    df[['label_r']] <- ifelse(df[[x]] < 10 | df[[y]] < 0.3, 
+                           max_radius + 0.02,  # Just outside the maximum radius
+                           df[[y]] / 2)  # Middle of the slice
+    
+    # Set axis range to accommodate all df and labels
+    axis_range <- max(max_radius, max(df[['label_r']])) + 0.1
+    
+    # Create the polar area diagram
+    fig <- plot_ly()
+    
+    # Add each sector
+    for(i in 1:nrow(df)) {
+        # Determine color for this category
+        sector_color <- if (!is.null(colors) && data[i, 'category'] %in% names(colors)) {
+            colors[[ data[i, 'category'] ]]
+        } else {
+            NULL  # Use default plotly colors
+        }
+
+        # Build marker configuration
+        marker_config <- list(line = list(color = 'white', width = 2))
+        if (!is.null(sector_color)) {
+            marker_config[['color']] <- sector_color
+        }
+
+        fig <- fig %>%
+            add_trace(
+                type = 'barpolar',
+                r = df[i, y],
+                theta = df[i, 'theta_center'],
+                width = df[i, 'angle_degrees'],
+                name = df[i, group],
+                hovertext = paste(df[i, group],
+                    "<br>Population:", df[i, x],
+                    "%<br>Value:", df[i, y]
+                ),
+                hoverinfo = 'text',
+                marker = marker_config
+            )
+    }
+    
+    # Connector lines for small slices
+    for(i in 1:nrow(df)) {
+        if(df[i, 'label_r'] > max_radius) {
+            # Add a line from the edge of the slice to the label
+            fig <- fig %>%
+                add_trace(
+                    type = 'scatterpolar',
+                    r = c(df[i, y], df[i, 'label_r']),
+                    theta = c(df[i, 'theta_center'], df[i, 'theta_center']),
+                    mode = 'lines',
+                    line = list(color = 'gray', width = 1),
+                    showlegend = FALSE,
+                    hoverinfo = 'skip'
+                )
+        }
+    }
+    
+    # Text labels
+    for(i in 1:nrow(df)) {
+        label_color <- ifelse(df[i, 'label_r'] > max_radius, 'black', 'white')
+        fig <- fig %>%
+            add_trace(
+                type = 'scatterpolar',
+                r = df[i, 'label_r'],
+                theta = df[i, 'theta_center'],
+                text = df[i, 'label'],
+                mode = 'text',
+                textfont = list(size = 12, color = label_color),
+                showlegend = FALSE,
+                hoverinfo = 'skip'
+            )
+    }
+    
+
+    # Radial ticks
+    if (show_axes) {
+        tick_interval <- if(max_radius <= 1) 0.5 else ceiling(max_radius / 2)
+        tick_max <- ceiling(max_radius)
+        tick_values <- seq(tick_interval, tick_max, by = tick_interval)
+    } else {
+        tick_values <- NULL
+    }
+
+    fig <- fig %>%
+        layout(
+            title = title,
+            polar = list(
+                radialaxis = list(
+                    range = c(0, axis_range),
+                    showticklabels = FALSE,
+                    ticks = 'outside',
+                    tickvals = tick_values,
+                    ticktext = as.character(tick_values),
+                    tickmode = 'array',
+                    showgrid = show_axes,
+                    gridcolor = 'lightgray',
+                    gridwidth = 1,
+                    showline = FALSE
+                ),
+                angularaxis = list(
+                    direction = 'clockwise',
+                    ticks = '',
+                    showticklabels = FALSE,
+                    showline = FALSE,
+                    showgrid = show_axes,
+                    gridcolor = 'lightgray',
+                    gridwidth = 1,
+                    showline = show_axes
+                ),
+                bgcolor = "white"
+            )
+        )
+    
     return(fig)
 }

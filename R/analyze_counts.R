@@ -94,6 +94,9 @@ if (!(opt[['stat']] %in% c('fishers_lsd', 't_test', 'tukey', 'bonferroni'))) {
 # args
 metadata_cols <- unlist(strsplit(opt[['group-by']], ','))
 
+# get last_initial_gate
+last_initial_gate <- 'CD45+'  # try CD45+
+
 
 # Start Log
 start_time = Sys.time()
@@ -106,9 +109,6 @@ log_print(paste('Script started at:', start_time))
 # Raw Data
 
 log_print(paste(Sys.time(), 'Reading data...'))
-
-# get last_initial_gate
-last_initial_gate <- 'Live Cells'  # try CD45+
 
 # Read counts data exported from flowjo
 df <- import_flowjo_export(
@@ -389,7 +389,7 @@ for (idx in 1:nrow(pval_tbl)) {
             df_subset[, c("organ", "cell_type", "group_name", "pct_cells")],
             x='group_name', y='pct_cells',
             ymin=min( df_subset[['pct_cells']]*1.1, 0 ),
-            ylabel='Percent of\nLive Cells',
+            ylabel=paste('Percent of', last_initial_gate),
             title=paste(toupper(organ), cell_type),
             test=opt[['stat']],
             show_numbers=opt[['show-numbers']],
