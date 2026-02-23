@@ -128,6 +128,8 @@ if (!(opt[['stat']] %in% c('fishers_lsd', 't_test', 'tukey', 'bonferroni'))) {
 # args
 metadata_cols <- unlist(strsplit(opt[['group-by']], ','))
 
+last_initial_gate <- 'Live Cells'
+
 # Start Log
 start_time = Sys.time()
 log <- log_open(paste0("analyze_mfi-",
@@ -146,6 +148,7 @@ df <- import_flowjo_export(
     metric_name=opt[['metric']],
     last_initial_gate=NA
 )
+df <- df[, c('fcs_name', 'gate', 'cell_type', 'gmfi')]
 if (is.null(df)) {
     stop(paste('No files found in', file.path(wd, opt[['input-dir']])))
 }
@@ -153,6 +156,7 @@ if (is.null(df)) {
 
 # left join sdev
 sdev_df <- import_flowjo_export(file.path(wd, opt[['sdev-dir']]), metric_name='sdev')
+sdev_df <- sdev_df[, c('fcs_name', 'gate', 'cell_type', 'sdev')]
 if (!is.null(sdev_df)) {
     log_print(paste(Sys.time(), 'Merging sdev data...'))
     df <- merge(df, sdev_df,
@@ -160,8 +164,6 @@ if (!is.null(sdev_df)) {
         all.x=TRUE, all.y=FALSE, suffixes=c('', '_'))
     df[(is.na(df[['sdev']])), 'sdev'] <- 0  # fillna
 }
-
-last_initial_gate <- 'Live Cells'  # try CD45+
 
 # left join counts
 counts_df <- import_flowjo_export(
@@ -172,20 +174,12 @@ counts_df <- import_flowjo_export(
 if (!is.null(counts_df)) {
     log_print(paste(Sys.time(), 'Merging counts data...'))
 
-    counts_cols <- c("fcs_name", "gate", "cell_type",  "num_cells")  # don't need pct_cells
-    counts_df <- counts_df[, counts_cols]
+    divisor <- tail(find_initial_gates(colnames(counts_df), last_initial_gate), 1)[[1]]
+    counts_df[['pct_cells']] <- round(counts_df[['num_cells']] /
+        counts_df[[divisor]] * 100, 4)
 
-    ss_df <- import_flowjo_export(
-        file.path(wd, opt[['counts-dir']]),
-        metric_name='num_cells',
-        last_initial_gate=NA
-    )
-    ss_df <- ss_df[
-        ((ss_df[['gate']]=='Cells/Single Cells/Single Cells') |
-         (ss_df[['gate']]=='Cells/Single Cells/Single Cells/Live Cells')),
-        counts_cols
-    ]
-    counts_df <- rbind(counts_df, ss_df)
+    counts_cols <- c("fcs_name", "gate", "cell_type",  "num_cells", "pct_cells")  # don't need pct_cells
+    counts_df <- counts_df[, counts_cols]
 
     df <- merge(df, counts_df,
         by=c("fcs_name", "gate", "cell_type"),
@@ -242,7 +236,7 @@ for (organ in sort(organs)) {
                 c('organ', 'genotype', 'treatment',
                    'group_name', metadata_cols, 'cell_type',
                    'Cells/Single Cells/Single Cells/Live Cells',
-                   'num_cells', opt[['metric']], 'viable_cells_conc',
+                   'num_cells', 'pct_cells', opt[['metric']], 'viable_cells_conc',
                    'total_vol', 'total_viable_cells', 'abs_count',
                    'mouse_id', 'sex', 'weeks_old', 'fcs_name'),
                 colnames(df)
@@ -305,7 +299,7 @@ if (!is.null(sdev_df)) {
     tvd_df <- df[
         ((df[opt[['fluorescence']]]!='WT') &
          (df[['sdev']] > 0) & (df[['num_cells']] > 5)),
-        c('mouse_id', 'fcs_name', group_cols, 'num_cells', val_cols)]
+        c('mouse_id', 'fcs_name', group_cols, 'num_cells', 'pct_cells', val_cols)]
 
     # left join WT mean MFI
     wt_df <- group_by_agg(
@@ -321,7 +315,7 @@ if (!is.null(sdev_df)) {
         by=items_in_a_not_b(group_cols, opt[['fluorescence']]),
         all.x=TRUE, all.y=FALSE, suffixes=c('', '_'))[,
         c('mouse_id', 'fcs_name', group_cols,
-          'num_cells', val_cols, 'wt_gmfi', 'wt_sdev')
+          'num_cells', 'pct_cells', val_cols, 'wt_gmfi', 'wt_sdev')
     ]
     tvd_df[['group_name']] <- apply(
         tvd_df[ , metadata_cols , drop = FALSE] , 1 , paste , collapse = ", "
