@@ -55,14 +55,12 @@ import_flow_metadata <- function(dirpath) {
 
     # single value column with only 'F' causes R to interpret this as FALSE
     if ('sex' %in% colnames(flow_metadata)) {
-        if ( typeof(flow_metadata[['sex']])=='logical' ) {
-            flow_metadata[['sex']] <- mapvalues(
-                flow_metadata[['sex']],
-                from = c(FALSE, TRUE),
-                to = c('F', 'T'),
-                warn_missing=FALSE
-            )
-        }
+        flow_metadata[['sex']] <- mapvalues(
+            flow_metadata[['sex']],
+            from = c(FALSE, TRUE),
+            to = c('F', 'T'),
+            warn_missing=FALSE
+        )
     }
 
     return(flow_metadata)

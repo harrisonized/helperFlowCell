@@ -778,9 +778,14 @@ plot_polar_area <- function(df,
     title=NULL,
     show_axes=FALSE,
     colors = NULL,
-    normalize=TRUE
+    normalize=TRUE,
+    min_label_pct=2,  # Minimum percentage to show label
+    min_radius=0.3    # Minimum radius to show label inside
 ) {
 
+    # Sort by r
+    df <- df[order(-df[[y]]), ]
+    
     # Normalize to 100%
     total_pct <- sum(df[[x]])
     if ((normalize && total_pct != 100) || total_pct > 100) {
@@ -790,20 +795,60 @@ plot_polar_area <- function(df,
     df[['theta_start']] <- c(0, cumsum(df[['angle_degrees']])[-nrow(df)])
     df[['theta_center']] <- df[['theta_start']] + df[['angle_degrees']] / 2
     
-    # Create labels
-    df[['label']] <- paste0(df[[x]], "%\n", df[[y]])
+    # Create labels with truncated values (3 significant figures)
+    df[['label']] <- paste0(
+        sprintf("%.3g", df[[x]]), "%\n",
+        sprintf("%.3g", df[[y]])
+    )
     
-    # Find max radius value to determine axis range
-    max_radius <- max(df[[y]])
+    # Fixed range from -0.1 to 1
+    min_radius_range <- -0.1
+    max_radius_range <- 1.0
     
-    # Determine label position based on slice width and radius
-    # For small slices, position just outside the max radius
-    df[['label_r']] <- ifelse(df[[x]] < 10 | df[[y]] < 0.3, 
-                           max_radius + 0.02,  # Just outside the maximum radius
-                           df[[y]] / 2)  # Middle of the slice
+    # For plotting: clamp values to [0.05, 1.0] range
+    # Values <= 0 get mapped to a small positive value to avoid holes
+    # Increased from 0.01 to 0.05 for better visibility
+    df[['plot_r']] <- ifelse(df[[y]] <= 0, 0.05, pmin(df[[y]], max_radius_range))
     
-    # Set axis range to accommodate all df and labels
-    axis_range <- max(max_radius, max(df[['label_r']])) + 0.1
+    # Determine label position to avoid overlaps
+    # Strategy: Large slices get labels inside, small slices get labels outside at varying radii
+    df[['label_r']] <- pmax(0.05, df[['plot_r']] / 2)  # Default: middle of slice
+    df[['label_theta']] <- df[['theta_center']]  # Default: center of slice
+    df[['show_label']] <- df[[x]] >= min_label_pct  # Track which labels to show
+    
+    # Identify slices that need external labels (small percentage OR small radius)
+    small_threshold <- 10
+    small_indices <- which(df[[x]] < small_threshold | df[['plot_r']] < min_radius)
+    
+    if (length(small_indices) > 0) {
+        # Calculate how many "layers" we need for small labels
+        num_small <- length(small_indices)
+        # Maximum spreading - each item gets its own layer if needed
+        layer_size <- max(1, ceiling(num_small / 8))  # Spread across up to 8 radial layers
+        
+        for (i in seq_along(small_indices)) {
+            idx <- small_indices[i]
+            layer <- ((i - 1) %/% layer_size) + 1
+            
+            # Position at different radii based on layer - closer to the chart
+            # Start just outside max_radius_range and spread from there
+            df[idx, 'label_r'] <- max_radius_range + 0.08 + (layer - 1) * 0.12
+            
+            # Keep theta at center for now
+            df[idx, 'label_theta'] <- df[idx, 'theta_center']
+        }
+    }
+    
+    # Calculate the maximum label position
+    max_label_r <- max(df[['label_r']])
+    
+    # Set axis range: if we have external labels, extend just enough for them
+    # Otherwise, use the fixed max
+    if (max_label_r > max_radius_range) {
+        axis_range <- max_label_r + 0.15
+    } else {
+        axis_range <- max_radius_range + 0.1
+    }
     
     # Create the polar area diagram
     fig <- plot_ly()
@@ -811,14 +856,17 @@ plot_polar_area <- function(df,
     # Add each sector
     for(i in 1:nrow(df)) {
         # Determine color for this category
-        sector_color <- if (!is.null(colors) && data[i, 'category'] %in% names(colors)) {
-            colors[[ data[i, 'category'] ]]
+        sector_color <- if (!is.null(colors) && df[i, group] %in% names(colors)) {
+            colors[[ df[i, group] ]]
         } else {
             NULL  # Use default plotly colors
         }
 
-        # Build marker configuration
-        marker_config <- list(line = list(color = 'white', width = 2))
+        # Build marker configuration with better rendering
+        marker_config <- list(
+            line = list(color = 'white', width = 1),  # Reduced line width for small slices
+            opacity = 1.0
+        )
         if (!is.null(sector_color)) {
             marker_config[['color']] <- sector_color
         }
@@ -826,28 +874,28 @@ plot_polar_area <- function(df,
         fig <- fig %>%
             add_trace(
                 type = 'barpolar',
-                r = df[i, y],
+                r = df[i, 'plot_r'],
                 theta = df[i, 'theta_center'],
                 width = df[i, 'angle_degrees'],
                 name = df[i, group],
                 hovertext = paste(df[i, group],
-                    "<br>Population:", df[i, x],
-                    "%<br>Value:", df[i, y]
+                    "<br>Population:", sprintf("%.3g", df[i, x]),
+                    "%<br>Value:", sprintf("%.3g", df[i, y])
                 ),
                 hoverinfo = 'text',
                 marker = marker_config
             )
     }
     
-    # Connector lines for small slices
+    # Connector lines for small slices - only if label is shown
     for(i in 1:nrow(df)) {
-        if(df[i, 'label_r'] > max_radius) {
+        if(df[i, 'show_label'] && df[i, 'label_r'] > max_radius_range) {
             # Add a line from the edge of the slice to the label
             fig <- fig %>%
                 add_trace(
                     type = 'scatterpolar',
-                    r = c(df[i, y], df[i, 'label_r']),
-                    theta = c(df[i, 'theta_center'], df[i, 'theta_center']),
+                    r = c(df[i, 'plot_r'], df[i, 'label_r']),
+                    theta = c(df[i, 'theta_center'], df[i, 'label_theta']),
                     mode = 'lines',
                     line = list(color = 'gray', width = 1),
                     showlegend = FALSE,
@@ -856,28 +904,32 @@ plot_polar_area <- function(df,
         }
     }
     
-    # Text labels
+    # Text labels - only show if above minimum percentage
     for(i in 1:nrow(df)) {
-        label_color <- ifelse(df[i, 'label_r'] > max_radius, 'black', 'white')
-        fig <- fig %>%
-            add_trace(
-                type = 'scatterpolar',
-                r = df[i, 'label_r'],
-                theta = df[i, 'theta_center'],
-                text = df[i, 'label'],
-                mode = 'text',
-                textfont = list(size = 12, color = label_color),
-                showlegend = FALSE,
-                hoverinfo = 'skip'
-            )
+        if(df[i, 'show_label']) {
+            label_color <- ifelse(df[i, 'label_r'] > max_radius_range, 'black', 'white')
+            
+            # Aggressive font size reduction for small slices
+            font_size <- if(df[i, x] < small_threshold | df[i, 'plot_r'] < min_radius) 8 else 12
+            
+            fig <- fig %>%
+                add_trace(
+                    type = 'scatterpolar',
+                    r = df[i, 'label_r'],
+                    theta = df[i, 'label_theta'],
+                    text = df[i, 'label'],
+                    mode = 'text',
+                    textfont = list(size = font_size, color = label_color),
+                    showlegend = FALSE,
+                    hoverinfo = 'skip'
+                )
+        }
     }
     
 
-    # Radial ticks
+    # Radial ticks - fixed at 0.5 and 1.0
     if (show_axes) {
-        tick_interval <- if(max_radius <= 1) 0.5 else ceiling(max_radius / 2)
-        tick_max <- ceiling(max_radius)
-        tick_values <- seq(tick_interval, tick_max, by = tick_interval)
+        tick_values <- c(0.5, 1.0)
     } else {
         tick_values <- NULL
     }
@@ -909,8 +961,13 @@ plot_polar_area <- function(df,
                     showline = show_axes
                 ),
                 bgcolor = "white"
-            )
+            ),
+            # Better rendering settings
+            hovermode = 'closest',
+            plot_bgcolor = 'white',
+            paper_bgcolor = 'white'
         )
     
     return(fig)
 }
+
