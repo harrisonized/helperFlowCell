@@ -37,6 +37,7 @@ import::here(file.path(wd, 'R', 'tools', 'math.R'),
 ## plot_multiple_comparisons
 ## plot_modal_histograms
 ## plot_polar_area
+## plot_ribbon_chart
 
 
 #' Save Figure
@@ -803,12 +804,12 @@ plot_polar_area <- function(df,
     
     # Fixed range from -0.1 to 1
     min_radius_range <- -0.1
-    max_radius_range <- 1.0
+    max_radius_range <- 1
     
     # For plotting: clamp values to [0.05, 1.0] range
     # Values <= 0 get mapped to a small positive value to avoid holes
     # Increased from 0.01 to 0.05 for better visibility
-    df[['plot_r']] <- ifelse(df[[y]] <= 0, 0.05, pmin(df[[y]], max_radius_range))
+    df[['plot_r']] <- ifelse(df[[y]] <= 0.15, 0.15, pmin(df[[y]], max_radius_range))
     
     # Determine label position to avoid overlaps
     # Strategy: Large slices get labels inside, small slices get labels outside at varying radii
@@ -929,7 +930,7 @@ plot_polar_area <- function(df,
 
     # Radial ticks - fixed at 0.5 and 1.0
     if (show_axes) {
-        tick_values <- c(0.5, 1.0)
+        tick_values <- c(0.5)
     } else {
         tick_values <- NULL
     }
@@ -955,7 +956,7 @@ plot_polar_area <- function(df,
                     ticks = '',
                     showticklabels = FALSE,
                     showline = FALSE,
-                    showgrid = show_axes,
+                    showgrid = FALSE,
                     gridcolor = 'lightgray',
                     gridwidth = 1,
                     showline = show_axes
@@ -971,3 +972,174 @@ plot_polar_area <- function(df,
     return(fig)
 }
 
+
+#' Plot Ribbon chart
+#' 
+#' Function to create connected stacked bar chart for an arbitrary number of groups
+#' 
+plot_ribbon_chart <- function(
+    df, x = "group", y = "value",
+    subcat = "category",  # ie. what goes in the legend
+    xlabel = NULL, ylabel = NULL, title = NULL,
+    group_order = NULL,  # Specify order of groups on x-axis
+    show_values = FALSE,  # Show/hide numbers inside bars
+    show_axes = TRUE,     # Show/hide axes
+    show_grid = TRUE,
+    normalize = FALSE,
+    bar_width = 0.4,
+    colors = NULL
+) {
+    
+    # Calculate percentages if needed
+    if (normalize) {
+        df <- df %>%
+            group_by(!!sym(x)) %>%
+            mutate(!!sym(y) := !!sym(y) / sum(!!sym(y)) * 100) %>%
+            ungroup()
+    }
+    
+    # Get unique groups in order and assign numeric positions
+    if (!is.null(group_order)) {
+        # Use specified order
+        groups <- group_order
+        # Verify all groups in data are in the order specification
+        missing_groups <- setdiff(unique(df[[x]]), groups)
+        if (length(missing_groups) > 0) {
+            warning("Some groups in data are not in group_order: ", paste(missing_groups, collapse = ", "))
+        }
+    } else {
+        # Use order as it appears in data
+        groups <- unique(df[[x]])
+    }
+    n_groups <- length(groups)
+    group_positions <- setNames(0:(n_groups - 1), groups)
+    
+    # Add numeric positions to df
+    df <- df %>%
+        mutate(x_pos = group_positions[!!sym(x)])
+    
+    # Calculate cumulative positions for stacking
+    df <- df %>%
+        group_by(!!sym(x)) %>%
+        mutate(
+            end = cumsum(!!sym(y)),
+            start = lag(end, default = 0)
+        ) %>%
+        ungroup()
+    
+    # Create base plot
+    fig <- plot_ly()
+    
+    # Add stacked bars for each category
+    categories <- unique(df[[subcat]])
+
+    # Handle colors - use named list if provided, otherwise default colors
+    if (is.null(colors)) {
+        default_colors <- c("#3b82f6", "#8b5cf6", "#ec4899", "#f59e0b", "#10b981", "#ef4444", 
+                           "#06b6d4", "#8b5cf6", "#f97316", "#6366f1", "#14b8a6", "#a855f7")
+        # Recycle colors if we have more categories than colors
+        colors <- rep(default_colors, length.out = length(categories))
+        color_map <- setNames(colors, categories)
+    } else if (is.null(names(colors))) {
+        # Unnamed vector - assign to categories in order, recycle if needed
+        colors <- rep(colors, length.out = length(categories))
+        color_map <- setNames(colors, categories)
+    } else {
+        # Named list/vector - use as is
+        color_map <- colors
+    }
+
+    for (i in seq_along(categories)) {
+        cat <- categories[i]
+        subset_data <- df[df[[subcat]] == cat, ]
+        cat_color <- color_map[[cat]]
+        
+        # Add bars using numeric x positions
+        fig <- fig %>%
+            add_trace(
+                data = subset_data,
+                x = ~x_pos,
+                y = as.formula(paste0("~", y)),
+                type = "bar",
+                name = cat,
+                marker = list(color = cat_color),
+                text = if (show_values) as.formula(paste0("~round(", y, ", 1)")) else NULL,
+                textposition = if (show_values) "inside" else "none",
+                width = bar_width,
+                hovertemplate = paste0(cat, "<br>Value: %{y:.1f}<extra></extra>")
+            )
+    }
+    
+    # Add connecting polygons between consecutive groups
+    for (i in seq_along(categories)) {
+        cat <- categories[i]
+        subset_data <- df[df[[subcat]] == cat, ]
+        cat_color <- color_map[[cat]]
+
+        # Connect each consecutive pair of groups
+        for (j in 1:(n_groups - 1)) {
+            left_group <- subset_data[subset_data[[x]] == groups[j], ]
+            right_group <- subset_data[subset_data[[x]] == groups[j + 1], ]
+            
+            if (nrow(left_group) > 0 && nrow(right_group) > 0) {
+                # Calculate edge positions
+                left_pos <- left_group[['x_pos']]
+                right_pos <- right_group[['x_pos']]
+                
+                left_edge <- left_pos + bar_width / 2
+                right_edge <- right_pos - bar_width / 2
+                
+                # Create polygon coordinates
+                x_coords <- c(left_edge, right_edge, right_edge, left_edge, left_edge)
+                y_coords <- c(
+                    left_group[['start']], 
+                    right_group[['start']], 
+                    right_group[['end']], 
+                    left_group[['end']],
+                    left_group[['start']]
+                )
+                
+                fig <- fig %>%
+                    add_trace(
+                        x = x_coords,
+                        y = y_coords,
+                        type = "scatter",
+                        mode = "lines",
+                        fill = "toself",
+                        fillcolor = paste0(cat_color, "40"),
+                        line = list(color = cat_color, width = 1),
+                        showlegend = FALSE,
+                        hoverinfo = "skip"
+                    )
+            }
+        }
+    }
+
+
+    fig <- fig %>%
+        layout(
+            title = title,
+            barmode = "stack",
+            xaxis = list(
+                title = if (!is.null(xlabel)) xlabel else "",
+                tickmode = "array",
+                tickvals = 0:(n_groups - 1),
+                ticktext = groups,
+                showticklabels = show_axes,
+                showline = show_axes
+            ),
+            yaxis = list(
+                title = if (!is.null(ylabel)) ylabel else "",
+                rangemode = "tozero",
+                showticklabels = show_axes,
+                showline = show_axes,
+                showgrid = show_grid,
+                zeroline=FALSE
+            ),
+            hovermode = "closest",
+            plot_bgcolor = "rgba(0,0,0,0)",
+            paper_bgcolor = "rgba(0,0,0,0)"
+        )
+    
+    return(fig)
+}

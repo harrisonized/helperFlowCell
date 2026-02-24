@@ -63,5 +63,11 @@ import_flow_metadata <- function(dirpath) {
         )
     }
 
+    for (col in c('viable_cells_conc', 'total_vol', 'total_viable_cells')) {
+        if (col %in% colnames(flow_metadata)) {
+            flow_metadata[[col]] <- as.numeric(flow_metadata[[col]])
+        }
+    }
+
     return(flow_metadata)
 }
