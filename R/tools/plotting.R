@@ -17,8 +17,12 @@ import::here(superb, 'showSignificance')
 import::here(plotly, 'plot_ly', 'add_trace', 'layout', 'save_image')
 import::here(htmlwidgets, 'saveWidget')  # brew install pandoc
 
+import::here(file.path(wd, 'R', 'tools', 'df_tools.R'),
+    'dropna', .character_only=TRUE)
 import::here(file.path(wd, 'R', 'tools', 'list_tools.R'),
     'items_in_a_not_b', .character_only=TRUE)
+import::here(file.path(wd, 'R', 'tools', 'text_tools.R'),
+    'format_number', .character_only=TRUE)
 import::here(file.path(wd, 'R', 'tools', 'math.R'),
     'unpaired_t_test', 'fishers_lsd', 'tukey_multiple_comparisons',
     'bonferroni_multiple_comparisons', 'generate_lognormal_data',
@@ -781,7 +785,8 @@ plot_polar_area <- function(df,
     colors = NULL,
     normalize=TRUE,
     min_label_pct=2,  # Minimum percentage to show label
-    min_radius=0.3    # Minimum radius to show label inside
+    min_radius=0.3,   # Minimum radius to show label inside
+    min_display_pct=1.5 # Minimum percentage for display
 ) {
 
     # Sort by r
@@ -792,6 +797,23 @@ plot_polar_area <- function(df,
     if ((normalize && total_pct != 100) || total_pct > 100) {
         df[[x]] <- df[[x]] * 100 / total_pct
     }
+    
+    # Adjust small percentages to minimum display threshold
+    small_mask <- df[[x]] < min_display_pct & df[[x]] > 0
+    if (any(small_mask)) {
+        # Calculate total deficit from boosting small slices
+        deficit <- sum(min_display_pct - df[[x]][small_mask])
+        
+        # Count non-small slices to distribute the deficit
+        n_large <- sum(!small_mask)
+        
+        if (n_large > 0) {
+            # Adjust each percentage
+            df[[x]][small_mask] <- min_display_pct
+            df[[x]][!small_mask] <- df[[x]][!small_mask] - (deficit / n_large)
+        }
+    }
+    
     df[['angle_degrees']] <- df[[x]] * (360 / 100)
     df[['theta_start']] <- c(0, cumsum(df[['angle_degrees']])[-nrow(df)])
     df[['theta_center']] <- df[['theta_start']] + df[['angle_degrees']] / 2
@@ -986,9 +1008,14 @@ plot_ribbon_chart <- function(
     show_axes = TRUE,     # Show/hide axes
     show_grid = TRUE,
     normalize = FALSE,
+    show_xlabels = TRUE,
     bar_width = 0.4,
-    colors = NULL
+    colors = NULL,
+    ylim = NULL,  # y-axis range, e.g. c(0, 100). NULL = auto (tozero)
+    label_format = "format_number",  # "format_number", "round", or "none"
+    num_digits = 3
 ) {
+    df <- dropna(df, y)
     
     # Calculate percentages if needed
     if (normalize) {
@@ -1000,23 +1027,29 @@ plot_ribbon_chart <- function(
     
     # Get unique groups in order and assign numeric positions
     if (!is.null(group_order)) {
-        # Use specified order
         groups <- group_order
-        # Verify all groups in data are in the order specification
         missing_groups <- setdiff(unique(df[[x]]), groups)
         if (length(missing_groups) > 0) {
             warning("Some groups in data are not in group_order: ", paste(missing_groups, collapse = ", "))
         }
     } else {
-        # Use order as it appears in data
         groups <- unique(df[[x]])
     }
     n_groups <- length(groups)
     group_positions <- setNames(0:(n_groups - 1), groups)
     
-    # Add numeric positions to df
+    # Add numeric positions and formatted labels to df
     df <- df %>%
-        mutate(x_pos = group_positions[!!sym(x)])
+        mutate(
+            x_pos = group_positions[!!sym(x)],
+            .label = if (label_format == "format_number") {
+                format_number(!!sym(y), sigfigs=num_digits)
+            } else if (label_format == "round") {
+                round(!!sym(y), num_digits)
+            } else {
+                !!sym(y)
+            }
+        )
     
     # Calculate cumulative positions for stacking
     df <- df %>%
@@ -1033,19 +1066,16 @@ plot_ribbon_chart <- function(
     # Add stacked bars for each category
     categories <- unique(df[[subcat]])
 
-    # Handle colors - use named list if provided, otherwise default colors
+    # Handle colors
     if (is.null(colors)) {
         default_colors <- c("#3b82f6", "#8b5cf6", "#ec4899", "#f59e0b", "#10b981", "#ef4444", 
                            "#06b6d4", "#8b5cf6", "#f97316", "#6366f1", "#14b8a6", "#a855f7")
-        # Recycle colors if we have more categories than colors
         colors <- rep(default_colors, length.out = length(categories))
         color_map <- setNames(colors, categories)
     } else if (is.null(names(colors))) {
-        # Unnamed vector - assign to categories in order, recycle if needed
         colors <- rep(colors, length.out = length(categories))
         color_map <- setNames(colors, categories)
     } else {
-        # Named list/vector - use as is
         color_map <- colors
     }
 
@@ -1054,7 +1084,6 @@ plot_ribbon_chart <- function(
         subset_data <- df[df[[subcat]] == cat, ]
         cat_color <- color_map[[cat]]
         
-        # Add bars using numeric x positions
         fig <- fig %>%
             add_trace(
                 data = subset_data,
@@ -1063,10 +1092,10 @@ plot_ribbon_chart <- function(
                 type = "bar",
                 name = cat,
                 marker = list(color = cat_color),
-                text = if (show_values) as.formula(paste0("~round(", y, ", 1)")) else NULL,
+                text = if (show_values) ~.label else NULL,
                 textposition = if (show_values) "inside" else "none",
                 width = bar_width,
-                hovertemplate = paste0(cat, "<br>Value: %{y:.1f}<extra></extra>")
+                hovertemplate = paste0(cat, "<br>Value: %{y}<extra></extra>")
             )
     }
     
@@ -1076,20 +1105,17 @@ plot_ribbon_chart <- function(
         subset_data <- df[df[[subcat]] == cat, ]
         cat_color <- color_map[[cat]]
 
-        # Connect each consecutive pair of groups
         for (j in 1:(n_groups - 1)) {
             left_group <- subset_data[subset_data[[x]] == groups[j], ]
             right_group <- subset_data[subset_data[[x]] == groups[j + 1], ]
             
             if (nrow(left_group) > 0 && nrow(right_group) > 0) {
-                # Calculate edge positions
                 left_pos <- left_group[['x_pos']]
                 right_pos <- right_group[['x_pos']]
                 
                 left_edge <- left_pos + bar_width / 2
                 right_edge <- right_pos - bar_width / 2
                 
-                # Create polygon coordinates
                 x_coords <- c(left_edge, right_edge, right_edge, left_edge, left_edge)
                 y_coords <- c(
                     left_group[['start']], 
@@ -1115,6 +1141,13 @@ plot_ribbon_chart <- function(
         }
     }
 
+    # Build y-axis range config
+    yaxis_range <- if (!is.null(ylim)) {
+        if (length(ylim) != 2) stop("`ylim` must be a length-2 vector, e.g. c(0, 100)")
+        list(range = ylim, rangemode = "normal")
+    } else {
+        list(rangemode = "tozero")
+    }
 
     fig <- fig %>%
         layout(
@@ -1125,20 +1158,22 @@ plot_ribbon_chart <- function(
                 tickmode = "array",
                 tickvals = 0:(n_groups - 1),
                 ticktext = groups,
-                showticklabels = show_axes,
+                showticklabels = show_xlabels,
                 showline = show_axes
             ),
-            yaxis = list(
-                title = if (!is.null(ylabel)) ylabel else "",
-                rangemode = "tozero",
-                showticklabels = show_axes,
-                showline = show_axes,
-                showgrid = show_grid,
-                zeroline=FALSE
+            yaxis = c(
+                list(
+                    title = if (!is.null(ylabel)) ylabel else "",
+                    showticklabels = show_axes,
+                    showline = show_axes,
+                    showgrid = show_grid,
+                    zeroline = FALSE
+                ),
+                yaxis_range
             ),
             hovermode = "closest",
-            plot_bgcolor = "rgba(0,0,0,0)",
-            paper_bgcolor = "rgba(0,0,0,0)"
+            plot_bgcolor = "white",
+            paper_bgcolor = "white"
         )
     
     return(fig)

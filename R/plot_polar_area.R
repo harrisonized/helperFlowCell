@@ -21,8 +21,8 @@ import::from(file.path(wd, 'R', 'tools', 'df_tools.R'),
 
 # args
 option_list = list(
-    make_option(c("-i", "--input-dir"), default='database/tvd/steady-state',
-                metavar='database/tvd/steady-state', type="character",
+    make_option(c("-i", "--input-dir"), default='database/expression/r848',
+                metavar='database/expression/r848', type="character",
                 help="input directory, all csv files will be read in"),
 
     make_option(c("-o", "--output-dir"), default="hfc-output",
@@ -71,7 +71,7 @@ colors <- list(
     'B cells' = '#8c564b',  # brown
     'CD4+ T cells' = '#e377c2',  # pink
     'CD8+ T cells' = '#9467bd',  # purple
-    'AM' = '#bcbd22',  # olive
+    'AM' = '#d62728',  # red
     'IM' = '#7f7f7f'  # gray
 )
 cell_types <- names(colors)
@@ -91,17 +91,26 @@ log_print(paste('Script started at:', start_time))
 raw_tvds <- append_many_csv(
     file.path(wd, opt[['input-dir']]), recursive=FALSE, include_filepath=FALSE
 )
+raw_tvds[['pct_cells']] <- as.numeric(raw_tvds[['pct_cells']])
 raw_tvds[['tvd']] <- as.numeric(raw_tvds[['tvd']])
+
+# spell check
+raw_tvds[(raw_tvds[, 'cell_type']=='Dendritic Cells'), "cell_type"] <- "DCs"
+raw_tvds[(raw_tvds[, 'cell_type']=='B Cells'), "cell_type"] <- "B cells"
+raw_tvds[(raw_tvds[, 'cell_type']=='Alveolar Macrophages'), "cell_type"] <- "AM"
+raw_tvds[(raw_tvds[, 'cell_type']=='Interstitial Macrophages'), "cell_type"] <- "IM"
 raw_tvds[(raw_tvds[, 'organ']=='sp'), "organ"] <- "spleen"
 raw_tvds[(raw_tvds[, 'organ']=='sp_dc'), "organ"] <- "spleen"
-raw_tvds[(raw_tvds[, 'cell_type']=='Dendritic Cells'), "cell_type"] <- "DCs"
 
+# filter
 raw_tvds <- raw_tvds[raw_tvds[['cell_type']] %in% cell_types, ]
-raw_tvds <- raw_tvds[raw_tvds[['treatment']] %in% steady_state, ]
+# raw_tvds <- raw_tvds[raw_tvds[['treatment']] %in% steady_state, ]
+raw_tvds <- raw_tvds[(raw_tvds[['zygosity']] == 'homo'), ]
+
 
 # group by
 df <- raw_tvds %>%
-    group_by(organ, cell_type) %>%
+    group_by(organ, cell_type, treatment) %>%
     summarise(
         mean_pct_cells = mean(pct_cells, na.rm = TRUE),
         mean_tvd = mean(tvd, na.rm = TRUE),
@@ -114,28 +123,30 @@ df <- fillna(df, 'mean_tvd', 0)
 # ----------------------------------------------------------------------
 # Plot
 
-
 organs <- unique(df[['organ']])
+treatments <- unique(df[['treatment']])
 pbar <- progress_bar$new(total = length(organs))
 for (organ in sort(organs)) {
-
-    fig <- plot_polar_area(df[(df[['organ']]==organ), ],
-        x="mean_pct_cells", y="mean_tvd", group='cell_type',
-        min_label_pct=100,
-        colors=colors,
-        title=organ,
-        show_axes=TRUE
-    )
-
-    if (!troubleshooting) {
-        save_fig(
-            fig=fig,
-            height=opt[['height']], width=opt[['width']],
-            dirpath=file.path(wd, opt[['output-dir']], 'figures'),
-            filename=paste(organ, 'polar_area', sep='-'),
-            save_html=TRUE
+    for (treatment in treatments) {
+        fig <- plot_polar_area(df[(df[['organ']]==organ) & (df[['treatment']]==treatment), ],
+            x="mean_pct_cells", y="mean_tvd", group='cell_type',
+            min_label_pct=100,
+            colors=colors,
+            title=organ,
+            show_axes=TRUE
         )
+
+        if (!troubleshooting) {
+            save_fig(
+                fig=fig,
+                height=opt[['height']], width=opt[['width']],
+                dirpath=file.path(wd, opt[['output-dir']], 'figures'),
+                filename=paste(organ, 'polar_area', treatment, sep='-'),
+                save_html=TRUE
+            )
+        }
     }
+
     pbar$tick()
 }
 

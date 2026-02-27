@@ -95,7 +95,7 @@ if (!(opt[['stat']] %in% c('fishers_lsd', 't_test', 'tukey', 'bonferroni'))) {
 metadata_cols <- unlist(strsplit(opt[['group-by']], ','))
 
 # get last_initial_gate
-last_initial_gate <- 'CD45+'  # try CD45+
+last_initial_gate <- 'Live Cells'  # try CD45+
 
 
 # Start Log

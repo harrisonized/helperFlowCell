@@ -20,20 +20,20 @@ import::from(file.path(wd, 'R', 'tools', 'df_tools.R'),
 
 # args
 option_list = list(
-    make_option(c("-i", "--input-dir"), default='database/ko/steady-state',
-                metavar='database/ko/steady-state', type="character",
+    make_option(c("-i", "--input-dir"), default='database/ko/iav',
+                metavar='database/ko/iav', type="character",
                 help="input directory, all csv files will be read in"),
 
     make_option(c("-o", "--output-dir"), default="hfc-output",
                 metavar="hfc-output", type="character",
                 help="output directory"),
 
-    make_option(c("-l", "--height"), default=500,
-                metavar="500", type="integer",
+    make_option(c("-l", "--height"), default=400,
+                metavar="400", type="integer",
                 help="height in px"),
 
-    make_option(c("-w", "--width"), default=800,
-                metavar="800", type="integer",
+    make_option(c("-w", "--width"), default=600,
+                metavar="600", type="integer",
                 help="width in px"),
 
     make_option(c("-t", "--troubleshooting"), default=FALSE, action="store_true",
@@ -95,47 +95,65 @@ for (col in c('viable_cells_conc', 'total_vol', 'total_viable_cells', 'abs_count
         raw_counts[[col]] <- as.numeric(raw_counts[[col]])
     }
 }
-raw_counts[(raw_counts[, 'cell_type']=='cDCs'), "cell_type"] <- "DCs"
+
+raw_counts[(raw_counts[, 'treatment']=='untreated'), "treatment"] <- "D0"
+raw_counts[(raw_counts[, 'treatment']=='IAV'), "treatment"] <- "D8"
+
 raw_counts[(raw_counts[, 'cell_type']=='Dendritic Cells'), "cell_type"] <- "DCs"
+raw_counts[(raw_counts[, 'cell_type']=='B Cells'), "cell_type"] <- "B cells"
+raw_counts[(raw_counts[, 'cell_type']=='Alveolar Macrophages'), "cell_type"] <- "AM"
+raw_counts[(raw_counts[, 'cell_type']=='Interstitial Macrophages'), "cell_type"] <- "IM"
+raw_counts[(raw_counts[, 'organ']=='sp'), "organ"] <- "spleen"
+raw_counts[(raw_counts[, 'organ']=='sp_dc'), "organ"] <- "spleen"
+
 raw_counts <- raw_counts[raw_counts[['cell_type']] %in% cell_types, ]
-raw_counts <- raw_counts[raw_counts[['treatment']] %in% steady_state, ]
+# raw_counts <- raw_counts[raw_counts[['treatment']] %in% steady_state, ]
 
 # group by
 df <- raw_counts %>%
-    group_by(organ, cell_type, zygosity) %>%
+    group_by(organ, cell_type, zygosity, treatment) %>%
     summarise(
         mean_pct_cells = mean(pct_cells, na.rm = TRUE),
         mean_abs_count = mean(abs_count, na.rm = TRUE),
         .groups = 'drop'
     )
 df <- as.data.frame(df)
+df[['group_name']] <- apply( df[ , c('zygosity', 'treatment') ] , 1 , paste , collapse = ", " )
 
 
 # ----------------------------------------------------------------------
 # Plot
 
+zygosities <- unique(df[['zygosity']])
 organs <- unique(df[['organ']])
 pbar <- progress_bar$new(total = length(organs))
-for (organ in sort(organs)) {
-
-    fig <- plot_ribbon_chart(
-        df = df[(df[['organ']]==organ), ],
-        x = "zygosity", y = "mean_abs_count", subcat = "cell_type", title="Lung",
-        bar_width = 0.5,
-        normalize = FALSE,
-        show_values=FALSE,
-        colors = NULL,
-        group_order = c("WT", "KO")
-    )
-
-    if (!troubleshooting) {
-        save_fig(
-            fig=fig,
-            height=opt[['height']], width=opt[['width']],
-            dirpath=file.path(wd, opt[['output-dir']], 'figures'),
-            filename=paste(organ, 'ribbon', sep='-'),
-            save_html=TRUE
+for (organ in c('mdln')) {
+    for (zygosity in zygosities) {
+        fig <- plot_ribbon_chart(
+            df = df[(df[['organ']]==organ) & (df[['zygosity']]==zygosity), ],
+            x = "group_name", y = "mean_abs_count", subcat = "cell_type",
+            title = organ,
+            bar_width = 0.7,
+            normalize = FALSE,
+            show_values = TRUE,
+            show_axes = TRUE,
+            show_grid = TRUE,
+            show_xlabels = TRUE,
+            colors = colors,
+            group_order = sort(unique(df[['group_name']])),
+            ylim=c(0, 37500000)
         )
+
+        if (!troubleshooting) {
+            save_fig(
+                fig=fig,
+                height=opt[['height']], width=opt[['width']], scale=4,
+                dirpath=file.path(wd, opt[['output-dir']], 'figures'),
+                filename=paste(organ, 'ribbon', zygosity, sep='-'),
+                save_html=TRUE
+            )
+        }
+
     }
     pbar$tick()
 }
