@@ -18,7 +18,7 @@ import::here(plotly, 'plot_ly', 'add_trace', 'layout', 'save_image')
 import::here(htmlwidgets, 'saveWidget')  # brew install pandoc
 
 import::here(file.path(wd, 'R', 'tools', 'df_tools.R'),
-    'dropna', .character_only=TRUE)
+    'dropna', 'separate_groups_with_na', .character_only=TRUE)
 import::here(file.path(wd, 'R', 'tools', 'list_tools.R'),
     'items_in_a_not_b', .character_only=TRUE)
 import::here(file.path(wd, 'R', 'tools', 'text_tools.R'),
@@ -104,10 +104,10 @@ plot_dots <- function(df,
 
 #' Plot Scatter
 #'
-#' @description Thin wrapper arounbd Plotly scatter plot
+#' @description Thin wrapper around Plotly scatter plot
 #' 
 plot_scatter <- function(
-    df, x, y, group_by=NULL, size=NULL,
+    df, x, y, group_by=NULL, separate_by=NULL, size=NULL,
     xlabel=NULL, ylabel=NULL, title=NULL,
     xmin=NULL, xmax=NULL,
     ymin=NULL, ymax=NULL,
@@ -136,6 +136,10 @@ plot_scatter <- function(
     }
     if (yaxis_type=='log') {
         yrange = sapply(c(ymin, ymax), function(y) if (y > 0) {log(y, base=10)} else {NULL} )
+    }
+
+    if (!is.null(group_by) & !is.null(separate_by)) {
+        df <- separate_groups_with_na(df, id=separate_by, order_by=c(separate_by, x), na_cols=c(x, y))
     }
 
     # color

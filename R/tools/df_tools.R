@@ -5,10 +5,12 @@ import::here(file.path(wd, 'R', 'tools', 'list_tools.R'),
 ## Functions
 ## append_dataframe
 ## dataframe_row_from_named_list
+## dropna
 ## fillna
 ## group_by_agg
 ## rename_columns
 ## reset_index
+## separate_groups_with_na
 ## stranspose
 ## pivot_then_collapse
 
@@ -55,6 +57,20 @@ dataframe_row_from_named_list <- function(items) {
     df <- as.data.frame(t(df))  # transpose
     rownames(df) <- 1
     colnames(df) <- names(items)
+    return(df)
+}
+
+
+#' Fill specific columns with NA
+#'
+#' @description
+#' In case you're too lazy to remember the syntax
+#'
+dropna <- function(df, cols) {
+    for (col in cols) {
+        df <- df[!is.na(df[[col]]), ]
+    }
+
     return(df)
 }
 
@@ -147,6 +163,27 @@ reset_index <- function(df, index_name='index', drop=FALSE) {
         df <- df[, items_in_a_not_b(colnames(df), 'index')]
     }
     return (df)
+}
+
+
+#' Separate Groups With NA
+#' 
+#' Makes a copy of the last row for each id and inserts NA
+#' Used in plot_scatter to separate lines in between each group
+#' 
+separate_groups_with_na <- function(df, id, order_by, na_cols) {
+    df_sorted <- df[
+        do.call(order, c(list(df[[id]]), lapply(order_by, function(col) df[[col]]))),
+    ]
+    result <- do.call(rbind,
+        lapply(split(df_sorted, df_sorted[[id]]),
+               function(group) {
+                   na_row <- group[nrow(group), ]
+                   na_row[1, na_cols] <- NA
+                   rbind(group, na_row)})
+    )
+    rownames(result) <- NULL
+    return(result)
 }
 
 

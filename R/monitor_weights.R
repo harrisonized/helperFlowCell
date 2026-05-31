@@ -34,8 +34,8 @@ import::from(file.path(wd, 'R', 'tools', 'df_tools.R'),
 
 # args
 option_list = list(
-    make_option(c("-i", "--input-file"), default='data/weights.xlsx',
-                metavar='data/weights.xlsx', type="character",
+    make_option(c("-i", "--input-file"), default='data/weights/weights.xlsx',
+                metavar='data/weights/weights.xlsx', type="character",
                 help="specify input file"),
 
     make_option(c("-o", "--output-dir"), default="figures/survival",
@@ -64,6 +64,7 @@ troubleshooting = opt[['troubleshooting']]
 
 # args
 metadata_cols <- unlist(strsplit(opt[['group-by']], ','))
+hover_data <- c('mouse_id', 'sex', 'genotype', 'dob', 'day', 'week', 'cage_id', 'rack', 'position')
 
 # Start Log
 start_time = Sys.time()
@@ -167,7 +168,7 @@ if (!troubleshooting) {
         file.path(dirpath, 'survival-curve.png'),  
         plot=fig,
         height=4000, width=6000, dpi=500, units='px',
-        scaling=2
+        scale=2
     )
 }
 
@@ -216,7 +217,7 @@ color_map[['color']] <- lapply(
         '#FF7F0E'  # orange
     } else if (x=='M') {
         '#377EB8'  # blue
-    } else if (x=='PBS') {
+    } else if ((x=='PBS') | (x=='WT-78')) {
         '#9467bd'  # purple
     } else {
         'rgba(23,190,207,1)'  # sea green
@@ -227,16 +228,16 @@ color_discrete_map <- setNames(color_map[['color']], color_map[['group']])
 
 # Percent weight
 fig <- plot_scatter(
-    df,
+    df[!is.na(df[['pct_weight']]), ],
     x=if (opt[['week']]) {'week'} else {'day'},
-    y='pct_weight', group_by='group',
+    y='pct_weight', group_by='group', separate_by='mouse_id',
     ymin=0.75,
     xlabel=paste("Time", if (opt[['week']]) {'(weeks)'} else {'(days)'}),
     ylabel='Percent Weight',
     title='Percent Weight Over Time',
     mode='lines+markers',
     color_discrete_map=color_discrete_map,
-    hover_data=c('mouse_id', 'sex', 'genotype', 'dob', 'day', 'week')
+    hover_data=hover_data
 )
 
 # save
@@ -252,15 +253,15 @@ if (!troubleshooting) {
 
 # Raw weight
 fig <- plot_scatter(
-    df,
+    df[!is.na(df[['weight']]), ],
     x=if (opt[['week']]) {'week'} else {'day'},
-    y='weight', group_by='group',
+    y='weight', group_by='group', separate_by='mouse_id',
     xlabel=paste("Time", if (opt[['week']]) {'(weeks)'} else {'(days)'}),
     ylabel='Mouse Weight (g)',
     title='Raw Weight Over Time',
     mode='lines+markers',
     color_discrete_map=color_discrete_map,
-    hover_data=c('sex', 'genotype', 'dob', 'day', 'week')
+    hover_data=hover_data
 )
 
 # save
@@ -296,7 +297,7 @@ if (!troubleshooting) {
             file.path(wd, opt[['output-dir']], 'weight-loss.png'),
             plot=fig,
             height=2000, width=2400, dpi=300, units='px',
-            scaling=1
+            scale=1
         )
     }, warning = function(w) {
         if ( any(grepl("containing non-finite values", w),
@@ -341,7 +342,7 @@ if ('spleen_weight' %in% colnames(weight_tbl)) {
                 file.path(wd, opt[['output-dir']], 'spleen-weight', 'spleen_weight.svg'),
                 plot=fig,
                 height=5000, width=5000, dpi=500, units='px',
-                scaling=1
+                scale=1
             )
         }, warning = function(w) {
             if ( any(grepl("containing non-finite values", w),
