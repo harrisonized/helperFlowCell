@@ -70,6 +70,9 @@ df2[(df2 < 0)] <- NA
 df <- pmin(df1, df2, na.rm=TRUE) 
 df[(is.na(df))] <- 0
 
+channels <- row.names(df1)
+df <- df[, channels]
+
 # save
 if (!troubleshooting) {
     write.table(
@@ -82,8 +85,6 @@ if (!troubleshooting) {
 
 # ----------------------------------------------------------------------
 # Export Spillover Table
-
-channels <- row.names(df1)
 
 # pivot
 withCallingHandlers({

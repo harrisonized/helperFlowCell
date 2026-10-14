@@ -1,7 +1,7 @@
 import::here(tidyr, 'pivot_longer')
 import::here(plyr, 'mapvalues')
 import::here(file.path(wd, 'R', 'functions', 'preprocessing.R'),
-    'preprocess_flowjo_export', .character_only=TRUE)
+    'preprocess_flowjo_export', 'preprocess_flowjo_export_v2', .character_only=TRUE)
 import::here(file.path(wd, 'R', 'tools', 'file_io.R'),
     'append_many_csv', .character_only=TRUE)
 import::here(file.path(wd, 'R', 'tools', 'df_tools.R'),
@@ -11,6 +11,7 @@ import::here(file.path(wd, 'R', 'tools', 'list_tools.R'),
 
 ## Functions
 ## import_flowjo_export
+## import_flowjo_export_v2
 ## import_flow_metadata
 
 
@@ -34,6 +35,57 @@ import_flowjo_export <- function(
         x, metric_name=metric_name, last_initial_gate=last_initial_gate
     ))
     df <- do.call(rbind, dfs)
+    df <- reset_index(df, drop=TRUE)
+
+    return(df)
+}
+
+
+#' Import Flowjo Export
+#' 
+#' Read data exported from flowjo, use this to import counts, gmfi, or sdev
+#' If metric=='count', the import will include the Single Cells and Live Cells gates
+#' 
+#' This is part of a refactoring effort to generalize data import so that files with
+#' different initial gates can be merged.
+#'
+import_flowjo_export_v2 <- function(
+    dirpath,
+    metric_name='num_cells',
+    initial_gate_name="Live Cells",
+    recursive=FALSE
+) {
+
+    filepaths <- list.files(dirpath, recursive=recursive, full.names=TRUE)
+
+    dfs <- new.env()
+    for (filepath in filepaths) {
+        raw_table <- read.csv(
+            filepath, sep=',', row.names=NULL,
+            header=TRUE, check.names=FALSE,
+            na.strings=c()
+        )
+
+        # remove entirely null columns and rows
+        raw_table <- Filter(function(x) !all(is.na(x)), raw_table)  # columns
+        raw_table <- raw_table[rowSums(is.na(raw_table)) != ncol(raw_table), ]  # rows
+
+        # repair column names
+        missing_colnames <- which(nchar(colnames(raw_table))==0)
+        num_missing <- length(missing_colnames)
+        if (num_missing > 0) {
+            colnames(raw_table)[which(nchar(colnames(raw_table))==0)] <- paste0("X", 1:num_missing)
+        }
+
+        df <- preprocess_flowjo_export_v2(raw_table, initial_gate_name=initial_gate_name)
+
+        dfs[[filepath]] <- df
+    }
+
+    dfs <- as.list(dfs)
+    if (length(dfs) > 1) {
+        df <- do.call(rbind, dfs[filepaths])
+    }
     df <- reset_index(df, drop=TRUE)
 
     return(df)

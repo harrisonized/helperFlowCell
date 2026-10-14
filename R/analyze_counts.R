@@ -1,7 +1,9 @@
-## Graphs percentage of live cells for each cell population
-## Expects the first four gates to be Cells/Single Cells/Single Cells/Live Cells
-## If abs_count is included as a column in your metadata file, this script
-## will also calculate absolute counts
+## Graphs percentage of Live Cells for each cell population
+## 
+## To plot absolute counts, include abs_count as a column in the metadata file
+## If your initial gate is not found, this script will falls back on the top-level gate as the divisor
+## 
+## 
 
 wd = dirname(this.path::here())  # wd = '~/github/R/helperFlowCell'
 suppressPackageStartupMessages(library('dplyr'))
@@ -17,7 +19,7 @@ import::from(file.path(wd, 'R', 'functions', 'preprocessing.R'),
     'find_initial_gates', 'preprocess_flowjo_export', 'sort_groups_by_metric',
     .character_only=TRUE)
 import::from(file.path(wd, 'R', 'functions', 'file_io.R'),
-    'import_flowjo_export', 'import_flow_metadata', .character_only=TRUE)
+    'import_flowjo_export_v2', 'import_flow_metadata', .character_only=TRUE)
 
 import::from(file.path(wd, 'R', 'tools', 'file_io.R'),
     'append_many_csv', .character_only=TRUE)
@@ -69,6 +71,10 @@ option_list = list(
                 metavar="FALSE", type="logical",
                 help="in violin with significance, show all numbers instead of stars"),
 
+    make_option(c("-a", "--initial-gate-name"), default="Live Cells",
+                metavar="FALSE", type="character",
+                help="Can also choose: 'Single Cells', 'CD45+', etc."),
+
     make_option(c("-l", "--height"), default=500,
                 metavar="500", type="integer",
                 help="height in px"),
@@ -93,9 +99,7 @@ if (!(opt[['stat']] %in% c('fishers_lsd', 't_test', 'tukey', 'bonferroni'))) {
 
 # args
 metadata_cols <- unlist(strsplit(opt[['group-by']], ','))
-
-# get last_initial_gate
-last_initial_gate <- 'Live Cells'  # try CD45+
+initial_gate_name <- opt[['initial-gate-name']]
 
 
 # Start Log
@@ -111,24 +115,22 @@ log_print(paste('Script started at:', start_time))
 log_print(paste(Sys.time(), 'Reading data...'))
 
 # Read counts data exported from flowjo
-df <- import_flowjo_export(
+df <- import_flowjo_export_v2(
     file.path(wd, opt[['input-dir']]),
     metric_name='num_cells',
-    last_initial_gate=last_initial_gate  # change to CD45+
+    initial_gate_name=initial_gate_name
 )
 if (length(df)==0) {
     msg <- paste("No data found. Please check", file.path(wd, opt[['input-dir']]), '...')
     stop(msg)
 }
 
-divisor <- tail(find_initial_gates(colnames(df), last_initial_gate), 1)[[1]]
-df[['pct_cells']] <- round(df[['num_cells']] /
-    df[[divisor]] * 100, 4)
+df[['pct_cells']] <- round(df[['num_cells']] / df[["divisor"]] * 100, 4)
 
 # reference files
 flow_metadata <- import_flow_metadata(file.path(wd, opt[['metadata-dir']]))
 mouse_db <- append_many_csv(
-    file.path(wd, opt[['ref-dir']]),recursive=TRUE, include_filepath=FALSE)
+    file.path(wd, opt[['ref-dir']]), recursive=TRUE, include_filepath=FALSE)
 
 
 # ----------------------------------------------------------------------
@@ -259,47 +261,20 @@ for (organ in sort(organs)) {
 
     log_print(paste0(Sys.time(), ' Processing ', organ, '...'))
 
-
-    # ----------------------------------------------------------------------
-    # Data
-
-    tmp <- sort_groups_by_metric(
-        df[(df[['organ']]==organ),
-            unique(intersect(
-                c('organ', 'genotype', 'treatment',
-                   'group_name', metadata_cols, 'cell_type',
-                   'Cells/Single Cells/Single Cells/Live Cells',
-                   'num_cells', 'pct_cells', 'abs_count', 'viable_cells_conc',
-                   'total_vol', 'total_viable_cells',
-                   'mouse_id', 'sex', 'weeks_old', 'fcs_name'),
-                colnames(df)
-            ))],
-        x='cell_type',
-        y='pct_cells',
-        groups=c('group_name')
-    )
-
+    # save data
     if (!troubleshooting) {
-        dirpath <- file.path(wd, opt[['output-dir']], 'data',
-            gsub(',', '_', opt[['group-by']]), 'pct_cells')  # created above
-        filepath = file.path(dirpath,
-            paste0(organ, '.csv')
-        )
-        write.table(tmp, file = filepath, row.names = FALSE, sep = ',')
+        dirpath <- file.path(wd, opt[['output-dir']], 'data')
+        filepath = file.path(dirpath, paste0(organ, '.csv'))
+        write.table(df[(df[['organ']]==organ), ], file = filepath, row.names = FALSE, sep = ',')
     }
-
-
-    # ----------------------------------------------------------------------
-    # Plot
-
 
     # ------------------------------------------------------------
     # Percent Cells
 
     fig <- plot_violin(
-        tmp,
+        df[(df[['organ']]==organ), ],
         x='cell_type', y='pct_cells', group_by='group_name',
-        ylabel=paste('Percent of', last_initial_gate), title=organ,
+        ylabel=paste('Percent of', initial_gate_name), title=organ,
         ymin=0, ymax=100,
         hover_data=unique(intersect(
                 c('mouse_id', 'group_name', metadata_cols,
@@ -325,7 +300,7 @@ for (organ in sort(organs)) {
 
     if ('abs_count' %in% colnames(df)) {
         fig <- plot_violin(
-            tmp,
+            df[(df[['organ']]==organ), ],
             x='cell_type', y='abs_count', group_by='group_name',
             ylabel='Absolute Count', title=organ,
             ymin=0,
@@ -389,7 +364,7 @@ for (idx in 1:nrow(pval_tbl)) {
             df_subset[, c("organ", "cell_type", "group_name", "pct_cells")],
             x='group_name', y='pct_cells',
             ymin=min( df_subset[['pct_cells']]*1.1, 0 ),
-            ylabel=paste('Percent of', last_initial_gate),
+            ylabel=paste('Percent of', initial_gate_name),
             title=paste(toupper(organ), cell_type),
             test=opt[['stat']],
             show_numbers=opt[['show-numbers']],

@@ -20,7 +20,9 @@ import::here(file.path(wd, 'R', 'config', 'flow.R'),
 ## Functions
 ## create_survival_table
 ## find_initial_gates
+## find_initial_gates_v2
 ## preprocess_flowjo_export
+## preprocess_flowjo_export_v2
 ## preprocess_antibody_inventory
 ## preprocess_instrument_config
 ## sort_groups_by_metric
@@ -93,7 +95,25 @@ find_initial_gates <- function(cols, name, backup_name="Live Cells") {
 }
 
 
+#' Find Initial Gates
+#' 
+#' Helper function for preprocess_flowjo_export
+#'
+find_initial_gates_v2 <- function(cols, name, backup_name="Live Cells") {
+
+    idx <- which(sapply(strsplit(cols, "/"), function(x) tail(x, 1) == name))
+    if (length(idx) == 0 ) {
+        warning(paste0('initial_gate "', name, '" not found, using "', cols[2], '" as a fallback.'))
+        return(cols[2])
+    }
+    initial_gates <- cols[2:idx]
+    return(initial_gates)
+}
+
+
 #' Preprocess Each Flowjo Export
+#' 
+#' To be deprecated
 #' 
 preprocess_flowjo_export <- function(raw_table,
     metric_name='num_cells',  # num_cells, gmfi, or rsdev
@@ -136,6 +156,86 @@ preprocess_flowjo_export <- function(raw_table,
     for (cell_type in c(cell_type_ignore, 'mNeonGreen+')) {
         df <- df[!str_detect(df[['cell_type']], cell_type), ]
     }
+
+    return(df)
+}
+
+
+#' Preprocess Each Flowjo Export
+#' 
+preprocess_flowjo_export_v2 <- function(raw_table,
+    metric_name='num_cells',  # num_cells, gmfi, or rsdev
+    initial_gate_name=NULL 
+) {
+
+    raw_table <- rename_columns(raw_table,
+        c('X1'='fcs_name',
+          'Count'='Ungated',
+          'Mean (Comp-Alexa Fluor 488-A)'='Ungated',  # find a better solution
+          'Mode (Comp-Alexa Fluor 488-A)'='Ungated',
+          'Geometric Mean (Comp-Alexa Fluor 488-A)'='Ungated'
+        )
+    )
+
+    # drop summary statistics
+    colnames(raw_table)[1] <- 'fcs_name'
+    raw_table <- raw_table[!(raw_table[['fcs_name']] %in% c('Mean', 'SD')), ]
+
+    # Remove "Count | " from column names
+    prefixes <- unname(sapply(colnames(raw_table), function(x) strsplit(x, ' \\| ')[[1]][1]))  # gate names
+    colnames(raw_table) <- prefixes
+
+    # Collapse pregates into a csv column
+    if (!is.null(initial_gate_name)) {
+
+        initial_gates <- find_initial_gates_v2(colnames(raw_table), initial_gate_name)
+
+        if (length(initial_gates)==1) {
+
+            # Ungated
+            divisor <- initial_gates
+            raw_table[['pregate']] <- divisor
+            raw_table[['pregate_vals']] <- raw_table[[divisor]]
+
+        } else if (length(initial_gates)==2) {
+
+            # c("Ungated", "Time"), c("Ungated", "Cells")
+            raw_table[['pregate']] <- initial_gates[1]
+            raw_table <- rename_columns(raw_table, setNames(list("pregate_vals"), initial_gates[1]))
+            divisor <- initial_gates[2]
+
+        } else {
+
+            pregate_cols <- initial_gates[1:(length(initial_gates) - 1)]
+            raw_table[['pregate']] <- paste("Ungated", pregate_cols[length(pregate_cols)], sep='/')
+            raw_table[['pregate_vals']] <- apply(raw_table[, pregate_cols], 1, paste, collapse = ", ")
+            raw_table <- raw_table[, items_in_a_not_b(colnames(raw_table), pregate_cols)]  # drop pregate cols
+            colnames(raw_table) <- sub(paste0(pregate_cols[length(pregate_cols)], "/"), "", colnames(raw_table), fixed = TRUE)
+
+            divisor <- initial_gate_name
+        }
+    }
+
+    raw_table[['divisor_name']] <- divisor
+    df <- pivot_longer(raw_table,
+        names_to = "gate", values_to = metric_name,
+        cols=items_in_a_not_b(colnames(raw_table), c("fcs_name", "pregate", "pregate_vals", 'divisor_name', divisor)),
+        values_drop_na = TRUE
+    )
+    df <- rename_columns(df, setNames(list("divisor"), divisor))
+
+    df[['cell_type']] <- unlist(lapply(strsplit(df[['gate']], '/'), function(x) x[length(x)]))
+    df[['cell_type']] <- multiple_replacement(df[['cell_type']], cell_type_spell_check)
+    
+    # filter ignored cell types
+    for (cell_type in c(cell_type_ignore, 'mNeonGreen+')) {
+        df <- df[!str_detect(df[['cell_type']], cell_type), ]
+    }
+
+    df <- df[, c(
+        'fcs_name', 'pregate', 'pregate_vals', 'gate', 'cell_type', 'divisor_name',
+        "divisor", 'num_cells')
+    ]
 
     return(df)
 }

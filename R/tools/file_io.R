@@ -60,7 +60,7 @@ append_many_csv <- function(dir_path,
         return(dfs)
     } else {
         combined <- do.call(rbind.fill, dfs)
-        return(combined)  
+        return(combined)
     }
 }
 
