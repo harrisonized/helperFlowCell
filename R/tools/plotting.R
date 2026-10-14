@@ -1054,8 +1054,20 @@ plot_ribbon_chart <- function(
                 !!sym(y)
             }
         )
-    
+
+    # Add stacked bars for each category
+    categories <- df %>%
+        group_by(!!sym(subcat)) %>%
+        summarise(total = sum(!!sym(y), na.rm = TRUE), .groups = "drop") %>%
+        arrange(desc(total)) %>%
+        pull(!!sym(subcat))
+
     # Calculate cumulative positions for stacking
+    df <- df %>%
+        mutate(
+            .category_order = match(!!sym(subcat), categories)
+        ) %>%
+        arrange(!!sym(x), .category_order)
     df <- df %>%
         group_by(!!sym(x)) %>%
         mutate(
@@ -1067,13 +1079,23 @@ plot_ribbon_chart <- function(
     # Create base plot
     fig <- plot_ly()
     
-    # Add stacked bars for each category
-    categories <- unique(df[[subcat]])
-
     # Handle colors
     if (is.null(colors)) {
-        default_colors <- c("#3b82f6", "#8b5cf6", "#ec4899", "#f59e0b", "#10b981", "#ef4444", 
-                           "#06b6d4", "#8b5cf6", "#f97316", "#6366f1", "#14b8a6", "#a855f7")
+        # default_colors <- c("#3b82f6", "#8b5cf6", "#ec4899", "#f59e0b", "#10b981", "#ef4444", 
+        #                     "#06b6d4", "#8b5cf6", "#f97316", "#6366f1", "#14b8a6", "#a855f7")
+        default_colors <- c(
+            # matplotlib colors
+            '#1f77b4',  # blue
+            '#ff7f0e',  # orange
+            '#2ca02c',  # green
+            '#d62728',  # red
+            '#9467bd',  # purple
+            '#8c564b',  # brown
+            '#e377c2',  # pink
+            '#7f7f7f',  # gray
+            '#bcbd22',  # olive
+            '#17becf'  # cyan
+        )
         colors <- rep(default_colors, length.out = length(categories))
         color_map <- setNames(colors, categories)
     } else if (is.null(names(colors))) {

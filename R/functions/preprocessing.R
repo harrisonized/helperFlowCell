@@ -165,7 +165,7 @@ preprocess_flowjo_export <- function(raw_table,
 #' 
 preprocess_flowjo_export_v2 <- function(raw_table,
     metric_name='num_cells',  # num_cells, gmfi, or rsdev
-    initial_gate_name=NULL 
+    divisor=NULL 
 ) {
 
     raw_table <- rename_columns(raw_table,
@@ -186,9 +186,9 @@ preprocess_flowjo_export_v2 <- function(raw_table,
     colnames(raw_table) <- prefixes
 
     # Collapse pregates into a csv column
-    if (!is.null(initial_gate_name)) {
+    if (!is.null(divisor)) {
 
-        initial_gates <- find_initial_gates_v2(colnames(raw_table), initial_gate_name)
+        initial_gates <- find_initial_gates_v2(colnames(raw_table), divisor)
 
         if (length(initial_gates)==1) {
 
@@ -211,8 +211,6 @@ preprocess_flowjo_export_v2 <- function(raw_table,
             raw_table[['pregate_vals']] <- apply(raw_table[, pregate_cols], 1, paste, collapse = ", ")
             raw_table <- raw_table[, items_in_a_not_b(colnames(raw_table), pregate_cols)]  # drop pregate cols
             colnames(raw_table) <- sub(paste0(pregate_cols[length(pregate_cols)], "/"), "", colnames(raw_table), fixed = TRUE)
-
-            divisor <- initial_gate_name
         }
     }
 

@@ -52,7 +52,7 @@ import_flowjo_export <- function(
 import_flowjo_export_v2 <- function(
     dirpath,
     metric_name='num_cells',
-    initial_gate_name="Live Cells",
+    divisor="Live Cells",
     recursive=FALSE
 ) {
 
@@ -77,7 +77,7 @@ import_flowjo_export_v2 <- function(
             colnames(raw_table)[which(nchar(colnames(raw_table))==0)] <- paste0("X", 1:num_missing)
         }
 
-        df <- preprocess_flowjo_export_v2(raw_table, initial_gate_name=initial_gate_name)
+        df <- preprocess_flowjo_export_v2(raw_table, divisor=divisor)
 
         dfs[[filepath]] <- df
     }

@@ -29,7 +29,8 @@ import::from(file.path(wd, 'R', 'tools', 'list_tools.R'),
 import::from(file.path(wd, 'R', 'tools', 'math.R'),
     'apply_unpaired_t_test', 'apply_multiple_comparisons', .character_only=TRUE)
 import::from(file.path(wd, 'R', 'tools', 'plotting.R'),
-    'save_fig', 'plot_violin', 'plot_multiple_comparisons', .character_only=TRUE)
+    'save_fig', 'plot_violin', 'plot_ribbon_chart', 'plot_multiple_comparisons',
+    .character_only=TRUE)
 import::from(file.path(wd, 'R', 'config', 'flow.R'),
     'mouse_db_ignore', .character_only=TRUE)
 import::from(file.path(wd, 'R', 'config', 'user_input.R'),
@@ -71,17 +72,9 @@ option_list = list(
                 metavar="FALSE", type="logical",
                 help="in violin with significance, show all numbers instead of stars"),
 
-    make_option(c("-a", "--initial-gate-name"), default="Live Cells",
+    make_option(c("-d", "--divisor"), default="Live Cells",
                 metavar="FALSE", type="character",
                 help="Can also choose: 'Single Cells', 'CD45+', etc."),
-
-    make_option(c("-l", "--height"), default=500,
-                metavar="500", type="integer",
-                help="height in px"),
-
-    make_option(c("-w", "--width"), default=2000,
-                metavar="2000", type="integer",
-                help="width in px, max width is 200000"),
 
     make_option(c("-t", "--troubleshooting"), default=FALSE, action="store_true",
                 metavar="FALSE", type="logical",
@@ -97,9 +90,12 @@ if (!(opt[['stat']] %in% c('fishers_lsd', 't_test', 'tukey', 'bonferroni'))) {
     stop("Choose from stat= 'fishers_lsd', 't_test', 'tukey', or 'bonferroni'")
 }
 
+# exclude from ribbon charts
+composite_gates <- c("Single Cells", "Live Cells", "CD45+", "Non-DCs", "DCs", "CD115+", "T cells")
+
 # args
 metadata_cols <- unlist(strsplit(opt[['group-by']], ','))
-initial_gate_name <- opt[['initial-gate-name']]
+divisor <- opt[['divisor']]
 
 
 # Start Log
@@ -118,7 +114,7 @@ log_print(paste(Sys.time(), 'Reading data...'))
 df <- import_flowjo_export_v2(
     file.path(wd, opt[['input-dir']]),
     metric_name='num_cells',
-    initial_gate_name=initial_gate_name
+    divisor=divisor
 )
 if (length(df)==0) {
     msg <- paste("No data found. Please check", file.path(wd, opt[['input-dir']]), '...')
@@ -251,7 +247,7 @@ if ('abs_count' %in% colnames(df)) {
 
 
 # ----------------------------------------------------------------------
-# Data Overview
+# Plotly Interactive Overview
 
 organs <- sort(unique(df[['organ']]))
 log_print(paste(Sys.time(), 'Groups found...', paste(organs, collapse = ', ')))
@@ -274,7 +270,7 @@ for (organ in sort(organs)) {
     fig <- plot_violin(
         df[(df[['organ']]==organ), ],
         x='cell_type', y='pct_cells', group_by='group_name',
-        ylabel=paste('Percent of', initial_gate_name), title=organ,
+        ylabel=paste('Percent of', divisor), title=organ,
         ymin=0, ymax=100,
         hover_data=unique(intersect(
                 c('mouse_id', 'group_name', metadata_cols,
@@ -287,7 +283,7 @@ for (organ in sort(organs)) {
     if (!troubleshooting) {
         save_fig(
             fig=fig,
-            height=opt[['height']], width=opt[['width']],
+            height=500, width=2000,
             dirpath=file.path(wd, opt[['output-dir']], 'figures',
                 gsub(',', '_', opt[['group-by']]), 'pct_cells', 'interactive'),
             filename=paste(organ, 'pct_cells', sep='-'),
@@ -315,7 +311,7 @@ for (organ in sort(organs)) {
         if (!troubleshooting) {
             save_fig(
                 fig=fig,
-                height=opt[['height']], width=opt[['width']],
+                height=500, width=2000,
                 dirpath=file.path(wd, opt[['output-dir']], 'figures',
                     gsub(',', '_', opt[['group-by']]), 'abs_count', 'interactive'),
                 filename=paste(organ, 'abs_count', sep='-'),
@@ -323,6 +319,80 @@ for (organ in sort(organs)) {
             )
         }
     }
+}
+
+
+# ----------------------------------------------------------------------
+# Ribbon Charts
+
+ribbon_df <- df %>%
+    group_by(across(all_of(c("organ", "cell_type", metadata_cols)))) %>%
+    summarise(
+        mean_pct_cells = mean(.data[["pct_cells"]], na.rm = TRUE),
+        !!!if ("abs_count" %in% names(df)) {
+            list(mean_abs_count = rlang::expr(mean(.data[["abs_count"]], na.rm = TRUE)))
+        } else {
+            list()
+        },
+        .groups = "drop"
+    )
+ribbon_df <- as.data.frame(ribbon_df)
+ribbon_df[['group_name']] <- apply( ribbon_df[ , metadata_cols ] , 1 , paste , collapse = ", " )
+ribbon_df <- ribbon_df[!ribbon_df[['cell_type']] %in% composite_gates, ]
+
+for (organ in organs) {
+
+    # mean_pct_cells
+    fig <- plot_ribbon_chart(
+        df = ribbon_df[(ribbon_df[['organ']]==organ), ],
+        x = "group_name", y = "mean_pct_cells", subcat = "cell_type",
+        title = organ,
+        bar_width = 0.7,
+        normalize = TRUE,
+        show_values = TRUE,
+        show_axes = TRUE,
+        show_grid = TRUE,
+        show_xlabels = TRUE,
+        group_order = sort(unique(df[['group_name']]))
+    )
+
+    if (!troubleshooting) {
+        save_fig(
+            fig=fig,
+            height=400, width=600, scale=4,
+            dirpath=file.path(wd, opt[['output-dir']], 'figures', 'ribbon_charts', 'pct_cells'),
+            filename=paste(organ, 'ribbon', sep='-'),
+            save_html=TRUE
+        )
+    }
+
+    # mean_abs_count
+    if ('mean_abs_count' %in% colnames(ribbon_df)) {
+        fig <- plot_ribbon_chart(
+            df = ribbon_df[(ribbon_df[['organ']]==organ), ],
+            x = "group_name", y = "mean_abs_count", subcat = "cell_type",
+            title = organ,
+            bar_width = 0.7,
+            normalize = FALSE,
+            show_values = TRUE,
+            show_axes = TRUE,
+            show_grid = TRUE,
+            show_xlabels = TRUE,
+            # colors = colors,
+            group_order = sort(unique(df[['group_name']]))
+        )
+
+        if (!troubleshooting) {
+            save_fig(
+                fig=fig,
+                height=400, width=600, scale=4,
+                dirpath=file.path(wd, opt[['output-dir']], 'figures', 'ribbon_charts', 'abs_counts'),
+                filename=paste(organ, 'ribbon', sep='-'),
+                save_html=TRUE
+            )
+        }
+    }
+
 }
 
 
@@ -364,7 +434,7 @@ for (idx in 1:nrow(pval_tbl)) {
             df_subset[, c("organ", "cell_type", "group_name", "pct_cells")],
             x='group_name', y='pct_cells',
             ymin=min( df_subset[['pct_cells']]*1.1, 0 ),
-            ylabel=paste('Percent of', initial_gate_name),
+            ylabel=paste('Percent of', divisor),
             title=paste(toupper(organ), cell_type),
             test=opt[['stat']],
             show_numbers=opt[['show-numbers']],
