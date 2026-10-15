@@ -9,20 +9,14 @@ suppressPackageStartupMessages(library('logr'))
 library('optparse')
 import::from(progress, 'progress_bar')
 import::from(jsonlite, 'toJSON')
-import::from(stringr, 'str_detect')
-import::from(tidyr, 'pivot_longer')
 import::from(ggplot2, 'ggsave')
 
-import::from(file.path(wd, 'R', 'functions', 'preprocessing.R'),
-    'find_initial_gates', 'preprocess_flowjo_export', 'sort_groups_by_metric',
-    .character_only=TRUE)
 import::from(file.path(wd, 'R', 'functions', 'file_io.R'),
     'import_flowjo_export_v2', 'import_flow_metadata', .character_only=TRUE)
-
 import::from(file.path(wd, 'R', 'tools', 'file_io.R'),
     'append_many_csv', .character_only=TRUE)
 import::from(file.path(wd, 'R', 'tools', 'list_tools.R'),
-    'items_in_a_not_b', 'multiple_replacement', 'move_list_items_to_front',
+    'items_in_a_not_b', 'move_list_items_to_front',
     .character_only=TRUE)
 import::from(file.path(wd, 'R', 'tools', 'math.R'),
     'apply_unpaired_t_test', 'apply_multiple_comparisons', .character_only=TRUE)
@@ -32,7 +26,7 @@ import::from(file.path(wd, 'R', 'tools', 'plotting.R'),
 import::from(file.path(wd, 'R', 'config', 'flow.R'),
     'mouse_db_ignore', .character_only=TRUE)
 import::from(file.path(wd, 'R', 'config', 'user_input.R'),
-    'custom_group_order', .character_only=TRUE)
+    'custom_group_order', 'composite_gates', .character_only=TRUE)
 
 reticulate::py_config()  # required on linux to access reticulate
 
@@ -87,9 +81,6 @@ troubleshooting_dir = file.path(output_dir, 'troubleshooting')
 if (!(opt[['stat']] %in% c('fishers_lsd', 't_test', 'tukey', 'bonferroni'))) {
     stop("Choose from stat= 'fishers_lsd', 't_test', 'tukey', or 'bonferroni'")
 }
-
-# exclude from ribbon charts
-composite_gates <- c("Single Cells", "Live Cells", "CD45+", "Non-DCs", "DCs", "CD115+", "T cells")
 
 # args
 metadata_cols <- unlist(strsplit(opt[['group-by']], ','))

@@ -12,8 +12,6 @@
 ## cytometry data.
 ## This script treats all three kinds of MFI equally, however, you can rename it on
 ## graph using the -y option
-##
-## At the end, plots TVDs
 
 wd = dirname(this.path::here())  # wd = '~/github/R/helperFlowCell'
 suppressPackageStartupMessages(library('dplyr'))
@@ -24,14 +22,8 @@ import::from(progress, 'progress_bar')
 import::from(jsonlite, 'toJSON')
 import::from(ggplot2, 'ggsave')
 
-import::from(file.path(wd, 'R', 'functions', 'preprocessing.R'),
-    'find_initial_gates', 'sort_groups_by_metric', .character_only=TRUE)
 import::from(file.path(wd, 'R', 'functions', 'file_io.R'),
-    'import_flowjo_export', 'import_flowjo_export_v2', 'import_flow_metadata', .character_only=TRUE)
-
-import::from(file.path(wd, 'R', 'tools', 'df_tools.R'),
-    'group_by_agg', 'rename_columns',
-    .character_only=TRUE)
+    'import_flowjo_export_v2', 'import_flow_metadata', .character_only=TRUE)
 import::from(file.path(wd, 'R', 'tools', 'file_io.R'),
     'append_many_csv', .character_only=TRUE)
 import::from(file.path(wd, 'R', 'tools', 'list_tools.R'),
@@ -39,8 +31,7 @@ import::from(file.path(wd, 'R', 'tools', 'list_tools.R'),
     .character_only=TRUE)
 import::from(file.path(wd, 'R', 'tools', 'math.R'),
     'apply_unpaired_t_test', 'apply_multiple_comparisons',
-    'generate_lognormal_data', 'compute_normal_tvd', # 'compute_lognormal_tvd',
-    .character_only=TRUE)
+    'generate_lognormal_data', .character_only=TRUE)
 import::from(file.path(wd, 'R', 'tools', 'plotting.R'),
     'save_fig', 'plot_violin', 'plot_multiple_comparisons',
     'plot_modal_histograms', .character_only=TRUE)
@@ -91,13 +82,13 @@ option_list = list(
                 metavar="FALSE", type="logical",
                 help="generate histograms"),
 
-    make_option(c("-y", "--metric"), default="gmfi",
-                metavar="gmfi", type="character",
-                help="metric name, eg. opt[['metric']] or 'mode'"),
-
     make_option(c("-x", "--xlabel"), default="Comp-GFP-A :: mNeonGreen",
                 metavar="Comp-GFP-A :: mNeonGreen", type="character",
                 help="x-axis label for histograms"),
+
+    make_option(c("-y", "--metric"), default="gmfi",
+                metavar="gmfi", type="character",
+                help="metric name, eg. opt[['metric']] or 'mode'"),
 
     make_option(c("-d", "--divisor"), default="Live Cells",
                 metavar="Live Cells", type="character",
@@ -204,7 +195,7 @@ df <- df[order(df[['cell_type']], df[['organ']], df[['group_name']]), ]  # sort 
 
 
 # ----------------------------------------------------------------------
-# Compute statistics on gmfi
+# Compute statistics on MFI
 
 log_print(paste(Sys.time(), paste0('Computing ', opt[['stat']], '...')))
 
@@ -439,94 +430,6 @@ for (idx in 1:nrow(pval_tbl)) {
     }
 
     pbar$tick()
-}
-
-
-# ----------------------------------------------------------------------
-# Total Variation Distance
-
-if (!is.null(sdev_df)) {
-
-    log_print(paste(Sys.time(), 'Computing total variation distances...'))
-
-    group_cols <- c('organ', 'gate', 'cell_type', metadata_cols)
-    val_cols <- c('gmfi', 'sdev')
-    tvd_df <- df[
-        ((df[opt[['fluorescence']]]!='WT') &
-         (df[['sdev']] > 0) & (df[['num_cells']] > 5)),
-        c('mouse_id', 'fcs_name', group_cols, 'num_cells', 'pct_cells', val_cols)]
-
-    # left join WT mean MFI
-    wt_df <- group_by_agg(
-        df[((df[opt[['fluorescence']]]=='WT') &
-            (df[['sdev']] > 0) & (df[['num_cells']] > 5)),
-           c(group_cols, val_cols)],
-        group_cols, val_cols, mean
-    )
-    wt_df <- rename_columns(wt_df, c('gmfi'='wt_gmfi', 'sdev'='wt_sdev'))
-
-    tvd_df <- merge(
-        tvd_df, wt_df,
-        by=items_in_a_not_b(group_cols, opt[['fluorescence']]),
-        all.x=TRUE, all.y=FALSE, suffixes=c('', '_'))[,
-        c('mouse_id', 'fcs_name', group_cols,
-          'num_cells', 'pct_cells', val_cols, 'wt_gmfi', 'wt_sdev')
-    ]
-    tvd_df[['group_name']] <- apply(
-        tvd_df[ , metadata_cols , drop = FALSE] , 1 , paste , collapse = ", "
-    )
-
-    tvd_df[['tvd']] <- mapply(
-        compute_normal_tvd,
-        mean1 = tvd_df[['gmfi']],
-        sd1   = tvd_df[['sdev']],
-        mean2 = tvd_df[['wt_gmfi']],
-        sd2   = tvd_df[['wt_sdev']],
-        log_transform=TRUE
-    )
-
-    if (!troubleshooting) {
-        dirpath <- file.path(wd, opt[['output-dir']], 'data',
-            gsub(',', '_', opt[['group-by']]), opt[['metric']])
-        # if (!dir.exists(dirpath)) { dir.create(dirpath, recursive=TRUE) }
-        write.table(tvd_df, file=file.path(dirpath, paste0('gmfi-tvd', '.csv')),
-            row.names=FALSE, sep=',' )
-    }
-
-    # ------------------------------------------------------------
-    # Plot
-
-    organs <- sort(unique(tvd_df[['organ']]))
-    for (organ in sort(organs)) {
-
-        log_print(paste(Sys.time(), 'Plotting', organ, 'tvd...'))
-
-        fig <- plot_violin(
-            tvd_df[(tvd_df[['organ']]==organ), ],
-            x='cell_type', y='tvd', group_by='group_name',
-            ylabel='TVD', title=organ,
-            ymin=0, ymax=1,
-            hover_data=unique(intersect(
-                    c('mouse_id', 'group_name', metadata_cols,
-                      'sex', 'treatment', 'weeks_old', 
-                      'Cells', 'num_cells', 'fcs_name'),
-                    colnames(df)
-            ))
-        )
-
-        if (!troubleshooting) {
-            dirpath <- file.path(wd, opt[['output-dir']], 'figures',
-                gsub(',', '_', opt[['group-by']]), 'tvd', 'interactive')
-            # if (!dir.exists(dirpath)) { dir.create(dirpath, recursive=TRUE) }
-            save_fig(
-                fig=fig,
-                height=500, width=2000,
-                dirpath=dirpath,
-                filename=paste(organ, 'tvd', sep='-'),
-                save_html=TRUE
-            )
-        }
-    }
 }
 
 

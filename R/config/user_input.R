@@ -3,6 +3,9 @@ custom_group_order <- c(
     'M, WT', 'M, hemi'
 )
 
+# exclude from ribbon plots or polar area charts
+composite_gates <- c("Single Cells", "Live Cells", "CD45+", "Non-DCs", "DCs", "CD115+", "Monocytes", "T cells", "MCs")
+
 
 # ----------------------------------------------------------------------
 # Examples
