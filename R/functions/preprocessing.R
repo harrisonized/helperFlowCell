@@ -20,7 +20,7 @@ import::here(file.path(wd, 'R', 'config', 'flow.R'),
 ## Functions
 ## create_survival_table
 ## find_initial_gates
-## find_initial_gates_v2
+## find_initial_gate_v2
 ## preprocess_flowjo_export
 ## preprocess_flowjo_export_v2
 ## preprocess_antibody_inventory
@@ -99,15 +99,34 @@ find_initial_gates <- function(cols, name, backup_name="Live Cells") {
 #' 
 #' Helper function for preprocess_flowjo_export
 #'
-find_initial_gates_v2 <- function(cols, name, backup_name="Live Cells") {
+find_initial_gate_v2 <- function(trees, node) {
+    parts <- strsplit(trees, "/", fixed = TRUE)
 
-    idx <- which(sapply(strsplit(cols, "/"), function(x) tail(x, 1) == name))
-    if (length(idx) == 0 ) {
-        warning(paste0('initial_gate "', name, '" not found, using "', cols[2], '" as a fallback.'))
-        return(cols[2])
+    # Keep paths containing the requested node
+    relevant <- parts[vapply(
+        parts, function(x) node %in% x, logical(1)
+    )]
+    # If not found, return the first node
+    if (length(relevant) == 0) {
+        return(parts[[1]][1])
     }
-    initial_gates <- cols[2:idx]
-    return(initial_gates)
+
+    # Find the longest common prefix among relevant paths
+    common_len <- 0
+    for (i in seq_len(min(lengths(relevant)))) {
+        if (length(unique(vapply(relevant, `[`, character(1), i))) > 1L) {
+            break
+        }
+        common_len <- i
+    }
+    common_path <- relevant[[1]][seq_len(common_len)]
+    idx <- which(common_path == node)
+    if (length(idx) == 0) {
+        return(parts[[1]][1])
+    }
+    res <- paste(common_path[seq_len(max(idx))], collapse = "/")
+
+    return(res)
 }
 
 
@@ -135,7 +154,7 @@ preprocess_flowjo_export <- function(raw_table,
 
     # get last_initial_gate
     if (!is.na(last_initial_gate)) {
-        initial_gates <- find_initial_gates(colnames(raw_table), last_initial_gate)
+        initial_gates <- find_initial_gates(colnames(raw_table)[2:ncol(raw_table)], last_initial_gate)
         if (length(initial_gates) == 1 && is.null(initial_gates)) {
             last_initial_gate <- NULL
         }
@@ -168,15 +187,6 @@ preprocess_flowjo_export_v2 <- function(raw_table,
     divisor=NULL 
 ) {
 
-    raw_table <- rename_columns(raw_table,
-        c('X1'='fcs_name',
-          'Count'='Ungated',
-          'Mean (Comp-Alexa Fluor 488-A)'='Ungated',  # find a better solution
-          'Mode (Comp-Alexa Fluor 488-A)'='Ungated',
-          'Geometric Mean (Comp-Alexa Fluor 488-A)'='Ungated'
-        )
-    )
-
     # drop summary statistics
     colnames(raw_table)[1] <- 'fcs_name'
     raw_table <- raw_table[!(raw_table[['fcs_name']] %in% c('Mean', 'SD')), ]
@@ -188,7 +198,9 @@ preprocess_flowjo_export_v2 <- function(raw_table,
     # Collapse pregates into a csv column
     if (!is.null(divisor)) {
 
-        initial_gates <- find_initial_gates_v2(colnames(raw_table), divisor)
+        gates <- colnames(raw_table)[2:ncol(raw_table)]
+        initial_gate <- find_initial_gate_v2(gates, divisor)
+        initial_gates <- gates[seq_len(grep(initial_gate, gates, fixed = TRUE)[1])]
 
         if (length(initial_gates)==1) {
 
@@ -210,11 +222,14 @@ preprocess_flowjo_export_v2 <- function(raw_table,
             raw_table[['pregate']] <- paste("Ungated", pregate_cols[length(pregate_cols)], sep='/')
             raw_table[['pregate_vals']] <- apply(raw_table[, pregate_cols], 1, paste, collapse = ", ")
             raw_table <- raw_table[, items_in_a_not_b(colnames(raw_table), pregate_cols)]  # drop pregate cols
-            colnames(raw_table) <- sub(paste0(pregate_cols[length(pregate_cols)], "/"), "", colnames(raw_table), fixed = TRUE)
+            raw_table <- rename_columns(raw_table, setNames(list(divisor), initial_gate))
+            # colnames(raw_table) <- sub(paste0(pregate_cols[length(pregate_cols)], "/"), "", colnames(raw_table), fixed = TRUE)
         }
+
+        raw_table[['divisor_name']] <- divisor
     }
 
-    raw_table[['divisor_name']] <- divisor
+    raw_table <- reset_index(raw_table, drop=TRUE)
     df <- pivot_longer(raw_table,
         names_to = "gate", values_to = metric_name,
         cols=items_in_a_not_b(colnames(raw_table), c("fcs_name", "pregate", "pregate_vals", 'divisor_name', divisor)),
@@ -230,10 +245,10 @@ preprocess_flowjo_export_v2 <- function(raw_table,
         df <- df[!str_detect(df[['cell_type']], cell_type), ]
     }
 
-    df <- df[, c(
-        'fcs_name', 'pregate', 'pregate_vals', 'gate', 'cell_type', 'divisor_name',
-        "divisor", 'num_cells')
-    ]
+    df <- df[, intersect(
+        c('fcs_name', 'pregate', 'pregate_vals', 'gate', 'cell_type', 'divisor_name', "divisor", metric_name),
+        colnames(df)
+    )]
 
     return(df)
 }

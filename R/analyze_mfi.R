@@ -1,4 +1,5 @@
 ## Graphs MFI for each cell population
+## 
 ## There are three different ways of calculating MFI
 ## 1. Geometric mean: This is the best choice, because the calculation compensates
 ## for extreme skew, which is standard in flow cytometry data due to the logarithmic
@@ -11,19 +12,22 @@
 ## cytometry data.
 ## This script treats all three kinds of MFI equally, however, you can rename it on
 ## graph using the -y option
+##
+## At the end, plots TVDs
 
 wd = dirname(this.path::here())  # wd = '~/github/R/helperFlowCell'
 suppressPackageStartupMessages(library('dplyr'))
 suppressPackageStartupMessages(library('logr'))
 library('optparse')
+library('zeallot')  # %<-%
 import::from(progress, 'progress_bar')
 import::from(jsonlite, 'toJSON')
 import::from(ggplot2, 'ggsave')
 
 import::from(file.path(wd, 'R', 'functions', 'preprocessing.R'),
-    'sort_groups_by_metric', .character_only=TRUE)
+    'find_initial_gates', 'sort_groups_by_metric', .character_only=TRUE)
 import::from(file.path(wd, 'R', 'functions', 'file_io.R'),
-    'import_flowjo_export', 'import_flow_metadata', .character_only=TRUE)
+    'import_flowjo_export', 'import_flowjo_export_v2', 'import_flow_metadata', .character_only=TRUE)
 
 import::from(file.path(wd, 'R', 'tools', 'df_tools.R'),
     'group_by_agg', 'rename_columns',
@@ -51,25 +55,17 @@ import::from(file.path(wd, 'R', 'config', 'user_input.R'),
 
 # args
 option_list = list(
-    make_option(c("-i", "--input-dir"), default='data/flow-mfi',
-                metavar='data/flow-gmfi', type="character",
-                help="input directory, all csv files will be read in"),
-
-    make_option(c("-o", "--output-dir"), default="hfc-output",
-                metavar="hfc-output", type="character",
-                help="output directory for the data"),
-
-    make_option(c("-d", "--sdev-dir"), default='data/flow-sdev',
-                metavar='data/flow-sdev', type="character",
-                help="standard deviations"),
-
-    make_option(c("-c", "--counts-dir"), default='data/flow-counts',
-                metavar='data/flow-counts', type="character",
-                help="counts"),
+    make_option(c("-i", "--input-dirs"), default='data/flow-counts,data/flow-mfi,data/flow-sdev',
+                metavar='data/flow-counts,data/flow-mfi,data/flow-sdev', type="character",
+                help="input directories, enter a comma-separated list in the same order as the example"),
 
     make_option(c("-m", "--metadata-dir"), default="data/flow-metadata",
                 metavar="data/flow-metadata", type="character",
                 help="metadata directory containing csvs mapping fcs to mouse ids"),
+
+    make_option(c("-o", "--output-dir"), default="hfc-output",
+                metavar="hfc-output", type="character",
+                help="output directory for the data"),
 
     make_option(c("-r", "--ref-dir"), default='data/mice',
                 metavar='data/mice', type="character",
@@ -79,13 +75,9 @@ option_list = list(
                 metavar='treatment', type="character",
                 help="enter a column or comma-separated list of columns, no spaces"),
 
-    make_option(c("-p", "--plot-histograms"), default=FALSE, action="store_true",
-                metavar="FALSE", type="logical",
-                help="generate histograms"),
-
-    make_option(c("-y", "--metric"), default="gmfi",
-                metavar="gmfi", type="character",
-                help="metric name, eg. opt[['metric']] or 'mode'"),
+    make_option(c("-f", "--fluorescence"), default="zygosity",
+                metavar="zygosity", type="character",
+                help="use this to split the fluorescence column from the group by"),
 
     make_option(c("-s", "--stat"), default='fishers_lsd',
                 metavar='fishers_lsd', type="character",
@@ -95,21 +87,21 @@ option_list = list(
                 metavar="FALSE", type="logical",
                 help="in violin with significance, show all numbers instead of stars"),
 
-    make_option(c("-f", "--fluorescence"), default="zygosity",
-                metavar="zygosity", type="character",
-                help="use this to split out the fluorescence column from the group by"),
+    make_option(c("-p", "--plot-histograms"), default=FALSE, action="store_true",
+                metavar="FALSE", type="logical",
+                help="generate histograms"),
+
+    make_option(c("-y", "--metric"), default="gmfi",
+                metavar="gmfi", type="character",
+                help="metric name, eg. opt[['metric']] or 'mode'"),
 
     make_option(c("-x", "--xlabel"), default="Comp-GFP-A :: mNeonGreen",
                 metavar="Comp-GFP-A :: mNeonGreen", type="character",
                 help="x-axis label for histograms"),
 
-    make_option(c("-l", "--height"), default=500,
-                metavar="500", type="integer",
-                help="height in px"),
-
-    make_option(c("-w", "--width"), default=2000,
-                metavar="2000", type="integer",
-                help="width in px, max width is 200000"),
+    make_option(c("-d", "--divisor"), default="Live Cells",
+                metavar="Live Cells", type="character",
+                help="Can also choose: 'Single Cells', 'CD45+', etc."),
 
     make_option(c("-t", "--troubleshooting"), default=FALSE, action="store_true",
                 metavar="FALSE", type="logical",
@@ -126,9 +118,11 @@ if (!(opt[['stat']] %in% c('fishers_lsd', 't_test', 'tukey', 'bonferroni'))) {
 }
 
 # args
+c(counts_dir, mfi_dir, sdev_dir) %<-% unlist(strsplit(opt[['input-dirs']], ','))
 metadata_cols <- unlist(strsplit(opt[['group-by']], ','))
 
-last_initial_gate <- 'Live Cells'
+divisor <- opt[['divisor']]
+
 
 # Start Log
 start_time = Sys.time()
@@ -142,21 +136,27 @@ log_print(paste('Script started at:', start_time))
 
 log_print(paste(Sys.time(), 'Reading data...'))
 
-# import mfi
-df <- import_flowjo_export(
-    file.path(wd, opt[['input-dir']]),
-    metric_name=opt[['metric']],
-    last_initial_gate=NA
-)
-df <- df[, c('fcs_name', 'gate', 'cell_type', 'gmfi')]
-if (is.null(df)) {
-    stop(paste('No files found in', file.path(wd, opt[['input-dir']])))
-}
+# Required files
+df <- import_flowjo_export_v2(file.path(wd, mfi_dir), metric_name=opt[['metric']], divisor=NULL)
+if (is.null(df)) { stop(paste('No files found in', file.path(wd, dir)))}
+flow_metadata <- import_flow_metadata(file.path(wd, opt[['metadata-dir']]))
+if (is.null(flow_metadata)) { stop(paste('No files found in', file.path(wd, opt[['metadata-dir']])))}
+
+# Optional files
+counts_df <- import_flowjo_export_v2(file.path(wd, counts_dir), metric_name='num_cells', divisor=divisor)
+if (is.null(counts_df)) { warning( paste('No files found in', file.path(wd, counts_dir)) )}
+sdev_df <- import_flowjo_export_v2(file.path(wd, sdev_dir), metric_name='sdev', divisor=NULL)
+if (is.null(sdev_df)) { warning( paste('No files found in', file.path(wd, sdev_dir)) )}
+mouse_db <- append_many_csv(file.path(wd, opt[['ref-dir']]), recursive=TRUE, include_filepath=FALSE)
+if (is.null(mouse_db)) { warning( paste('No files found in', file.path(wd, opt[['ref-dir']])) )}
 
 
-# left join sdev
-sdev_df <- import_flowjo_export(file.path(wd, opt[['sdev-dir']]), metric_name='sdev')
-sdev_df <- sdev_df[, c('fcs_name', 'gate', 'cell_type', 'sdev')]
+# ----------------------------------------------------------------------
+# Preprocessing
+
+log_print(paste(Sys.time(), 'Preprocessing...'))
+
+# Left join datasets
 if (!is.null(sdev_df)) {
     log_print(paste(Sys.time(), 'Merging sdev data...'))
     df <- merge(df, sdev_df,
@@ -164,21 +164,11 @@ if (!is.null(sdev_df)) {
         all.x=TRUE, all.y=FALSE, suffixes=c('', '_'))
     df[(is.na(df[['sdev']])), 'sdev'] <- 0  # fillna
 }
-
-# left join counts
-counts_df <- import_flowjo_export(
-    file.path(wd, opt[['counts-dir']]),
-    metric_name='num_cells',
-    last_initial_gate=last_initial_gate
-)
 if (!is.null(counts_df)) {
     log_print(paste(Sys.time(), 'Merging counts data...'))
 
-    divisor <- tail(find_initial_gates(colnames(counts_df), last_initial_gate), 1)[[1]]
-    counts_df[['pct_cells']] <- round(counts_df[['num_cells']] /
-        counts_df[[divisor]] * 100, 4)
-
-    counts_cols <- c("fcs_name", "gate", "cell_type",  "num_cells", "pct_cells")  # don't need pct_cells
+    counts_df[['pct_cells']] <- round(counts_df[['num_cells']] / counts_df[['divisor']] * 100, 4)
+    counts_cols <- c("fcs_name", "gate", "cell_type",  "num_cells", "pct_cells")  # remove pregates
     counts_df <- counts_df[, counts_cols]
 
     df <- merge(df, counts_df,
@@ -186,12 +176,8 @@ if (!is.null(counts_df)) {
         all.x=TRUE, all.y=FALSE, suffixes=c('', '_'))
 }
 
-
 # inner join flow metadata
-flow_metadata <- import_flow_metadata(file.path(wd, opt[['metadata-dir']]))
-df <- merge(df, flow_metadata,
-    by="fcs_name", all.x=FALSE, all.y=FALSE, suffixes=c('', '_'))
-df <- df[(df[['is_unstained']]==FALSE), ]  # drop unstained cells
+df <- merge(df, flow_metadata, by="fcs_name", all.x=FALSE, all.y=FALSE, suffixes=c('', '_'))
 if (length(metadata_cols) > 1) {
     df[['group_name']] <- apply( df[ , metadata_cols ] , 1 , paste , collapse = ", " )
     df[['subgroup_name']] <- apply(
@@ -201,10 +187,7 @@ if (length(metadata_cols) > 1) {
     df[['group_name']] <- df[[metadata_cols]]
 }
 
-
 # left join mouse data
-mouse_db <- append_many_csv(
-    file.path(wd, opt[['ref-dir']]), recursive=TRUE, include_filepath=FALSE)
 if (!is.null(mouse_db)) {
     log_print(paste(Sys.time(), 'Merging mouse data...'))
     df <- merge(df, mouse_db[, items_in_a_not_b(colnames(mouse_db), mouse_db_ignore)],
@@ -212,171 +195,16 @@ if (!is.null(mouse_db)) {
     df[['weeks_old']] <- round(df[['age']]/7, 1)
 }
 
-
 # filter and sort
+df <- df[(df[['is_unstained']]==FALSE), ]  # drop unstained cells
+if (!is.null(counts_df)) {
+    df <- df[(df[['num_cells']] > 50), ]  # filter
+}
 df <- df[order(df[['cell_type']], df[['organ']], df[['group_name']]), ]  # sort rows
 
 
 # ----------------------------------------------------------------------
-# Data Overview
-
-organs <- sort(unique(df[['organ']]))
-log_print(paste(Sys.time(), 'Organs included...', paste(organs, collapse = ', ')))
-
-for (organ in sort(organs)) {
-
-    log_print(paste(Sys.time(), 'Plotting', organ, 'overview...'))
-
-    # ------------------------------------------------------------
-    # Data
-
-    tmp <- sort_groups_by_metric(
-        df[(df[['organ']]==organ),
-            unique(intersect(
-                c('organ', 'genotype', 'treatment',
-                   'group_name', metadata_cols, 'cell_type',
-                   'Cells/Single Cells/Single Cells/Live Cells',
-                   'num_cells', 'pct_cells', opt[['metric']], 'viable_cells_conc',
-                   'total_vol', 'total_viable_cells', 'abs_count',
-                   'mouse_id', 'sex', 'weeks_old', 'fcs_name'),
-                colnames(df)
-            ))],
-        x='cell_type',
-        y=opt[['metric']],
-        groups=c('group_name')
-    )
-
-    if (!troubleshooting) {
-        dirpath <- file.path(wd, opt[['output-dir']], 'data',
-            gsub(',', '_', opt[['group-by']]), opt[['metric']])
-        if (!dir.exists(dirpath)) { dir.create(dirpath, recursive=TRUE) }
-        filepath = file.path(dirpath, paste0(opt[['metric']], '-', organ, '.csv'))
-        write.table(tmp, file = filepath, row.names = FALSE, sep = ',')
-    }
-
-    # ------------------------------------------------------------
-    # Plot
-
-    fig <- plot_violin(
-        tmp,
-        x='cell_type', y=opt[['metric']], group_by='group_name',
-        ylabel='MFI', title=organ,
-        ymin=0,
-        hover_data=unique(intersect(
-                c('mouse_id', 'group_name', metadata_cols,
-                  'sex', 'treatment', 'weeks_old', 
-                  'Cells', 'num_cells', 'fcs_name'),
-                colnames(df)
-        ))
-    )
-
-    if (!troubleshooting) {
-        save_fig(
-            fig=fig,
-            height=opt[['height']], width=opt[['width']],
-            dirpath=file.path(wd, opt[['output-dir']], 'figures',
-                gsub(',', '_', opt[['group-by']]), opt[['metric']], 'interactive'),
-            filename=paste(organ, opt[['metric']], sep='-'),
-            save_html=TRUE
-        )
-    }
-
-}
-
-
-# ----------------------------------------------------------------------
-# Total Variation Distance
-
-if (!is.null(sdev_df)) {
-
-    # ------------------------------------------------------------
-    # Data
-
-    log_print(paste(Sys.time(), 'Computing total variation distances...'))
-
-    group_cols <- c('organ', 'gate', 'cell_type', metadata_cols)
-    val_cols <- c('gmfi', 'sdev')
-    tvd_df <- df[
-        ((df[opt[['fluorescence']]]!='WT') &
-         (df[['sdev']] > 0) & (df[['num_cells']] > 5)),
-        c('mouse_id', 'fcs_name', group_cols, 'num_cells', 'pct_cells', val_cols)]
-
-    # left join WT mean MFI
-    wt_df <- group_by_agg(
-        df[((df[opt[['fluorescence']]]=='WT') &
-            (df[['sdev']] > 0) & (df[['num_cells']] > 5)),
-           c(group_cols, val_cols)],
-        group_cols, val_cols, mean
-    )
-    wt_df <- rename_columns(wt_df, c('gmfi'='wt_gmfi', 'sdev'='wt_sdev'))
-    
-    tvd_df <- merge(
-        tvd_df, wt_df,
-        by=items_in_a_not_b(group_cols, opt[['fluorescence']]),
-        all.x=TRUE, all.y=FALSE, suffixes=c('', '_'))[,
-        c('mouse_id', 'fcs_name', group_cols,
-          'num_cells', 'pct_cells', val_cols, 'wt_gmfi', 'wt_sdev')
-    ]
-    tvd_df[['group_name']] <- apply(
-        tvd_df[ , metadata_cols , drop = FALSE] , 1 , paste , collapse = ", "
-    )
-
-    tvd_df[['tvd']] <- mapply(
-        compute_normal_tvd,
-        mean1 = tvd_df[['gmfi']],
-        sd1   = tvd_df[['sdev']],
-        mean2 = tvd_df[['wt_gmfi']],
-        sd2   = tvd_df[['wt_sdev']],
-        log_transform=TRUE
-    )
-
-    if (!troubleshooting) {
-        dirpath <- file.path(wd, opt[['output-dir']], 'data',
-            gsub(',', '_', opt[['group-by']]), opt[['metric']])
-        # if (!dir.exists(dirpath)) { dir.create(dirpath, recursive=TRUE) }
-        write.table(tvd_df, file=file.path(dirpath, paste0('gmfi-tvd', '.csv')),
-            row.names=FALSE, sep=',' )
-    }
-
-    # ------------------------------------------------------------
-    # Plot
-
-    organs <- sort(unique(tvd_df[['organ']]))
-    for (organ in sort(organs)) {
-
-        log_print(paste(Sys.time(), 'Plotting', organ, 'tvd...'))
-
-        fig <- plot_violin(
-            tvd_df[(tvd_df[['organ']]==organ), ],
-            x='cell_type', y='tvd', group_by='group_name',
-            ylabel='TVD', title=organ,
-            ymin=0, ymax=1,
-            hover_data=unique(intersect(
-                    c('mouse_id', 'group_name', metadata_cols,
-                      'sex', 'treatment', 'weeks_old', 
-                      'Cells', 'num_cells', 'fcs_name'),
-                    colnames(df)
-            ))
-        )
-
-        if (!troubleshooting) {
-            dirpath <- file.path(wd, opt[['output-dir']], 'figures',
-                gsub(',', '_', opt[['group-by']]), opt[['metric']], 'interactive')
-            # if (!dir.exists(dirpath)) { dir.create(dirpath, recursive=TRUE) }
-            save_fig(
-                fig=fig,
-                height=opt[['height']], width=opt[['width']],
-                dirpath=dirpath,
-                filename=paste(organ, 'tvd', sep='-'),
-                save_html=TRUE
-            )
-        }
-    }
-}
-
-
-# ----------------------------------------------------------------------
-# MFI Multiple Comparisons
+# Compute statistics on gmfi
 
 log_print(paste(Sys.time(), paste0('Computing ', opt[['stat']], '...')))
 
@@ -397,11 +225,6 @@ if (opt[['stat']]=='t_test') {
     )
 }
 
-log_print(paste(Sys.time(), paste(
-    nrow(pval_tbl), 'populations found across',
-    length(organs), 'organs') )
-)
-
 if (!troubleshooting) {
     tmp <- pval_tbl
     group_names <- sort(unique( df[['group_name']] ))
@@ -411,11 +234,67 @@ if (!troubleshooting) {
 
     dirpath <- file.path(wd, opt[['output-dir']], 'data',
         gsub(',', '_', opt[['group-by']]), opt[['metric']])
-    # if (!dir.exists(dirpath)) { dir.create(dirpath, recursive=TRUE) }
-    filepath = file.path(dirpath, paste0('gmfi-pvals-', opt[['stat']], '.csv'))
+    if (!dir.exists(dirpath)) { dir.create(dirpath, recursive=TRUE) }
+    filepath = file.path(dirpath, paste0(opt[['metric']], '-pvals-', opt[['stat']], '.csv'))
     write.table(tmp, file = filepath, row.names = FALSE,  sep = ',' )
 }
 
+
+# ----------------------------------------------------------------------
+# Plotly Interactive Overview
+
+organs <- sort(unique(df[['organ']]))
+log_print(paste(Sys.time(), 'Groups found...', paste(organs, collapse = ', ')))
+
+for (organ in sort(organs)) {
+
+    log_print(paste0(Sys.time(), ' Processing ', organ, '...'))
+
+    # save data
+    if (!troubleshooting) {
+        dirpath <- file.path(wd, opt[['output-dir']], 'data', opt[['metric']])
+        filepath = file.path(dirpath, paste0(opt[['metric']], "-", organ, '.csv'))
+        if (!dir.exists(dirpath)) { dir.create(dirpath, recursive=TRUE) }
+        write.table(df[(df[['organ']]==organ), ], file = filepath, row.names = FALSE, sep = ',')
+    }
+
+    # ------------------------------------------------------------
+    # MFI
+
+    fig <- plot_violin(
+        df[(df[['organ']]==organ), ],
+        x='cell_type', y=opt[['metric']], group_by='group_name',
+        ylabel=toupper(opt[['metric']]), title=organ,
+        ymin=0,
+        hover_data=unique(intersect(
+                c('mouse_id', 'group_name', metadata_cols,
+                  'sex', 'treatment', 'weeks_old', 
+                  'Cells', 'num_cells', 'fcs_name'),
+                colnames(df)
+        ))
+    )
+
+    if (!troubleshooting) {
+        save_fig(
+            fig=fig,
+            height=500, width=2000,
+            dirpath=file.path(wd, opt[['output-dir']], 'figures',
+                gsub(',', '_', opt[['group-by']]), opt[['metric']], 'interactive'),
+            filename=paste(organ, opt[['metric']], sep='-'),
+            save_html=TRUE
+        )
+    }
+
+}
+
+
+# ----------------------------------------------------------------------
+# Multiple Comparisons
+
+log_print(paste(Sys.time(), paste(
+    nrow(pval_tbl), 'populations found across',
+    length(organs), 'organs') )
+)
 
 log_print(paste(Sys.time(), paste('Plotting mulitple comparisons using', opt[['stat']])))
 if (opt[['plot-histograms']] && !is.null(sdev_df)) {
@@ -439,7 +318,7 @@ for (idx in 1:nrow(pval_tbl)) {
     ]
 
     # ----------------------------------------------------------------------
-    # MFI Violin Plot
+    # MFI
 
     final_group_order <- move_list_items_to_front(
         unique(df_subset[['group_name']]),
@@ -560,6 +439,94 @@ for (idx in 1:nrow(pval_tbl)) {
     }
 
     pbar$tick()
+}
+
+
+# ----------------------------------------------------------------------
+# Total Variation Distance
+
+if (!is.null(sdev_df)) {
+
+    log_print(paste(Sys.time(), 'Computing total variation distances...'))
+
+    group_cols <- c('organ', 'gate', 'cell_type', metadata_cols)
+    val_cols <- c('gmfi', 'sdev')
+    tvd_df <- df[
+        ((df[opt[['fluorescence']]]!='WT') &
+         (df[['sdev']] > 0) & (df[['num_cells']] > 5)),
+        c('mouse_id', 'fcs_name', group_cols, 'num_cells', 'pct_cells', val_cols)]
+
+    # left join WT mean MFI
+    wt_df <- group_by_agg(
+        df[((df[opt[['fluorescence']]]=='WT') &
+            (df[['sdev']] > 0) & (df[['num_cells']] > 5)),
+           c(group_cols, val_cols)],
+        group_cols, val_cols, mean
+    )
+    wt_df <- rename_columns(wt_df, c('gmfi'='wt_gmfi', 'sdev'='wt_sdev'))
+
+    tvd_df <- merge(
+        tvd_df, wt_df,
+        by=items_in_a_not_b(group_cols, opt[['fluorescence']]),
+        all.x=TRUE, all.y=FALSE, suffixes=c('', '_'))[,
+        c('mouse_id', 'fcs_name', group_cols,
+          'num_cells', 'pct_cells', val_cols, 'wt_gmfi', 'wt_sdev')
+    ]
+    tvd_df[['group_name']] <- apply(
+        tvd_df[ , metadata_cols , drop = FALSE] , 1 , paste , collapse = ", "
+    )
+
+    tvd_df[['tvd']] <- mapply(
+        compute_normal_tvd,
+        mean1 = tvd_df[['gmfi']],
+        sd1   = tvd_df[['sdev']],
+        mean2 = tvd_df[['wt_gmfi']],
+        sd2   = tvd_df[['wt_sdev']],
+        log_transform=TRUE
+    )
+
+    if (!troubleshooting) {
+        dirpath <- file.path(wd, opt[['output-dir']], 'data',
+            gsub(',', '_', opt[['group-by']]), opt[['metric']])
+        # if (!dir.exists(dirpath)) { dir.create(dirpath, recursive=TRUE) }
+        write.table(tvd_df, file=file.path(dirpath, paste0('gmfi-tvd', '.csv')),
+            row.names=FALSE, sep=',' )
+    }
+
+    # ------------------------------------------------------------
+    # Plot
+
+    organs <- sort(unique(tvd_df[['organ']]))
+    for (organ in sort(organs)) {
+
+        log_print(paste(Sys.time(), 'Plotting', organ, 'tvd...'))
+
+        fig <- plot_violin(
+            tvd_df[(tvd_df[['organ']]==organ), ],
+            x='cell_type', y='tvd', group_by='group_name',
+            ylabel='TVD', title=organ,
+            ymin=0, ymax=1,
+            hover_data=unique(intersect(
+                    c('mouse_id', 'group_name', metadata_cols,
+                      'sex', 'treatment', 'weeks_old', 
+                      'Cells', 'num_cells', 'fcs_name'),
+                    colnames(df)
+            ))
+        )
+
+        if (!troubleshooting) {
+            dirpath <- file.path(wd, opt[['output-dir']], 'figures',
+                gsub(',', '_', opt[['group-by']]), 'tvd', 'interactive')
+            # if (!dir.exists(dirpath)) { dir.create(dirpath, recursive=TRUE) }
+            save_fig(
+                fig=fig,
+                height=500, width=2000,
+                dirpath=dirpath,
+                filename=paste(organ, 'tvd', sep='-'),
+                save_html=TRUE
+            )
+        }
+    }
 }
 
 

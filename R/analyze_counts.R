@@ -2,8 +2,6 @@
 ## 
 ## To plot absolute counts, include abs_count as a column in the metadata file
 ## If your initial gate is not found, this script will falls back on the top-level gate as the divisor
-## 
-## 
 
 wd = dirname(this.path::here())  # wd = '~/github/R/helperFlowCell'
 suppressPackageStartupMessages(library('dplyr'))
@@ -48,13 +46,13 @@ option_list = list(
                 metavar='data/flow-counts', type="character",
                 help="input directory, all csv files will be read in"),
 
-    make_option(c("-o", "--output-dir"), default="hfc-output",
-                metavar="hfc-output", type="character",
-                help="output directory for the data"),
-
     make_option(c("-m", "--metadata-dir"), default="data/flow-metadata",
                 metavar="data/flow-metadata", type="character",
                 help="metadata directory containing csvs mapping fcs to mouse ids"),
+
+    make_option(c("-o", "--output-dir"), default="hfc-output",
+                metavar="hfc-output", type="character",
+                help="output directory for the data"),
 
     make_option(c("-r", "--ref-dir"), default='data/mice',
                 metavar='data/mice', type="character",
@@ -73,7 +71,7 @@ option_list = list(
                 help="in violin with significance, show all numbers instead of stars"),
 
     make_option(c("-d", "--divisor"), default="Live Cells",
-                metavar="FALSE", type="character",
+                metavar="Live Cells", type="character",
                 help="Can also choose: 'Single Cells', 'CD45+', etc."),
 
     make_option(c("-t", "--troubleshooting"), default=FALSE, action="store_true",
@@ -106,7 +104,7 @@ log_print(paste('Script started at:', start_time))
 
 
 # ----------------------------------------------------------------------
-# Raw Data
+# Read Data
 
 log_print(paste(Sys.time(), 'Reading data...'))
 
@@ -170,7 +168,7 @@ df <- df[((df[['cell_type']] %in% negative_gates)==FALSE), ]
 
 
 # ----------------------------------------------------------------------
-# Compute statistics
+# Compute statistics on counts
 
 log_print(paste(Sys.time(), paste0('Computing ', opt[['stat']], '...')))
 
@@ -251,7 +249,6 @@ if ('abs_count' %in% colnames(df)) {
 
 organs <- sort(unique(df[['organ']]))
 log_print(paste(Sys.time(), 'Groups found...', paste(organs, collapse = ', ')))
-log_print(paste(Sys.time(), 'Exporting data...'))
 
 for (organ in sort(organs)) {
 
@@ -259,8 +256,9 @@ for (organ in sort(organs)) {
 
     # save data
     if (!troubleshooting) {
-        dirpath <- file.path(wd, opt[['output-dir']], 'data')
-        filepath = file.path(dirpath, paste0(organ, '.csv'))
+        dirpath <- file.path(wd, opt[['output-dir']], 'data', 'counts')
+        filepath = file.path(dirpath, paste0('counts-', organ, '.csv'))
+        if (!dir.exists(dirpath)) { dir.create(dirpath, recursive=TRUE) }
         write.table(df[(df[['organ']]==organ), ], file = filepath, row.names = FALSE, sep = ',')
     }
 

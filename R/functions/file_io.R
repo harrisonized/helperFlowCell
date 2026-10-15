@@ -53,17 +53,21 @@ import_flowjo_export_v2 <- function(
     dirpath,
     metric_name='num_cells',
     divisor="Live Cells",
-    recursive=FALSE
+    recursive=FALSE,
+    na_strings=c('n/a')
 ) {
 
     filepaths <- list.files(dirpath, recursive=recursive, full.names=TRUE)
+    if (length(filepaths)==0) {
+        return(NULL)
+    }
 
     dfs <- new.env()
     for (filepath in filepaths) {
         raw_table <- read.csv(
             filepath, sep=',', row.names=NULL,
             header=TRUE, check.names=FALSE,
-            na.strings=c()
+            na.strings=na_strings
         )
 
         # remove entirely null columns and rows
@@ -77,7 +81,7 @@ import_flowjo_export_v2 <- function(
             colnames(raw_table)[which(nchar(colnames(raw_table))==0)] <- paste0("X", 1:num_missing)
         }
 
-        df <- preprocess_flowjo_export_v2(raw_table, divisor=divisor)
+        df <- preprocess_flowjo_export_v2(raw_table, metric_name=metric_name, divisor=divisor)
 
         dfs[[filepath]] <- df
     }
