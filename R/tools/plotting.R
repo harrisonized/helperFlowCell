@@ -805,16 +805,23 @@ plot_polar_area <- function(df,
     # Adjust small percentages to minimum display threshold
     small_mask <- df[[x]] < min_display_pct & df[[x]] > 0
     if (any(small_mask)) {
-        # Calculate total deficit from boosting small slices
+        # Total deficit needed to boost small slices
         deficit <- sum(min_display_pct - df[[x]][small_mask])
-        
-        # Count non-small slices to distribute the deficit
-        n_large <- sum(!small_mask)
-        
-        if (n_large > 0) {
-            # Adjust each percentage
+
+        # Identify categories that are not being adjusted upward
+        large_mask <- !small_mask
+
+        # Total percentage available from the remaining categories
+        remaining_total <- sum(df[[x]][large_mask])
+
+        if (remaining_total > 0) {
+            # Boost small slices to the minimum
             df[[x]][small_mask] <- min_display_pct
-            df[[x]][!small_mask] <- df[[x]][!small_mask] - (deficit / n_large)
+
+            # Shrink remaining categories proportionally
+            df[[x]][large_mask] <-
+                df[[x]][large_mask] *
+                (remaining_total - deficit) / remaining_total
         }
     }
     

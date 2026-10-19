@@ -38,7 +38,8 @@ import::from(file.path(wd, 'R', 'tools', 'plotting.R'),
 import::from(file.path(wd, 'R', 'config', 'flow.R'),
     'mouse_db_ignore', .character_only=TRUE)
 import::from(file.path(wd, 'R', 'config', 'user_input.R'),
-    'custom_group_order', .character_only=TRUE)
+    'composite_gates', 'custom_group_order',
+    .character_only=TRUE)
 
 
 # ----------------------------------------------------------------------

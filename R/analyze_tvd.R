@@ -7,6 +7,8 @@ suppressPackageStartupMessages(library('logr'))
 library('optparse')
 library('zeallot')  # %<-%
 import::from(progress, 'progress_bar')
+import::from(jsonlite, 'toJSON')
+import::from(ggplot2, 'ggsave')
 
 import::from(file.path(wd, 'R', 'functions', 'file_io.R'),
     'import_flowjo_export_v2', 'import_flow_metadata', .character_only=TRUE)
@@ -17,17 +19,21 @@ import::from(file.path(wd, 'R', 'tools', 'df_tools.R'),
 import::from(file.path(wd, 'R', 'tools', 'file_io.R'),
     'append_many_csv', .character_only=TRUE)
 import::from(file.path(wd, 'R', 'tools', 'list_tools.R'),
-    'items_in_a_not_b', .character_only=TRUE)
+    'items_in_a_not_b', 'move_list_items_to_front', .character_only=TRUE)
+import::from(file.path(wd, 'R', 'tools', 'math.R'),
+    'apply_unpaired_t_test', 'apply_multiple_comparisons',
+    'generate_lognormal_data', .character_only=TRUE)
 import::from(file.path(wd, 'R', 'tools', 'math.R'),
     'compute_normal_tvd', # 'compute_lognormal_tvd',
     .character_only=TRUE)
 import::from(file.path(wd, 'R', 'tools', 'plotting.R'),
-    'save_fig', 'plot_violin', # 'plot_multiple_comparisons',
+    'save_fig', 'plot_violin', 'plot_multiple_comparisons',
     'plot_polar_area', .character_only=TRUE)
 import::from(file.path(wd, 'R', 'config', 'flow.R'),
     'mouse_db_ignore', .character_only=TRUE)
 import::from(file.path(wd, 'R', 'config', 'user_input.R'),
-    'composite_gates', .character_only=TRUE)
+    'composite_gates', 'custom_group_order',
+    .character_only=TRUE)
 
 
 # ----------------------------------------------------------------------
@@ -273,7 +279,7 @@ for (organ in sort(organs)) {
 # Polar Area Charts
 
 # group by
-polar_df <- tvd_df[(tvd_df['zygosity'] == 'homo'), ] %>%
+polar_df <- tvd_df[(tvd_df['zygosity'] == 'homo') & (!is.na(tvd_df['cell_type'])), ] %>%
     group_by(organ, cell_type, treatment) %>%
     summarise(
         mean_pct_cells = mean(pct_cells, na.rm = TRUE),
@@ -286,7 +292,6 @@ polar_df <- fillna(polar_df, 'mean_tvd', 0)
 
 organs <- sort(unique(polar_df[['organ']]))
 treatments <- unique(polar_df[['treatment']])
-pbar <- progress_bar$new(total = length(organs))
 for (organ in sort(organs)) {
     for (treatment in treatments) {
         fig <- plot_polar_area(
@@ -307,6 +312,127 @@ for (organ in sort(organs)) {
                 save_html=TRUE
             )
         }
+    }
+}
+
+
+# ----------------------------------------------------------------------
+# Compute statistics on TVD
+
+log_print(paste(Sys.time(), paste0('Computing tvd...')))
+
+if (opt[['stat']]=='t_test') {
+    pval_tbl <- apply_unpaired_t_test(
+        tvd_df,
+        index_cols=c('organ', 'cell_type'),
+        group_name='group_name',
+        metric='tvd'
+    )
+} else {
+    pval_tbl <- apply_multiple_comparisons(
+        tvd_df,
+        index_cols=c('organ', 'cell_type'),
+        group_name='group_name',
+        metric='tvd',
+        correction=opt[['stat']]
+    )
+}
+
+if (!troubleshooting) {
+    tmp <- pval_tbl
+    group_names <- sort(unique( tvd_df[['group_name']] ))
+    for (col in group_names) {
+        tmp[[col]] <- mapply(toJSON, tmp[[col]])
+    }
+
+    dirpath <- file.path(wd, opt[['output-dir']], 'data',
+        gsub(',', '_', opt[['group-by']]), opt[['metric']])
+    if (!dir.exists(dirpath)) { dir.create(dirpath, recursive=TRUE) }
+    filepath = file.path(dirpath, paste0('tvd-pvals-', opt[['stat']], '.csv'))
+    write.table(tmp, file = filepath, row.names = FALSE,  sep = ',' )
+}
+
+
+# ----------------------------------------------------------------------
+# Multiple Comparisons
+
+log_print(paste(Sys.time(), paste(
+    nrow(pval_tbl), 'populations found across',
+    length(organs), 'organs') )
+)
+
+log_print(paste(Sys.time(), paste('Plotting mulitple comparisons using', opt[['stat']])))
+
+pbar <- progress_bar$new(total = nrow(pval_tbl))
+for (idx in 1:nrow(pval_tbl)) {
+
+    # subset
+    organ <- pval_tbl[idx, 'organ'][[1]]
+    cell_type <- pval_tbl[idx, 'cell_type'][[1]]
+    tvd_df_subset <- tvd_df[
+        (tvd_df[['organ']] == organ) & (tvd_df[['cell_type']] == cell_type),
+        unique(intersect(
+                c('mouse_id', 'organ', 'cell_type', 'group_name',
+                  'subgroup_name', opt[['fluorescence']],
+                   'tvd', 'sdev', 'num_cells', 'abs_count'),
+                colnames(tvd_df)
+        ))
+    ]
+
+    # ----------------------------------------------------------------------
+    # MFI
+
+    final_group_order <- move_list_items_to_front(
+        unique(tvd_df_subset[['group_name']]),
+        custom_group_order
+    )
+    n_groups <- length(unique(final_group_order))
+
+    withCallingHandlers({
+        fig <- plot_multiple_comparisons(
+            tvd_df_subset[, c("organ", "cell_type", "group_name", 'tvd')],
+            x='group_name', y='tvd',
+            ymin=min( tvd_df_subset[, 'tvd']*1.1, 0 ),
+            ylabel='TVD',
+            title=paste(toupper(organ), cell_type),
+            test=opt[['stat']],
+            show_numbers=opt[['show-numbers']],
+            custom_group_order=final_group_order  # manual input
+        )
+    }, warning = function(w) {
+        if ( any(grepl("containing non-finite values", w),
+                 grepl("outside the scale range", w)) ) {
+            invokeRestart("muffleWarning")
+        }
+    })
+
+    # save
+    if (!troubleshooting) {
+        dirpath <- file.path(wd, opt[['output-dir']], 'figures',
+            gsub(',', '_', opt[['group-by']]), 'tvd', organ,
+            opt[['stat']]
+        )
+        if (!dir.exists(dirpath)) { dir.create(dirpath, recursive=TRUE) }
+        
+        filepath = file.path(dirpath,
+            paste0(gsub(' ', '', tolower(organ)), '-',
+                gsub(' ', '_', tolower(cell_type)), '.svg' )
+        )
+        withCallingHandlers({
+            ggsave(
+                filepath,
+                plot=fig,
+                height=5000, width=5000, dpi=500, units='px',
+                scaling=(if (n_groups==2) {1} else 2)
+            )
+        }, warning = function(w) {
+            if ( any(grepl("containing non-finite values", w),
+                     grepl("outside the scale range", w),
+                     grepl("fewer than two data points", w),
+                     grepl("argument is not numeric or logical: returning NA", w)) ) {
+                invokeRestart("muffleWarning")
+            }
+        })
     }
 
     pbar$tick()
