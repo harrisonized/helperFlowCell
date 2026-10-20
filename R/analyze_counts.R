@@ -26,7 +26,8 @@ import::from(file.path(wd, 'R', 'tools', 'plotting.R'),
 import::from(file.path(wd, 'R', 'config', 'flow.R'),
     'mouse_db_ignore', .character_only=TRUE)
 import::from(file.path(wd, 'R', 'config', 'user_input.R'),
-    'custom_group_order', 'composite_gates', .character_only=TRUE)
+    'custom_group_order', 'composite_gates', 'min_cells',
+    .character_only=TRUE)
 
 reticulate::py_config()  # required on linux to access reticulate
 
@@ -150,7 +151,7 @@ if (!is.null(mouse_db)) {
 # filter and sort
 df <- df[order(df[['cell_type']], df[['organ']], df[['group_name']]), ]  # sort rows
 group_names <- sort(unique( df[['group_name']] ))
-df <- df[(df[['num_cells']]>50), ]    # filter
+df <- df[(df[['num_cells']] > min_cells), ]    # filter
 df <- df[rowSums(is.na(df)) != ncol(df), ]  # filter NA rows caused by the above line
 
 # exclude negative gates

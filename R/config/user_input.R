@@ -1,3 +1,5 @@
+min_cells <- 3  # do not set this less than 3
+
 custom_group_order <- c(
     'F, WT', 'F, het', 'F, homo',
     'M, WT', 'M, hemi'

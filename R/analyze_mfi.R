@@ -38,7 +38,7 @@ import::from(file.path(wd, 'R', 'tools', 'plotting.R'),
 import::from(file.path(wd, 'R', 'config', 'flow.R'),
     'mouse_db_ignore', .character_only=TRUE)
 import::from(file.path(wd, 'R', 'config', 'user_input.R'),
-    'composite_gates', 'custom_group_order',
+    'composite_gates', 'custom_group_order', 'min_cells',
     .character_only=TRUE)
 
 
@@ -190,7 +190,7 @@ if (!is.null(mouse_db)) {
 # filter and sort
 df <- df[(df[['is_unstained']]==FALSE), ]  # drop unstained cells
 if (!is.null(counts_df)) {
-    df <- df[(df[['num_cells']] > 50), ]  # filter
+    df <- df[(df[['num_cells']] > min_cells), ]  # filter
     df <- df[rowSums(is.na(df)) != ncol(df), ]  # filter NA rows caused by the above line
 }
 df <- df[order(df[['cell_type']], df[['organ']], df[['group_name']]), ]  # sort rows
