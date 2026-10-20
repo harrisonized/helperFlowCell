@@ -185,6 +185,7 @@ if (!is.null(mouse_db)) {
 df <- df[(df[['is_unstained']]==FALSE), ]  # drop unstained cells
 if (!is.null(counts_df)) {
     df <- df[(df[['num_cells']] > 50), ]  # filter
+    df <- df[rowSums(is.na(df)) != ncol(df), ]  # filter NA rows caused by the above line
 }
 df <- df[order(df[['cell_type']], df[['organ']], df[['group_name']]), ]  # sort rows
 
@@ -307,7 +308,7 @@ for (organ in sort(organs)) {
             save_fig(
                 fig=fig,
                 height=opt[['height']], width=opt[['width']],
-                dirpath=file.path(wd, opt[['output-dir']], 'figures', 'polar_area'),
+                dirpath=file.path(path.expand(wd), opt[['output-dir']], 'figures', 'polar_area'),
                 filename=paste(organ, 'polar_area', treatment, sep='-'),
                 save_html=TRUE
             )
@@ -317,125 +318,135 @@ for (organ in sort(organs)) {
 
 
 # ----------------------------------------------------------------------
-# Compute statistics on TVD
-
-log_print(paste(Sys.time(), paste0('Computing tvd...')))
-
-if (opt[['stat']]=='t_test') {
-    pval_tbl <- apply_unpaired_t_test(
-        tvd_df,
-        index_cols=c('organ', 'cell_type'),
-        group_name='group_name',
-        metric='tvd'
-    )
-} else {
-    pval_tbl <- apply_multiple_comparisons(
-        tvd_df,
-        index_cols=c('organ', 'cell_type'),
-        group_name='group_name',
-        metric='tvd',
-        correction=opt[['stat']]
-    )
-}
-
-if (!troubleshooting) {
-    tmp <- pval_tbl
-    group_names <- sort(unique( tvd_df[['group_name']] ))
-    for (col in group_names) {
-        tmp[[col]] <- mapply(toJSON, tmp[[col]])
-    }
-
-    dirpath <- file.path(wd, opt[['output-dir']], 'data',
-        gsub(',', '_', opt[['group-by']]), opt[['metric']])
-    if (!dir.exists(dirpath)) { dir.create(dirpath, recursive=TRUE) }
-    filepath = file.path(dirpath, paste0('tvd-pvals-', opt[['stat']], '.csv'))
-    write.table(tmp, file = filepath, row.names = FALSE,  sep = ',' )
-}
-
-
-# ----------------------------------------------------------------------
 # Multiple Comparisons
 
-log_print(paste(Sys.time(), paste(
-    nrow(pval_tbl), 'populations found across',
-    length(organs), 'organs') )
-)
+if (n_distinct(tvd_df[['group_name']])==1) {
 
-log_print(paste(Sys.time(), paste('Plotting mulitple comparisons using', opt[['stat']])))
+    log_print(paste(Sys.time(), paste0('Single group found. Skipping multiple comparisons...')))
 
-pbar <- progress_bar$new(total = nrow(pval_tbl))
-for (idx in 1:nrow(pval_tbl)) {
-
-    # subset
-    organ <- pval_tbl[idx, 'organ'][[1]]
-    cell_type <- pval_tbl[idx, 'cell_type'][[1]]
-    tvd_df_subset <- tvd_df[
-        (tvd_df[['organ']] == organ) & (tvd_df[['cell_type']] == cell_type),
-        unique(intersect(
-                c('mouse_id', 'organ', 'cell_type', 'group_name',
-                  'subgroup_name', opt[['fluorescence']],
-                   'tvd', 'sdev', 'num_cells', 'abs_count'),
-                colnames(tvd_df)
-        ))
-    ]
+} else {
 
     # ----------------------------------------------------------------------
-    # MFI
+    # Data
 
-    final_group_order <- move_list_items_to_front(
-        unique(tvd_df_subset[['group_name']]),
-        custom_group_order
-    )
-    n_groups <- length(unique(final_group_order))
+    log_print(paste(Sys.time(), paste0('Computing tvd...')))
 
-    withCallingHandlers({
-        fig <- plot_multiple_comparisons(
-            tvd_df_subset[, c("organ", "cell_type", "group_name", 'tvd')],
-            x='group_name', y='tvd',
-            ymin=min( tvd_df_subset[, 'tvd']*1.1, 0 ),
-            ylabel='TVD',
-            title=paste(toupper(organ), cell_type),
-            test=opt[['stat']],
-            show_numbers=opt[['show-numbers']],
-            custom_group_order=final_group_order  # manual input
+    if (opt[['stat']]=='t_test') {
+        pval_tbl <- apply_unpaired_t_test(
+            tvd_df,
+            index_cols=c('organ', 'cell_type'),
+            group_name='group_name',
+            metric='tvd'
         )
-    }, warning = function(w) {
-        if ( any(grepl("containing non-finite values", w),
-                 grepl("outside the scale range", w)) ) {
-            invokeRestart("muffleWarning")
-        }
-    })
+    } else {
+        pval_tbl <- apply_multiple_comparisons(
+            tvd_df,
+            index_cols=c('organ', 'cell_type'),
+            group_name='group_name',
+            metric='tvd',
+            correction=opt[['stat']]
+        )
+    }
 
-    # save
     if (!troubleshooting) {
-        dirpath <- file.path(wd, opt[['output-dir']], 'figures',
-            gsub(',', '_', opt[['group-by']]), 'tvd', organ,
-            opt[['stat']]
-        )
+        tmp <- pval_tbl
+        group_names <- sort(unique( tvd_df[['group_name']] ))
+        for (col in group_names) {
+            tmp[[col]] <- mapply(toJSON, tmp[[col]])
+        }
+
+        dirpath <- file.path(wd, opt[['output-dir']], 'data',
+            gsub(',', '_', opt[['group-by']]), opt[['metric']])
         if (!dir.exists(dirpath)) { dir.create(dirpath, recursive=TRUE) }
-        
-        filepath = file.path(dirpath,
-            paste0(gsub(' ', '', tolower(organ)), '-',
-                gsub(' ', '_', tolower(cell_type)), '.svg' )
+        filepath = file.path(dirpath, paste0('tvd-pvals-', opt[['stat']], '.csv'))
+        write.table(tmp, file = filepath, row.names = FALSE,  sep = ',' )
+    }
+
+
+    # ----------------------------------------------------------------------
+    # Multiple Comparison Plots
+
+    log_print(paste(Sys.time(), paste(
+        nrow(pval_tbl), 'populations found across',
+        length(organs), 'organs') )
+    )
+
+    log_print(paste(Sys.time(), paste('Plotting mulitple comparisons using', opt[['stat']])))
+
+    pbar <- progress_bar$new(total = nrow(pval_tbl))
+    for (idx in 1:nrow(pval_tbl)) {
+
+        # subset
+        organ <- pval_tbl[idx, 'organ'][[1]]
+        cell_type <- pval_tbl[idx, 'cell_type'][[1]]
+        tvd_df_subset <- tvd_df[
+            (tvd_df[['organ']] == organ) & (tvd_df[['cell_type']] == cell_type),
+            unique(intersect(
+                    c('mouse_id', 'organ', 'cell_type', 'group_name',
+                      'subgroup_name', opt[['fluorescence']],
+                       'tvd', 'sdev', 'num_cells', 'abs_count'),
+                    colnames(tvd_df)
+            ))
+        ]
+
+        # ----------------------------------------------------------------------
+        # MFI
+
+        final_group_order <- move_list_items_to_front(
+            unique(tvd_df_subset[['group_name']]),
+            custom_group_order
         )
+        n_groups <- length(unique(final_group_order))
+
         withCallingHandlers({
-            ggsave(
-                filepath,
-                plot=fig,
-                height=5000, width=5000, dpi=500, units='px',
-                scaling=(if (n_groups==2) {1} else 2)
+            fig <- plot_multiple_comparisons(
+                tvd_df_subset[, c("organ", "cell_type", "group_name", 'tvd')],
+                x='group_name', y='tvd',
+                ymin=min( tvd_df_subset[, 'tvd']*1.1, 0 ),
+                ylabel='TVD',
+                title=paste(toupper(organ), cell_type),
+                test=opt[['stat']],
+                show_numbers=opt[['show-numbers']],
+                custom_group_order=final_group_order  # manual input
             )
         }, warning = function(w) {
             if ( any(grepl("containing non-finite values", w),
-                     grepl("outside the scale range", w),
-                     grepl("fewer than two data points", w),
-                     grepl("argument is not numeric or logical: returning NA", w)) ) {
+                     grepl("outside the scale range", w)) ) {
                 invokeRestart("muffleWarning")
             }
         })
-    }
 
-    pbar$tick()
+        # save
+        if (!troubleshooting) {
+            dirpath <- file.path(wd, opt[['output-dir']], 'figures',
+                gsub(',', '_', opt[['group-by']]), 'tvd', organ,
+                opt[['stat']]
+            )
+            if (!dir.exists(dirpath)) { dir.create(dirpath, recursive=TRUE) }
+            
+            filepath = file.path(dirpath,
+                paste0(gsub(' ', '', tolower(organ)), '-',
+                    gsub(' ', '_', tolower(cell_type)), '.svg' )
+            )
+            withCallingHandlers({
+                ggsave(
+                    filepath,
+                    plot=fig,
+                    height=5000, width=5000, dpi=500, units='px',
+                    scaling=(if (n_groups==2) {1} else 2)
+                )
+            }, warning = function(w) {
+                if ( any(grepl("containing non-finite values", w),
+                         grepl("outside the scale range", w),
+                         grepl("fewer than two data points", w),
+                         grepl("argument is not numeric or logical: returning NA", w)) ) {
+                    invokeRestart("muffleWarning")
+                }
+            })
+        }
+
+        pbar$tick()
+    }
 }
 
 

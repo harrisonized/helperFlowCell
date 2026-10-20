@@ -191,45 +191,9 @@ if (!is.null(mouse_db)) {
 df <- df[(df[['is_unstained']]==FALSE), ]  # drop unstained cells
 if (!is.null(counts_df)) {
     df <- df[(df[['num_cells']] > 50), ]  # filter
+    df <- df[rowSums(is.na(df)) != ncol(df), ]  # filter NA rows caused by the above line
 }
 df <- df[order(df[['cell_type']], df[['organ']], df[['group_name']]), ]  # sort rows
-
-
-# ----------------------------------------------------------------------
-# Compute statistics on MFI
-
-log_print(paste(Sys.time(), paste0('Computing ', opt[['stat']], '...')))
-
-if (opt[['stat']]=='t_test') {
-    pval_tbl <- apply_unpaired_t_test(
-        df,
-        index_cols=c('organ', 'cell_type'),
-        group_name='group_name',
-        metric=opt[['metric']]
-    )
-} else {
-    pval_tbl <- apply_multiple_comparisons(
-        df,
-        index_cols=c('organ', 'cell_type'),
-        group_name='group_name',
-        metric=opt[['metric']],
-        correction=opt[['stat']]
-    )
-}
-
-if (!troubleshooting) {
-    tmp <- pval_tbl
-    group_names <- sort(unique( df[['group_name']] ))
-    for (col in group_names) {
-        tmp[[col]] <- mapply(toJSON, tmp[[col]])
-    }
-
-    dirpath <- file.path(wd, opt[['output-dir']], 'data',
-        gsub(',', '_', opt[['group-by']]), opt[['metric']])
-    if (!dir.exists(dirpath)) { dir.create(dirpath, recursive=TRUE) }
-    filepath = file.path(dirpath, paste0(opt[['metric']], '-pvals-', opt[['stat']], '.csv'))
-    write.table(tmp, file = filepath, row.names = FALSE,  sep = ',' )
-}
 
 
 # ----------------------------------------------------------------------
@@ -283,154 +247,201 @@ for (organ in sort(organs)) {
 # ----------------------------------------------------------------------
 # Multiple Comparisons
 
-log_print(paste(Sys.time(), paste(
-    nrow(pval_tbl), 'populations found across',
-    length(organs), 'organs') )
-)
+if (n_distinct(df[['group_name']])==1) {
 
-log_print(paste(Sys.time(), paste('Plotting mulitple comparisons using', opt[['stat']])))
-if (opt[['plot-histograms']] && !is.null(sdev_df)) {
-    log_print(paste(Sys.time(), 'Plotting fluorescence histograms...'))
-}
+    log_print(paste(Sys.time(), paste0('Single group found. Skipping multiple comparisons...')))
 
-pbar <- progress_bar$new(total = nrow(pval_tbl))
-for (idx in 1:nrow(pval_tbl)) {
-
-    # subset
-    organ <- pval_tbl[idx, 'organ'][[1]]
-    cell_type <- pval_tbl[idx, 'cell_type'][[1]]
-    df_subset <- df[
-        (df[['organ']] == organ) & (df[['cell_type']] == cell_type),
-        unique(intersect(
-                c('mouse_id', 'organ', 'cell_type', 'group_name',
-                  'subgroup_name', opt[['fluorescence']],
-                   opt[['metric']], 'sdev', 'num_cells', 'abs_count'),
-                colnames(df)
-        ))
-    ]
+} else {
 
     # ----------------------------------------------------------------------
-    # MFI
+    # Data
 
-    final_group_order <- move_list_items_to_front(
-        unique(df_subset[['group_name']]),
-        custom_group_order
-    )
-    n_groups <- length(unique(final_group_order))
+    log_print(paste(Sys.time(), paste0('Computing ', opt[['stat']], '...')))
 
-    withCallingHandlers({
-        fig <- plot_multiple_comparisons(
-            df_subset[, c("organ", "cell_type", "group_name", opt[['metric']])],
-            x='group_name', y=opt[['metric']],
-            ymin=min( df_subset[, opt[['metric']]]*1.1, 0 ),
-            ylabel=opt[['metric']],
-            title=paste(toupper(organ), cell_type),
-            test=opt[['stat']],
-            show_numbers=opt[['show-numbers']],
-            custom_group_order=final_group_order  # manual input
+    if (opt[['stat']]=='t_test') {
+        pval_tbl <- apply_unpaired_t_test(
+            df,
+            index_cols=c('organ', 'cell_type'),
+            group_name='group_name',
+            metric=opt[['metric']]
         )
-    }, warning = function(w) {
-        if ( any(grepl("containing non-finite values", w),
-                 grepl("outside the scale range", w)) ) {
-            invokeRestart("muffleWarning")
-        }
-    })
+    } else {
+        pval_tbl <- apply_multiple_comparisons(
+            df,
+            index_cols=c('organ', 'cell_type'),
+            group_name='group_name',
+            metric=opt[['metric']],
+            correction=opt[['stat']]
+        )
+    }
 
-    # save
     if (!troubleshooting) {
-        dirpath <- file.path(wd, opt[['output-dir']], 'figures',
-            gsub(',', '_', opt[['group-by']]), opt[['metric']], organ,
-            opt[['stat']]
-        )
+        tmp <- pval_tbl
+        group_names <- sort(unique( df[['group_name']] ))
+        for (col in group_names) {
+            tmp[[col]] <- mapply(toJSON, tmp[[col]])
+        }
+
+        dirpath <- file.path(wd, opt[['output-dir']], 'data',
+            gsub(',', '_', opt[['group-by']]), opt[['metric']])
         if (!dir.exists(dirpath)) { dir.create(dirpath, recursive=TRUE) }
-        
-        filepath = file.path(dirpath,
-            paste0(gsub(' ', '', tolower(organ)), '-',
-                gsub(' ', '_', tolower(cell_type)), '.svg' )
+        filepath = file.path(dirpath, paste0(opt[['metric']], '-pvals-', opt[['stat']], '.csv'))
+        write.table(tmp, file = filepath, row.names = FALSE,  sep = ',' )
+    }
+
+
+    # ----------------------------------------------------------------------
+    # Plots
+
+    log_print(paste(Sys.time(), paste(
+        nrow(pval_tbl), 'populations found across',
+        length(organs), 'organs') )
+    )
+
+    log_print(paste(Sys.time(), paste('Plotting mulitple comparisons using', opt[['stat']])))
+    if (opt[['plot-histograms']] && !is.null(sdev_df)) {
+        log_print(paste(Sys.time(), 'Plotting fluorescence histograms...'))
+    }
+
+    pbar <- progress_bar$new(total = nrow(pval_tbl))
+    for (idx in 1:nrow(pval_tbl)) {
+
+        # subset
+        organ <- pval_tbl[idx, 'organ'][[1]]
+        cell_type <- pval_tbl[idx, 'cell_type'][[1]]
+        df_subset <- df[
+            (df[['organ']] == organ) & (df[['cell_type']] == cell_type),
+            unique(intersect(
+                    c('mouse_id', 'organ', 'cell_type', 'group_name',
+                      'subgroup_name', opt[['fluorescence']],
+                       opt[['metric']], 'sdev', 'num_cells', 'abs_count'),
+                    colnames(df)
+            ))
+        ]
+
+        # ----------------------------------------------------------------------
+        # MFI
+
+        final_group_order <- move_list_items_to_front(
+            unique(df_subset[['group_name']]),
+            custom_group_order
         )
+        n_groups <- length(unique(final_group_order))
+
         withCallingHandlers({
-            ggsave(
-                filepath,
-                plot=fig,
-                height=5000, width=5000, dpi=500, units='px',
-                scaling=(if (n_groups==2) {1} else 2)
+            fig <- plot_multiple_comparisons(
+                df_subset[, c("organ", "cell_type", "group_name", opt[['metric']])],
+                x='group_name', y=opt[['metric']],
+                ymin=min( df_subset[, opt[['metric']]]*1.1, 0 ),
+                ylabel=opt[['metric']],
+                title=paste(toupper(organ), cell_type),
+                test=opt[['stat']],
+                show_numbers=opt[['show-numbers']],
+                custom_group_order=final_group_order  # manual input
             )
         }, warning = function(w) {
             if ( any(grepl("containing non-finite values", w),
-                     grepl("outside the scale range", w),
-                     grepl("fewer than two data points", w),
-                     grepl("argument is not numeric or logical: returning NA", w)) ) {
+                     grepl("outside the scale range", w)) ) {
                 invokeRestart("muffleWarning")
             }
         })
-    }
 
-    # ----------------------------------------------------------------------
-    # Histograms
-
-    if (opt[['plot-histograms']] && !is.null(sdev_df)) {
-
-        subgroups <- unique(df_subset[['subgroup_name']])
-        for (subgroup in subgroups) {
-
-            df_subsubset <- df_subset[
-                (df_subset['subgroup_name'] == subgroup),
-                unique(intersect(
-                        c('organ', 'mouse_id', 'group_name', 'subgroup_name', 'zygosity',
-                          'num_cells', 'gmfi', 'sdev'),
-                        colnames(df_subset)
-                ))
-            ]
-            df_subsubset <- df_subsubset [!duplicated(df_subsubset[c('mouse_id', 'group_name')]), ]
-            df_subsubset[['color']] <- multiple_replacement(
-                df_subsubset[['zygosity']],
-                c('homo'='#ACF53B', 'het'='#ACF53B', 'hemi'='#ACF53B', 'WT'='#B0B0B0')
+        # save
+        if (!troubleshooting) {
+            dirpath <- file.path(wd, opt[['output-dir']], 'figures',
+                gsub(',', '_', opt[['group-by']]), opt[['metric']], organ,
+                opt[['stat']]
             )
-
-            sim_fluors <- Map(
-                generate_lognormal_data,
-                n = min(df_subsubset[['num_cells']], 1000, na.rm=TRUE),
-                mean = df_subsubset[['gmfi']],
-                sd = df_subsubset[['sdev']],
-                group_name = apply(
-                    df_subsubset[ , c('group_name', 'mouse_id') ],
-                    1 , paste , collapse = ", " )
+            if (!dir.exists(dirpath)) { dir.create(dirpath, recursive=TRUE) }
+            
+            filepath = file.path(dirpath,
+                paste0(gsub(' ', '', tolower(organ)), '-',
+                    gsub(' ', '_', tolower(cell_type)), '.svg' )
             )
-            sim_fluor <- do.call(rbind, sim_fluors)
-
-            fig <- plot_modal_histograms(sim_fluor,
-                xlabel = opt[['xlabel']],
-                ylabel = "Normalized to Mode",
-                title = paste(toupper(organ), cell_type, subgroup),
-                spar = 0.4,
-                colors = df_subsubset[['color']],  # autogenerate this
-                x_ticks = c(0, 250, 500, 1000, 2500, 5000, 10000),
-                show_bins=FALSE
-            )
-
-            # save
-            if (!troubleshooting) {
-                dirpath <- file.path(wd, opt[['output-dir']], 'figures',
-                    gsub(',', '_', opt[['group-by']]), opt[['metric']],
-                    organ, 'histograms'
-                )
-                if (!dir.exists(dirpath)) { dir.create(dirpath, recursive=TRUE) }
-                
-                filepath = file.path(dirpath,
-                    paste0(gsub(' ', '', tolower(organ)), '-',
-                        gsub(' ', '_', tolower(cell_type)), '-',
-                        gsub(', ', '_', subgroup), '.png' )
-                )
+            withCallingHandlers({
                 ggsave(
                     filepath,
-                    plot=fig, bg='white',
-                    height=1500, width=3000, dpi=200, units='px', scaling=2
+                    plot=fig,
+                    height=5000, width=5000, dpi=500, units='px',
+                    scaling=(if (n_groups==2) {1} else 2)
                 )
+            }, warning = function(w) {
+                if ( any(grepl("containing non-finite values", w),
+                         grepl("outside the scale range", w),
+                         grepl("fewer than two data points", w),
+                         grepl("argument is not numeric or logical: returning NA", w)) ) {
+                    invokeRestart("muffleWarning")
+                }
+            })
+        }
+
+        # ----------------------------------------------------------------------
+        # Histograms
+
+        if (opt[['plot-histograms']] && !is.null(sdev_df)) {
+
+            subgroups <- unique(df_subset[['subgroup_name']])
+            for (subgroup in subgroups) {
+
+                df_subsubset <- df_subset[
+                    (df_subset['subgroup_name'] == subgroup),
+                    unique(intersect(
+                            c('organ', 'mouse_id', 'group_name', 'subgroup_name', 'zygosity',
+                              'num_cells', 'gmfi', 'sdev'),
+                            colnames(df_subset)
+                    ))
+                ]
+                df_subsubset <- df_subsubset [!duplicated(df_subsubset[c('mouse_id', 'group_name')]), ]
+                df_subsubset[['color']] <- multiple_replacement(
+                    df_subsubset[['zygosity']],
+                    c('homo'='#ACF53B', 'het'='#ACF53B', 'hemi'='#ACF53B', 'WT'='#B0B0B0')
+                )
+
+                sim_fluors <- Map(
+                    generate_lognormal_data,
+                    n = min(df_subsubset[['num_cells']], 1000, na.rm=TRUE),
+                    mean = df_subsubset[['gmfi']],
+                    sd = df_subsubset[['sdev']],
+                    group_name = apply(
+                        df_subsubset[ , c('group_name', 'mouse_id') ],
+                        1 , paste , collapse = ", " )
+                )
+                sim_fluor <- do.call(rbind, sim_fluors)
+
+                fig <- plot_modal_histograms(sim_fluor,
+                    xlabel = opt[['xlabel']],
+                    ylabel = "Normalized to Mode",
+                    title = paste(toupper(organ), cell_type, subgroup),
+                    spar = 0.4,
+                    colors = df_subsubset[['color']],  # autogenerate this
+                    x_ticks = c(0, 250, 500, 1000, 2500, 5000, 10000),
+                    show_bins=FALSE
+                )
+
+                # save
+                if (!troubleshooting) {
+                    dirpath <- file.path(wd, opt[['output-dir']], 'figures',
+                        gsub(',', '_', opt[['group-by']]), opt[['metric']],
+                        organ, 'histograms'
+                    )
+                    if (!dir.exists(dirpath)) { dir.create(dirpath, recursive=TRUE) }
+                    
+                    filepath = file.path(dirpath,
+                        paste0(gsub(' ', '', tolower(organ)), '-',
+                            gsub(' ', '_', tolower(cell_type)), '-',
+                            gsub(', ', '_', subgroup), '.png' )
+                    )
+                    ggsave(
+                        filepath,
+                        plot=fig, bg='white',
+                        height=1500, width=3000, dpi=200, units='px', scaling=2
+                    )
+                }
             }
         }
-    }
 
-    pbar$tick()
+        pbar$tick()
+    }
 }
 
 

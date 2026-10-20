@@ -150,7 +150,8 @@ if (!is.null(mouse_db)) {
 # filter and sort
 df <- df[order(df[['cell_type']], df[['organ']], df[['group_name']]), ]  # sort rows
 group_names <- sort(unique( df[['group_name']] ))
-df <- df[(df[['num_cells']]>10), ]
+df <- df[(df[['num_cells']]>50), ]    # filter
+df <- df[rowSums(is.na(df)) != ncol(df), ]  # filter NA rows caused by the above line
 
 # exclude negative gates
 cell_types <- unique(df[['cell_type']])

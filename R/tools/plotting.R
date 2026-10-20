@@ -58,8 +58,14 @@ save_fig <- function(fig,
         dir.create( file.path(dirpath, 'png'), recursive=TRUE)
     }
 
+    # reticulate::py_install(
+    #     packages = "kaleido==0.2.1",
+    #     envname = "r-reticulate",
+    #     method = "virtualenv",
+    #     pip = TRUE
+    # )
     suppressWarnings(save_image(fig,
-        file=file.path(file.path(dirpath, 'png'), paste0(filename, '.png')), 
+        file=file.path(path.expand(dirpath), 'png', paste0(filename, '.png')), 
         height=height, width=width, scale=scale
     ))
 
@@ -988,7 +994,6 @@ plot_polar_area <- function(df,
                     direction = 'clockwise',
                     ticks = '',
                     showticklabels = FALSE,
-                    showline = FALSE,
                     showgrid = FALSE,
                     gridcolor = 'lightgray',
                     gridwidth = 1,
