@@ -223,12 +223,11 @@ tvd_df[['group_name']] <- apply(
 )
 
 tvd_df[['tvd']] <- mapply(
-    compute_normal_tvd,
+    compute_lognormal_tvd,
     mean1 = tvd_df[['gmfi']],
     sd1   = tvd_df[['sdev']],
     mean2 = tvd_df[['wt_gmfi']],
-    sd2   = tvd_df[['wt_sdev']],
-    log_transform=TRUE
+    sd2   = tvd_df[['wt_sdev']]
 )
 
 
@@ -380,7 +379,9 @@ if (n_distinct(tvd_df[['group_name']])==1) {
         organ <- pval_tbl[idx, 'organ'][[1]]
         cell_type <- pval_tbl[idx, 'cell_type'][[1]]
         tvd_df_subset <- tvd_df[
-            (tvd_df[['organ']] == organ) & (tvd_df[['cell_type']] == cell_type),
+            ((tvd_df[['organ']] == organ) &
+             (tvd_df[['cell_type']] == cell_type) & 
+             (!is.na(tvd_df[['tvd']]))),
             unique(intersect(
                     c('mouse_id', 'organ', 'cell_type', 'group_name',
                       'subgroup_name', opt[['fluorescence']],
@@ -388,6 +389,10 @@ if (n_distinct(tvd_df[['group_name']])==1) {
                     colnames(tvd_df)
             ))
         ]
+
+        if (nrow(tvd_df_subset)==0) {
+            next
+        }
 
         # ----------------------------------------------------------------------
         # MFI
