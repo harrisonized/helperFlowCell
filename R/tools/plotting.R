@@ -29,6 +29,9 @@ import::here(file.path(wd, 'R', 'tools', 'math.R'),
     .character_only=TRUE)
 import::here(file.path(wd, 'R', 'tools', 'math.R'),
     'apply_unpaired_t_test', .character_only=TRUE)
+import::here(file.path(wd, 'R', 'config', 'colors.R'),
+    'mpl_colors', 'tailwind_colors', .character_only=TRUE)
+
 
 ## Functions
 ## save_fig
@@ -788,28 +791,73 @@ plot_modal_histograms <- function(df,
 #' 
 #' Angle represents the number of degrees, radius represents size
 #' 
+#' Plot Polar Area
+#'
+#' Angle represents the number of degrees, radius represents size
+#'
 plot_polar_area <- function(df,
-    x="population_pct", y="radius_value", group='category',
-    title=NULL,
-    show_axes=FALSE,
+    x = "population_pct", y = "radius_value", group = "category",
+    title = NULL,
+    show_axes = FALSE,
     colors = NULL,
-    normalize=TRUE,
-    min_label_pct=2,  # Minimum percentage to show label
-    min_radius=0.3,   # Minimum radius to show label inside
-    min_display_pct=1.5 # Minimum percentage for display
+    normalize = TRUE,
+    min_label_pct = 2,  # Minimum percentage to show label
+    min_radius = 0.3,   # Minimum radius to show label inside
+    min_display_pct = 1.5 # Minimum percentage for display
 ) {
 
-    # Sort by r
+    # Default Tailwind palette for categories without an assigned color
+    tailwind_colors <- c(
+        "#3b82f6",  # blue 500
+        "#8b5cf6",  # violet 500
+        "#ec4899",  # pink 500
+        "#f59e0b",  # amber 500
+        "#10b981",  # emerald 500
+        "#ef4444",  # red 500
+        "#06b6d4",  # cyan 500
+        "#f97316",  # orange 500
+        "#6366f1",  # indigo 500
+        "#14b8a6",  # teal 500
+        "#a855f7"   # purple 500
+    )
+
+    # Complete the color mapping for categories in the data
+    if (is.null(colors)) {
+        colors <- list()
+    } else {
+        colors <- as.list(colors)
+    }
+
+    categories <- unique(as.character(df[[group]]))
+    categories <- categories[!is.na(categories)]
+
+    # Find categories without explicitly assigned colors
+    missing_categories <- sort(setdiff(categories, names(colors)))
+
+    # Assign fallback colors to missing categories
+    if (length(missing_categories) > 0) {
+        fallback_colors <- rep(
+            tailwind_colors,
+            length.out = length(missing_categories)
+        )
+
+        names(fallback_colors) <- missing_categories
+
+        colors <- c(colors, as.list(fallback_colors))
+    }
+
+    # Sort by radius value
     df <- df[order(-df[[y]]), ]
-    
+
     # Normalize to 100%
     total_pct <- sum(df[[x]])
     if ((normalize && total_pct != 100) || total_pct > 100) {
         df[[x]] <- df[[x]] * 100 / total_pct
     }
-    
+
     # Adjust small percentages to minimum display threshold
     small_mask <- df[[x]] < min_display_pct & df[[x]] > 0
+
     if (any(small_mask)) {
         # Total deficit needed to boost small slices
         deficit <- sum(min_display_pct - df[[x]][small_mask])
@@ -830,150 +878,179 @@ plot_polar_area <- function(df,
                 (remaining_total - deficit) / remaining_total
         }
     }
-    
-    df[['angle_degrees']] <- df[[x]] * (360 / 100)
-    df[['theta_start']] <- c(0, cumsum(df[['angle_degrees']])[-nrow(df)])
-    df[['theta_center']] <- df[['theta_start']] + df[['angle_degrees']] / 2
-    
+
+    df[["angle_degrees"]] <- df[[x]] * (360 / 100)
+    df[["theta_start"]] <- c(
+        0,
+        cumsum(df[["angle_degrees"]])[-nrow(df)]
+    )
+    df[["theta_center"]] <-
+        df[["theta_start"]] + df[["angle_degrees"]] / 2
+
     # Create labels with truncated values (3 significant figures)
-    df[['label']] <- paste0(
+    df[["label"]] <- paste0(
         sprintf("%.3g", df[[x]]), "%\n",
         sprintf("%.3g", df[[y]])
     )
-    
+
     # Fixed range from -0.1 to 1
     min_radius_range <- -0.1
     max_radius_range <- 1
-    
-    # For plotting: clamp values to [0.05, 1.0] range
-    # Values <= 0 get mapped to a small positive value to avoid holes
-    # Increased from 0.01 to 0.05 for better visibility
-    df[['plot_r']] <- ifelse(df[[y]] <= 0.15, 0.15, pmin(df[[y]], max_radius_range))
-    
-    # Determine label position to avoid overlaps
-    # Strategy: Large slices get labels inside, small slices get labels outside at varying radii
-    df[['label_r']] <- pmax(0.05, df[['plot_r']] / 2)  # Default: middle of slice
-    df[['label_theta']] <- df[['theta_center']]  # Default: center of slice
-    df[['show_label']] <- df[[x]] >= min_label_pct  # Track which labels to show
-    
-    # Identify slices that need external labels (small percentage OR small radius)
+
+    # Clamp values to [0.15, 1.0] range
+    df[["plot_r"]] <- ifelse(
+        df[[y]] <= 0.15,
+        0.15,
+        pmin(df[[y]], max_radius_range)
+    )
+
+    # Determine label positions to avoid overlaps
+    df[["label_r"]] <- pmax(0.05, df[["plot_r"]] / 2)
+    df[["label_theta"]] <- df[["theta_center"]]
+    df[["show_label"]] <- df[[x]] >= min_label_pct
+
+    # Identify slices that need external labels
     small_threshold <- 10
-    small_indices <- which(df[[x]] < small_threshold | df[['plot_r']] < min_radius)
-    
+
+    small_indices <- which(
+        df[[x]] < small_threshold |
+        df[["plot_r"]] < min_radius
+    )
+
     if (length(small_indices) > 0) {
-        # Calculate how many "layers" we need for small labels
+        # Spread small labels across radial layers
         num_small <- length(small_indices)
-        # Maximum spreading - each item gets its own layer if needed
-        layer_size <- max(1, ceiling(num_small / 8))  # Spread across up to 8 radial layers
-        
+        layer_size <- max(1, ceiling(num_small / 8))
+
         for (i in seq_along(small_indices)) {
             idx <- small_indices[i]
             layer <- ((i - 1) %/% layer_size) + 1
-            
-            # Position at different radii based on layer - closer to the chart
-            # Start just outside max_radius_range and spread from there
-            df[idx, 'label_r'] <- max_radius_range + 0.08 + (layer - 1) * 0.12
-            
-            # Keep theta at center for now
-            df[idx, 'label_theta'] <- df[idx, 'theta_center']
+
+            # Position just outside the chart
+            df[idx, "label_r"] <-
+                max_radius_range + 0.08 + (layer - 1) * 0.12
+
+            df[idx, "label_theta"] <- df[idx, "theta_center"]
         }
     }
-    
+
     # Calculate the maximum label position
-    max_label_r <- max(df[['label_r']])
-    
-    # Set axis range: if we have external labels, extend just enough for them
-    # Otherwise, use the fixed max
+    max_label_r <- max(df[["label_r"]])
+
+    # Extend axis range when external labels are present
     if (max_label_r > max_radius_range) {
         axis_range <- max_label_r + 0.15
     } else {
         axis_range <- max_radius_range + 0.1
     }
-    
+
     # Create the polar area diagram
     fig <- plot_ly()
-    
-    # Add each sector
-    for(i in 1:nrow(df)) {
-        # Determine color for this category
-        sector_color <- if (!is.null(colors) && df[i, group] %in% names(colors)) {
-            colors[[ df[i, group] ]]
-        } else {
-            NULL  # Use default plotly colors
-        }
 
-        # Build marker configuration with better rendering
+    # Add each sector
+    for (i in seq_len(nrow(df))) {
+
+        # Use predefined color or automatically assigned Tailwind color
+        sector_color <- colors[[as.character(df[[group]][i])]]
+
+        # Build marker configuration
         marker_config <- list(
-            line = list(color = 'white', width = 1),  # Reduced line width for small slices
+            line = list(color = "white", width = 1),
             opacity = 1.0
         )
+
         if (!is.null(sector_color)) {
-            marker_config[['color']] <- sector_color
+            marker_config[["color"]] <- sector_color
         }
 
         fig <- fig %>%
             add_trace(
-                type = 'barpolar',
-                r = df[i, 'plot_r'],
-                theta = df[i, 'theta_center'],
-                width = df[i, 'angle_degrees'],
-                name = df[i, group],
-                hovertext = paste(df[i, group],
-                    "<br>Population:", sprintf("%.3g", df[i, x]),
-                    "%<br>Value:", sprintf("%.3g", df[i, y])
+                type = "barpolar",
+                r = df[i, "plot_r"],
+                theta = df[i, "theta_center"],
+                width = df[i, "angle_degrees"],
+                name = as.character(df[[group]][i]),
+                hovertext = paste0(
+                    df[[group]][i],
+                    "<br>Population: ",
+                    sprintf("%.3g", df[[x]][i]),
+                    "%<br>Value: ",
+                    sprintf("%.3g", df[[y]][i])
                 ),
-                hoverinfo = 'text',
+                hoverinfo = "text",
                 marker = marker_config
             )
     }
-    
-    # Connector lines for small slices - only if label is shown
-    for(i in 1:nrow(df)) {
-        if(df[i, 'show_label'] && df[i, 'label_r'] > max_radius_range) {
-            # Add a line from the edge of the slice to the label
-            fig <- fig %>%
-                add_trace(
-                    type = 'scatterpolar',
-                    r = c(df[i, 'plot_r'], df[i, 'label_r']),
-                    theta = c(df[i, 'theta_center'], df[i, 'label_theta']),
-                    mode = 'lines',
-                    line = list(color = 'gray', width = 1),
-                    showlegend = FALSE,
-                    hoverinfo = 'skip'
-                )
-        }
-    }
-    
-    # Text labels - only show if above minimum percentage
-    for(i in 1:nrow(df)) {
-        if(df[i, 'show_label']) {
-            label_color <- ifelse(df[i, 'label_r'] > max_radius_range, 'black', 'white')
-            
-            # Aggressive font size reduction for small slices
-            font_size <- if(df[i, x] < small_threshold | df[i, 'plot_r'] < min_radius) 8 else 12
-            
-            fig <- fig %>%
-                add_trace(
-                    type = 'scatterpolar',
-                    r = df[i, 'label_r'],
-                    theta = df[i, 'label_theta'],
-                    text = df[i, 'label'],
-                    mode = 'text',
-                    textfont = list(size = font_size, color = label_color),
-                    showlegend = FALSE,
-                    hoverinfo = 'skip'
-                )
-        }
-    }
-    
 
-    # Radial ticks - fixed at 0.5 and 1.0
+    # Connector lines for small slices with visible external labels
+    for (i in seq_len(nrow(df))) {
+        if (
+            df[i, "show_label"] &&
+            df[i, "label_r"] > max_radius_range
+        ) {
+            fig <- fig %>%
+                add_trace(
+                    type = "scatterpolar",
+                    r = c(df[i, "plot_r"], df[i, "label_r"]),
+                    theta = c(
+                        df[i, "theta_center"],
+                        df[i, "label_theta"]
+                    ),
+                    mode = "lines",
+                    line = list(color = "gray", width = 1),
+                    showlegend = FALSE,
+                    hoverinfo = "skip"
+                )
+        }
+    }
+
+    # Add text labels for slices above the minimum percentage
+    for (i in seq_len(nrow(df))) {
+        if (df[i, "show_label"]) {
+
+            label_color <- if (
+                df[i, "label_r"] > max_radius_range
+            ) {
+                "black"
+            } else {
+                "white"
+            }
+
+            # Reduce font size for small slices
+            font_size <- if (
+                df[[x]][i] < small_threshold ||
+                df[i, "plot_r"] < min_radius
+            ) {
+                8
+            } else {
+                12
+            }
+
+            fig <- fig %>%
+                add_trace(
+                    type = "scatterpolar",
+                    r = df[i, "label_r"],
+                    theta = df[i, "label_theta"],
+                    text = df[i, "label"],
+                    mode = "text",
+                    textfont = list(
+                        size = font_size,
+                        color = label_color
+                    ),
+                    showlegend = FALSE,
+                    hoverinfo = "skip"
+                )
+        }
+    }
+
+    # Radial ticks
     if (show_axes) {
         tick_values <- c(0.5)
     } else {
         tick_values <- NULL
     }
 
+    # Configure layout
     fig <- fig %>%
         layout(
             title = title,
@@ -981,40 +1058,39 @@ plot_polar_area <- function(df,
                 radialaxis = list(
                     range = c(0, axis_range),
                     showticklabels = FALSE,
-                    ticks = 'outside',
+                    ticks = "outside",
                     tickvals = tick_values,
                     ticktext = as.character(tick_values),
-                    tickmode = 'array',
+                    tickmode = "array",
                     showgrid = show_axes,
-                    gridcolor = 'lightgray',
+                    gridcolor = "lightgray",
                     gridwidth = 1,
                     showline = FALSE
                 ),
                 angularaxis = list(
-                    direction = 'clockwise',
-                    ticks = '',
+                    direction = "clockwise",
+                    ticks = "",
                     showticklabels = FALSE,
                     showgrid = FALSE,
-                    gridcolor = 'lightgray',
+                    gridcolor = "lightgray",
                     gridwidth = 1,
                     showline = show_axes
                 ),
                 bgcolor = "white"
             ),
-            # Better rendering settings
-            hovermode = 'closest',
-            plot_bgcolor = 'white',
-            paper_bgcolor = 'white'
+            hovermode = "closest",
+            plot_bgcolor = "white",
+            paper_bgcolor = "white"
         )
-    
+
     return(fig)
 }
 
 
 #' Plot Ribbon chart
-#' 
+#'
 #' Function to create connected stacked bar chart for an arbitrary number of groups
-#' 
+#'
 plot_ribbon_chart <- function(
     df, x = "group", y = "value",
     subcat = "category",  # ie. what goes in the legend
@@ -1093,28 +1169,25 @@ plot_ribbon_chart <- function(
     
     # Handle colors
     if (is.null(colors)) {
-        # default_colors <- c("#3b82f6", "#8b5cf6", "#ec4899", "#f59e0b", "#10b981", "#ef4444", 
-        #                     "#06b6d4", "#8b5cf6", "#f97316", "#6366f1", "#14b8a6", "#a855f7")
-        default_colors <- c(
-            # matplotlib colors
-            '#1f77b4',  # blue
-            '#ff7f0e',  # orange
-            '#2ca02c',  # green
-            '#d62728',  # red
-            '#9467bd',  # purple
-            '#8c564b',  # brown
-            '#e377c2',  # pink
-            '#7f7f7f',  # gray
-            '#bcbd22',  # olive
-            '#17becf'  # cyan
-        )
-        colors <- rep(default_colors, length.out = length(categories))
-        color_map <- setNames(colors, categories)
-    } else if (is.null(names(colors))) {
-        colors <- rep(colors, length.out = length(categories))
-        color_map <- setNames(colors, categories)
+        color_map <- setNames( rep(mpl_colors, length.out = length(categories)), categories )
     } else {
-        color_map <- colors
+
+        if (is.list(colors)) {
+            colors <- unlist(colors)
+        }
+        if (is.null(names(colors))) {
+            color_map <- setNames( rep(colors, length.out = length(categories)), categories )
+        } else {
+
+            # fill missing categories with default colors
+            color_map <- colors
+            missing_categories <- setdiff(categories, names(color_map))
+            if (length(missing_categories) > 0) {
+                available_colors <- tailwind_colors[ (seq_along(missing_categories) - 1) %% length(tailwind_colors) + 1 ]
+                color_map <- c( color_map, setNames(available_colors, missing_categories) )
+            }
+            color_map <- color_map[categories]
+        }
     }
 
     for (i in seq_along(categories)) {
@@ -1216,3 +1289,4 @@ plot_ribbon_chart <- function(
     
     return(fig)
 }
+

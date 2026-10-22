@@ -26,7 +26,7 @@ import::from(file.path(wd, 'R', 'tools', 'plotting.R'),
 import::from(file.path(wd, 'R', 'config', 'flow.R'),
     'mouse_db_ignore', .character_only=TRUE)
 import::from(file.path(wd, 'R', 'config', 'user_input.R'),
-    'custom_group_order', 'composite_gates', 'min_cells',
+    'min_cells', 'cell_type_to_color', 'composite_gates', 'custom_group_order',
     .character_only=TRUE)
 
 reticulate::py_config()  # required on linux to access reticulate
@@ -241,6 +241,8 @@ for (organ in sort(organs)) {
 # ----------------------------------------------------------------------
 # Ribbon Charts
 
+log_print(paste0(Sys.time(), ' Plotting ribbon charts...'))
+
 ribbon_df <- df %>%
     group_by(across(all_of(c("organ", "cell_type", metadata_cols)))) %>%
     summarise(
@@ -269,6 +271,7 @@ for (organ in organs) {
         show_axes = TRUE,
         show_grid = TRUE,
         show_xlabels = TRUE,
+        color=cell_type_to_color,
         group_order = sort(unique(df[['group_name']]))
     )
 
@@ -296,7 +299,7 @@ for (organ in organs) {
             show_axes = TRUE,
             show_grid = TRUE,
             show_xlabels = TRUE,
-            # colors = colors,
+            colors = cell_type_to_color,
             group_order = sort(unique(df[['group_name']]))
         )
 

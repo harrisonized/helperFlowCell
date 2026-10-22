@@ -31,7 +31,7 @@ import::from(file.path(wd, 'R', 'tools', 'plotting.R'),
 import::from(file.path(wd, 'R', 'config', 'flow.R'),
     'mouse_db_ignore', .character_only=TRUE)
 import::from(file.path(wd, 'R', 'config', 'user_input.R'),
-    'composite_gates', 'custom_group_order', 'min_cells',
+    'min_cells', 'cell_type_to_color', 'composite_gates',  'custom_group_order',
     .character_only=TRUE)
 
 
@@ -292,6 +292,8 @@ for (organ in sort(organs)) {
 # ----------------------------------------------------------------------
 # Polar Area Charts
 
+log_print(paste0(Sys.time(), ' Plotting polar area charts...'))
+
 polar_df <- tvd_df[(tvd_df['zygosity'] == 'homo') & (!is.na(tvd_df['cell_type'])), ] %>%
     group_by(organ, cell_type, treatment) %>%
     summarise(
@@ -312,7 +314,7 @@ for (organ in organs) {
             polar_df[(polar_df[['organ']]==organ) & (polar_df[['treatment']]==treatment), ],
             x="mean_pct_cells", y="mean_tvd", group='cell_type',
             min_label_pct=100,
-            colors=colors,
+            colors=cell_type_to_color,
             title=organ,
             show_axes=TRUE
         )
