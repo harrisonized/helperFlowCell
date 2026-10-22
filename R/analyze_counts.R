@@ -100,23 +100,14 @@ log_print(paste('Script started at:', start_time))
 
 log_print(paste(Sys.time(), 'Reading data...'))
 
-# Read counts data exported from flowjo
-df <- import_flowjo_export_v2(
-    file.path(wd, opt[['input-dir']]),
-    metric_name='num_cells',
-    divisor=divisor
-)
-if (length(df)==0) {
-    msg <- paste("No data found. Please check", file.path(wd, opt[['input-dir']]), '...')
-    stop(msg)
-}
-
-df[['pct_cells']] <- round(df[['num_cells']] / df[["divisor"]] * 100, 4)
-
-# reference files
+# Required files
+df <- import_flowjo_export_v2(file.path(wd, opt[['input-dir']]), metric_name='num_cells', divisor=divisor)
+if (is.null(df)) { stop(paste('No files found in', file.path(wd, opt[['input-dir']])))}
 flow_metadata <- import_flow_metadata(file.path(wd, opt[['metadata-dir']]))
-mouse_db <- append_many_csv(
-    file.path(wd, opt[['ref-dir']]), recursive=TRUE, include_filepath=FALSE)
+if (is.null(flow_metadata)) { stop(paste('No files found in', file.path(wd, opt[['metadata-dir']])))}
+
+# Optional files
+mouse_db <- append_many_csv(file.path(wd, opt[['ref-dir']]), recursive=TRUE, include_filepath=FALSE)
 
 
 # ----------------------------------------------------------------------
@@ -124,10 +115,18 @@ mouse_db <- append_many_csv(
 
 log_print(paste(Sys.time(), 'Preprocessing...'))
 
+df[['pct_cells']] <- round(df[['num_cells']] / df[["divisor"]] * 100, 4)
+
 # inner join flow metadata
 df <- merge(df, flow_metadata,
     by="fcs_name", all.x=FALSE, all.y=FALSE, suffixes=c('', '_'))
-df <- df[(df[['is_unstained']]==FALSE), ]  # drop unstained cells
+if ('is_unstained' %in% colnames(df)) {
+    df <- df[(df[['is_unstained']]==FALSE), ]  # backwards compatibility
+}
+if ('is_excluded' %in% colnames(df)) {
+    df <- df[(df[['is_excluded']]==FALSE), ]  # drop unstained cells
+}
+
 if (length(metadata_cols) > 1) {
     df[['group_name']] <- apply( df[ , metadata_cols ] , 1 , paste , collapse = ", " )
 } else {
@@ -161,84 +160,7 @@ df <- df[((df[['cell_type']] %in% negative_gates)==FALSE), ]
 
 
 # ----------------------------------------------------------------------
-# Compute statistics on counts
-
-log_print(paste(Sys.time(), paste0('Computing ', opt[['stat']], '...')))
-
-if (opt[['stat']]=='t_test') {
-    pval_tbl <- apply_unpaired_t_test(
-        df,
-        index_cols=c('organ', 'cell_type'),
-        group_name='group_name',
-        metric='pct_cells'
-    )
-} else {
-    pval_tbl <- apply_multiple_comparisons(
-        df,
-        index_cols=c('organ', 'cell_type'),
-        group_name='group_name',
-        metric='pct_cells',
-        correction=opt[['stat']]
-    )
-}
-
-# save
-if (!troubleshooting) {
-    tmp <- pval_tbl
-    for (col in group_names) {
-        tmp[[col]] <- mapply(toJSON, tmp[[col]])
-    }
-
-    dirpath <- file.path(wd, opt[['output-dir']], 'data',
-        gsub(',', '_', opt[['group-by']]), 'pct_cells')
-    if (!dir.exists(dirpath)) {
-        dir.create(dirpath, recursive=TRUE)
-    }
-    filepath = file.path(dirpath, paste0('pct_cells-', opt[['stat']], '.csv'))
-    write.table(tmp, file = filepath, row.names = FALSE,  sep = ',' )
-}
-
-
-# Absolute Counts
-if ('abs_count' %in% colnames(df)) {
-
-    if (opt[['stat']]=='t_test') {
-        abs_count_tbl <- apply_unpaired_t_test(
-            df[!is.na(df[['abs_count']]), ],
-            index_cols=c('organ', 'cell_type'),
-            group_name='group_name',
-            metric='abs_count'
-        )
-    } else {
-        abs_count_tbl <- apply_multiple_comparisons(
-            df[!is.na(df[['abs_count']]), ],
-            index_cols=c('organ', 'cell_type'),
-            group_name='group_name',
-            metric='abs_count',
-            correction=opt[['stat']]
-        )
-    }
-
-    # save
-    if (!troubleshooting) {
-        tmp <- abs_count_tbl
-        for (col in group_names) {
-            tmp[[col]] <- mapply(toJSON, tmp[[col]])
-        }
-
-        dirpath <- file.path(wd, opt[['output-dir']], 'data',
-            gsub(',', '_', opt[['group-by']]), 'abs_count')
-        if (!dir.exists(dirpath)) {
-            dir.create(dirpath, recursive=TRUE)
-        }
-        filepath = file.path(dirpath, paste0('abs_count-', opt[['stat']], '.csv'))
-        write.table(tmp, file = filepath, row.names = FALSE,  sep = ',' )
-    }
-}
-
-
-# ----------------------------------------------------------------------
-# Plotly Interactive Overview
+# Overview Box Plot
 
 organs <- sort(unique(df[['organ']]))
 log_print(paste(Sys.time(), 'Groups found...', paste(organs, collapse = ', ')))
@@ -249,7 +171,8 @@ for (organ in sort(organs)) {
 
     # save data
     if (!troubleshooting) {
-        dirpath <- file.path(wd, opt[['output-dir']], 'data', 'counts')
+        dirpath <- file.path(wd, opt[['output-dir']], 'data',
+            gsub(',', '_', opt[['group-by']]), 'counts')
         filepath = file.path(dirpath, paste0('counts-', organ, '.csv'))
         if (!dir.exists(dirpath)) { dir.create(dirpath, recursive=TRUE) }
         write.table(df[(df[['organ']]==organ), ], file = filepath, row.names = FALSE, sep = ',')
@@ -276,7 +199,8 @@ for (organ in sort(organs)) {
             fig=fig,
             height=500, width=2000,
             dirpath=file.path(wd, opt[['output-dir']], 'figures',
-                gsub(',', '_', opt[['group-by']]), 'pct_cells', 'interactive'),
+                gsub(',', '_', opt[['group-by']]),
+                'overview', 'pct_cells'),
             filename=paste(organ, 'pct_cells', sep='-'),
             save_html=TRUE
         )
@@ -304,7 +228,8 @@ for (organ in sort(organs)) {
                 fig=fig,
                 height=500, width=2000,
                 dirpath=file.path(wd, opt[['output-dir']], 'figures',
-                    gsub(',', '_', opt[['group-by']]), 'abs_count', 'interactive'),
+                    gsub(',', '_', opt[['group-by']]),
+                    'overview', 'abs_count'),
                 filename=paste(organ, 'abs_count', sep='-'),
                 save_html=TRUE
             )
@@ -351,7 +276,9 @@ for (organ in organs) {
         save_fig(
             fig=fig,
             height=400, width=600, scale=4,
-            dirpath=file.path(wd, opt[['output-dir']], 'figures', 'ribbon_charts', 'pct_cells'),
+            dirpath=file.path(wd, opt[['output-dir']], 'figures',
+                gsub(',', '_', opt[['group-by']]),
+                'ribbon_charts', 'pct_cells'),
             filename=paste(organ, 'ribbon', sep='-'),
             save_html=TRUE
         )
@@ -377,7 +304,9 @@ for (organ in organs) {
             save_fig(
                 fig=fig,
                 height=400, width=600, scale=4,
-                dirpath=file.path(wd, opt[['output-dir']], 'figures', 'ribbon_charts', 'abs_counts'),
+                dirpath=file.path(wd, opt[['output-dir']], 'figures',
+                    gsub(',', '_', opt[['group-by']]),
+                    'ribbon_charts', 'abs_counts'),
                 filename=paste(organ, 'ribbon', sep='-'),
                 save_html=TRUE
             )
@@ -390,140 +319,221 @@ for (organ in organs) {
 # ----------------------------------------------------------------------
 # Multiple Comparisons
 
-log_print(paste(Sys.time(), paste(
-    nrow(pval_tbl), 'populations found across',
-    length(organs), 'organs') )
-)
+if (n_distinct(df[['group_name']])==1) {
 
-log_print(paste(Sys.time(), paste('Plotting mulitple comparisons using', opt[['stat']])))
+    log_print(paste(Sys.time(), paste0('Single group found. Skipping multiple comparisons...')))
 
-pbar <- progress_bar$new(total = nrow(pval_tbl))
-for (idx in 1:nrow(pval_tbl)) {
-
-    # subset data
-    organ <- pval_tbl[idx, 'organ'][[1]]
-    cell_type <- pval_tbl[idx, 'cell_type'][[1]]
-    df_subset <- df[
-        (df[['organ']] == organ) & (df[['cell_type']] == cell_type),
-        unique(intersect(
-                c('organ', 'cell_type', 'group_name', 'pct_cells', 'abs_count'),
-                colnames(df)
-        ))
-    ]
+} else {
 
     # ----------------------------------------------------------------------
-    # Percent Cells
+    # Compute statistics
 
-    final_group_order <- move_list_items_to_front(
-        unique(df_subset[['group_name']]),
-        custom_group_order
-    )
-    n_groups <- length(unique(final_group_order))
-    
-    withCallingHandlers({
-        fig <- plot_multiple_comparisons(
-            df_subset[, c("organ", "cell_type", "group_name", "pct_cells")],
-            x='group_name', y='pct_cells',
-            ymin=min( df_subset[['pct_cells']]*1.1, 0 ),
-            ylabel=paste('Percent of', divisor),
-            title=paste(toupper(organ), cell_type),
-            test=opt[['stat']],
-            show_numbers=opt[['show-numbers']],
-            custom_group_order=final_group_order  # manual input
+    log_print(paste(Sys.time(), paste0('Computing ', opt[['stat']], '...')))
+
+    if (opt[['stat']]=='t_test') {
+        pval_tbl <- apply_unpaired_t_test(
+            df,
+            index_cols=c('organ', 'cell_type'),
+            group_name='group_name',
+            metric='pct_cells'
         )
-    }, warning = function(w) {
-        if ( any(grepl("containing non-finite values", w),
-                 grepl("outside the scale range", w)) ) {
-            invokeRestart("muffleWarning")
-        }
-    })
+    } else {
+        pval_tbl <- apply_multiple_comparisons(
+            df,
+            index_cols=c('organ', 'cell_type'),
+            group_name='group_name',
+            metric='pct_cells',
+            correction=opt[['stat']]
+        )
+    }
 
     # save
     if (!troubleshooting) {
-        
-        dirpath <- file.path(wd, opt[['output-dir']], 'figures',
-            gsub(',', '_', opt[['group-by']]), 'pct_cells', organ,
-            opt[['stat']]
-        )
+        tmp <- pval_tbl
+        for (col in group_names) {
+            tmp[[col]] <- mapply(toJSON, tmp[[col]])
+        }
+
+        dirpath <- file.path(wd, opt[['output-dir']], 'data',
+            gsub(',', '_', opt[['group-by']]), 'statistics')
         if (!dir.exists(dirpath)) { dir.create(dirpath, recursive=TRUE) }
-        
-        filepath = file.path(dirpath,
-            paste0(gsub(' ', '', tolower(organ)), '-',
-                gsub(' ', '_', tolower(cell_type)), '.svg' )
-        )
-        withCallingHandlers({
-            ggsave(
-                filepath,  
-                plot=fig,
-                height=5000, width=5000, dpi=500, units='px',
-                scaling=(if (n_groups==2) {1} else 2)
-            )
-        }, warning = function(w) {
-            if ( any(grepl("rows containing non-finite values", w),
-                     grepl("fewer than two data points", w),
-                     grepl("argument is not numeric or logical: returning NA", w)) ) {
-                invokeRestart("muffleWarning")
-            }
-        })
+        filepath = file.path(dirpath, paste0('pct_cells-', opt[['stat']], '.csv'))
+        write.table(tmp, file = filepath, row.names = FALSE,  sep = ',' )
     }
 
-    # ----------------------------------------------------------------------
-    # Absolute Counts
 
+    # Absolute Counts
     if ('abs_count' %in% colnames(df)) {
 
-        tmp <- df_subset[
-            !is.na(df_subset[['abs_count']]), 
-            c("organ", "cell_type", "group_name", "abs_count")
-        ]
-
-        if (nrow(tmp)>0) {
-            fig <- plot_multiple_comparisons(
-                tmp,
-                x='group_name', y='abs_count',
-                ymin=min( df_subset[['abs_count']]*1.1, 0 ),
-                ylabel='Absolute Count',
-                title=paste(toupper(organ), cell_type),
-                test=opt[['stat']],
-                show_numbers=opt[['show-numbers']],
-                custom_group_order=final_group_order
+        if (opt[['stat']]=='t_test') {
+            abs_count_tbl <- apply_unpaired_t_test(
+                df[!is.na(df[['abs_count']]), ],
+                index_cols=c('organ', 'cell_type'),
+                group_name='group_name',
+                metric='abs_count'
             )
+        } else {
+            abs_count_tbl <- apply_multiple_comparisons(
+                df[!is.na(df[['abs_count']]), ],
+                index_cols=c('organ', 'cell_type'),
+                group_name='group_name',
+                metric='abs_count',
+                correction=opt[['stat']]
+            )
+        }
 
-            # save
-            if (!troubleshooting) {
-                
-                dirpath <- file.path(wd, opt[['output-dir']], 'figures',
-                    gsub(',', '_', opt[['group-by']]), 'abs_count',
-                    paste(organ, 'absolute', sep='-'),
-                    opt[['stat']]
-                )
-                if (!dir.exists(dirpath)) { dir.create(dirpath, recursive=TRUE) }
-                
-                filepath = file.path(dirpath,
-                    paste0(gsub(' ', '', tolower(organ)), '-',
-                        gsub(' ', '_', tolower(cell_type)), '.svg' )
-                )
-
-                # need bugfix for compressed images when more than 2 groups
-                withCallingHandlers({
-                    ggsave(
-                        filepath,  
-                        plot=fig,
-                        height=5000, width=5000, dpi=500, units='px',
-                        scaling=(if (n_groups==2) {1} else 2)
-                    )
-                }, warning = function(w) {
-                    if ( any(grepl("rows containing non-finite values", w),
-                             grepl("fewer than two data points", w),
-                             grepl("argument is not numeric or logical: returning NA", w)) ) {
-                        invokeRestart("muffleWarning")
-                    }
-                })
+        # save
+        if (!troubleshooting) {
+            tmp <- abs_count_tbl
+            for (col in group_names) {
+                tmp[[col]] <- mapply(toJSON, tmp[[col]])
             }
+
+            dirpath <- file.path(wd, opt[['output-dir']], 'data',
+                gsub(',', '_', opt[['group-by']]), 'statistics')
+            if (!dir.exists(dirpath)) { dir.create(dirpath, recursive=TRUE) }
+            filepath = file.path(dirpath, paste0('abs_count-', opt[['stat']], '.csv'))
+            write.table(tmp, file = filepath, row.names = FALSE,  sep = ',' )
         }
     }
 
-    pbar$tick()
+    # ----------------------------------------------------------------------
+    # Plots
+
+    log_print(paste(Sys.time(), paste(
+        nrow(pval_tbl), 'populations found across',
+        length(organs), 'organs') )
+    )
+
+    log_print(paste(Sys.time(), paste('Plotting mulitple comparisons using', opt[['stat']])))
+
+    pbar <- progress_bar$new(total = nrow(pval_tbl))
+    for (idx in 1:nrow(pval_tbl)) {
+
+        # subset data
+        organ <- pval_tbl[idx, 'organ'][[1]]
+        cell_type <- pval_tbl[idx, 'cell_type'][[1]]
+        df_subset <- df[
+            (df[['organ']] == organ) & (df[['cell_type']] == cell_type),
+            unique(intersect(
+                    c('organ', 'cell_type', 'group_name', 'pct_cells', 'abs_count'),
+                    colnames(df)
+            ))
+        ]
+
+        # ----------------------------------------------------------------------
+        # Percent Cells
+
+        final_group_order <- move_list_items_to_front(
+            unique(df_subset[['group_name']]),
+            custom_group_order
+        )
+        n_groups <- length(unique(final_group_order))
+        
+        withCallingHandlers({
+            fig <- plot_multiple_comparisons(
+                df_subset[, c("organ", "cell_type", "group_name", "pct_cells")],
+                x='group_name', y='pct_cells',
+                ymin=min( df_subset[['pct_cells']]*1.1, 0 ),
+                ylabel=paste('Percent of', divisor),
+                title=paste(toupper(organ), cell_type),
+                test=opt[['stat']],
+                show_numbers=opt[['show-numbers']],
+                custom_group_order=final_group_order  # manual input
+            )
+        }, warning = function(w) {
+            if ( any(grepl("containing non-finite values", w),
+                     grepl("outside the scale range", w)) ) {
+                invokeRestart("muffleWarning")
+            }
+        })
+
+        # save
+        if (!troubleshooting) {
+            
+            dirpath <- file.path(wd, opt[['output-dir']], 'figures',
+                gsub(',', '_', opt[['group-by']]),
+                'multiple_comparisons', 'pct_cells', organ, opt[['stat']]
+            )
+            if (!dir.exists(dirpath)) { dir.create(dirpath, recursive=TRUE) }
+            
+            filepath = file.path(dirpath,
+                paste0(gsub(' ', '', tolower(organ)), '-',
+                    gsub(' ', '_', tolower(cell_type)), '.svg' )
+            )
+            withCallingHandlers({
+                ggsave(
+                    filepath,  
+                    plot=fig,
+                    height=5000, width=5000, dpi=500, units='px',
+                    scaling=(if (n_groups==2) {1} else 2)
+                )
+            }, warning = function(w) {
+                if ( any(grepl("rows containing non-finite values", w),
+                         grepl("fewer than two data points", w),
+                         grepl("argument is not numeric or logical: returning NA", w)) ) {
+                    invokeRestart("muffleWarning")
+                }
+            })
+        }
+
+        # ----------------------------------------------------------------------
+        # Absolute Counts
+
+        if ('abs_count' %in% colnames(df)) {
+
+            tmp <- df_subset[
+                !is.na(df_subset[['abs_count']]), 
+                c("organ", "cell_type", "group_name", "abs_count")
+            ]
+
+            if (nrow(tmp)>0) {
+                fig <- plot_multiple_comparisons(
+                    tmp,
+                    x='group_name', y='abs_count',
+                    ymin=min( df_subset[['abs_count']]*1.1, 0 ),
+                    ylabel='Absolute Count',
+                    title=paste(toupper(organ), cell_type),
+                    test=opt[['stat']],
+                    show_numbers=opt[['show-numbers']],
+                    custom_group_order=final_group_order
+                )
+
+                # save
+                if (!troubleshooting) {
+                    
+                    dirpath <- file.path(wd, opt[['output-dir']], 'figures',
+                        gsub(',', '_', opt[['group-by']]),
+                        'multiple_comparisons', 'abs_count', organ, opt[['stat']]
+                    )
+                    if (!dir.exists(dirpath)) { dir.create(dirpath, recursive=TRUE) }
+                    
+                    filepath = file.path(dirpath,
+                        paste0(gsub(' ', '', tolower(organ)), '-',
+                            gsub(' ', '_', tolower(cell_type)), '.svg' )
+                    )
+
+                    # need bugfix for compressed images when more than 2 groups
+                    withCallingHandlers({
+                        ggsave(
+                            filepath,  
+                            plot=fig,
+                            height=5000, width=5000, dpi=500, units='px',
+                            scaling=(if (n_groups==2) {1} else 2)
+                        )
+                    }, warning = function(w) {
+                        if ( any(grepl("rows containing non-finite values", w),
+                                 grepl("fewer than two data points", w),
+                                 grepl("argument is not numeric or logical: returning NA", w)) ) {
+                            invokeRestart("muffleWarning")
+                        }
+                    })
+                }
+            }
+        }
+
+        pbar$tick()
+    }
 }
 
 

@@ -130,7 +130,7 @@ log_print(paste(Sys.time(), 'Reading data...'))
 
 # Required files
 df <- import_flowjo_export_v2(file.path(wd, mfi_dir), metric_name=opt[['metric']], divisor=NULL)
-if (is.null(df)) { stop(paste('No files found in', file.path(wd, dir)))}
+if (is.null(df)) { stop(paste('No files found in', file.path(wd, mfi_dir)))}
 flow_metadata <- import_flow_metadata(file.path(wd, opt[['metadata-dir']]))
 if (is.null(flow_metadata)) { stop(paste('No files found in', file.path(wd, opt[['metadata-dir']])))}
 
@@ -188,16 +188,26 @@ if (!is.null(mouse_db)) {
 }
 
 # filter and sort
-df <- df[(df[['is_unstained']]==FALSE), ]  # drop unstained cells
+if ('is_unstained' %in% colnames(df)) {
+    df <- df[(df[['is_unstained']]==FALSE), ]  # backwards compatibility
+}
+if ('is_excluded' %in% colnames(df)) {
+    df <- df[(df[['is_excluded']]==FALSE), ]  # drop unstained cells
+}
 if (!is.null(counts_df)) {
     df <- df[(df[['num_cells']] > min_cells), ]  # filter
     df <- df[rowSums(is.na(df)) != ncol(df), ]  # filter NA rows caused by the above line
 }
 df <- df[order(df[['cell_type']], df[['organ']], df[['group_name']]), ]  # sort rows
 
+# exclude negative gates
+cell_types <- unique(df[['cell_type']])
+negative_gates <- cell_types[grepl("-$", cell_types)]
+df <- df[((df[['cell_type']] %in% negative_gates)==FALSE), ]
+
 
 # ----------------------------------------------------------------------
-# Plotly Interactive Overview
+# Overview Box Plot
 
 organs <- sort(unique(df[['organ']]))
 log_print(paste(Sys.time(), 'Groups found...', paste(organs, collapse = ', ')))
@@ -208,7 +218,8 @@ for (organ in sort(organs)) {
 
     # save data
     if (!troubleshooting) {
-        dirpath <- file.path(wd, opt[['output-dir']], 'data', opt[['metric']])
+        dirpath <- file.path(wd, opt[['output-dir']], 'data',
+            gsub(',', '_', opt[['group-by']]), opt[['metric']])
         filepath = file.path(dirpath, paste0(opt[['metric']], "-", organ, '.csv'))
         if (!dir.exists(dirpath)) { dir.create(dirpath, recursive=TRUE) }
         write.table(df[(df[['organ']]==organ), ], file = filepath, row.names = FALSE, sep = ',')
@@ -235,7 +246,8 @@ for (organ in sort(organs)) {
             fig=fig,
             height=500, width=2000,
             dirpath=file.path(wd, opt[['output-dir']], 'figures',
-                gsub(',', '_', opt[['group-by']]), opt[['metric']], 'interactive'),
+                gsub(',', '_', opt[['group-by']]),
+                'overview', opt[['metric']]),
             filename=paste(organ, opt[['metric']], sep='-'),
             save_html=TRUE
         )
@@ -254,7 +266,7 @@ if (n_distinct(df[['group_name']])==1) {
 } else {
 
     # ----------------------------------------------------------------------
-    # Data
+    # Compute statistics
 
     log_print(paste(Sys.time(), paste0('Computing ', opt[['stat']], '...')))
 
@@ -283,9 +295,9 @@ if (n_distinct(df[['group_name']])==1) {
         }
 
         dirpath <- file.path(wd, opt[['output-dir']], 'data',
-            gsub(',', '_', opt[['group-by']]), opt[['metric']])
+            gsub(',', '_', opt[['group-by']]), 'statistics')
         if (!dir.exists(dirpath)) { dir.create(dirpath, recursive=TRUE) }
-        filepath = file.path(dirpath, paste0(opt[['metric']], '-pvals-', opt[['stat']], '.csv'))
+        filepath = file.path(dirpath, paste0(opt[['metric']], '-', opt[['stat']], '.csv'))
         write.table(tmp, file = filepath, row.names = FALSE,  sep = ',' )
     }
 
@@ -314,7 +326,7 @@ if (n_distinct(df[['group_name']])==1) {
             unique(intersect(
                     c('mouse_id', 'organ', 'cell_type', 'group_name',
                       'subgroup_name', opt[['fluorescence']],
-                       opt[['metric']], 'sdev', 'num_cells', 'abs_count'),
+                       opt[['metric']], 'sdev', 'num_cells'),
                     colnames(df)
             ))
         ]
@@ -349,8 +361,8 @@ if (n_distinct(df[['group_name']])==1) {
         # save
         if (!troubleshooting) {
             dirpath <- file.path(wd, opt[['output-dir']], 'figures',
-                gsub(',', '_', opt[['group-by']]), opt[['metric']], organ,
-                opt[['stat']]
+                gsub(',', '_', opt[['group-by']]), 
+                'multiple_comparisons', opt[['metric']], organ, opt[['stat']]
             )
             if (!dir.exists(dirpath)) { dir.create(dirpath, recursive=TRUE) }
             
@@ -421,8 +433,8 @@ if (n_distinct(df[['group_name']])==1) {
                 # save
                 if (!troubleshooting) {
                     dirpath <- file.path(wd, opt[['output-dir']], 'figures',
-                        gsub(',', '_', opt[['group-by']]), opt[['metric']],
-                        organ, 'histograms'
+                        gsub(',', '_', opt[['group-by']]),
+                        'histograms', opt[['metric']], organ
                     )
                     if (!dir.exists(dirpath)) { dir.create(dirpath, recursive=TRUE) }
                     

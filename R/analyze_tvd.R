@@ -21,10 +21,9 @@ import::from(file.path(wd, 'R', 'tools', 'file_io.R'),
 import::from(file.path(wd, 'R', 'tools', 'list_tools.R'),
     'items_in_a_not_b', 'move_list_items_to_front', .character_only=TRUE)
 import::from(file.path(wd, 'R', 'tools', 'math.R'),
-    'apply_unpaired_t_test', 'apply_multiple_comparisons',
-    'generate_lognormal_data', .character_only=TRUE)
+    'apply_unpaired_t_test', 'apply_multiple_comparisons', .character_only=TRUE)
 import::from(file.path(wd, 'R', 'tools', 'math.R'),
-    'compute_normal_tvd', 'compute_lognormal_tvd',
+    'compute_lognormal_tvd',  # 'compute_normal_tvd',
     .character_only=TRUE)
 import::from(file.path(wd, 'R', 'tools', 'plotting.R'),
     'save_fig', 'plot_violin', 'plot_multiple_comparisons',
@@ -182,12 +181,23 @@ if (!is.null(mouse_db)) {
 }
 
 # filter and sort
-df <- df[(df[['is_unstained']]==FALSE), ]  # drop unstained cells
+if ('is_unstained' %in% colnames(df)) {
+    df <- df[(df[['is_unstained']]==FALSE), ]  # backwards compatibility
+}
+if ('is_excluded' %in% colnames(df)) {
+    df <- df[(df[['is_excluded']]==FALSE), ]  # drop unstained cells
+}
+
 if (!is.null(counts_df)) {
     df <- df[(df[['num_cells']] > min_cells), ]  # filter
     df <- df[rowSums(is.na(df)) != ncol(df), ]  # filter NA rows caused by the above line
 }
 df <- df[order(df[['cell_type']], df[['organ']], df[['group_name']]), ]  # sort rows
+
+# exclude negative gates
+cell_types <- unique(df[['cell_type']])
+negative_gates <- cell_types[grepl("-$", cell_types)]
+df <- df[((df[['cell_type']] %in% negative_gates)==FALSE), ]
 
 
 # ----------------------------------------------------------------------
@@ -232,14 +242,17 @@ tvd_df[['tvd']] <- mapply(
 
 
 # ------------------------------------------------------------
-# Plotly Interactive Overview
+# Overview Box Plot
 
 organs <- sort(unique(tvd_df[['organ']]))
 for (organ in sort(organs)) {
 
+    log_print(paste0(Sys.time(), ' Processing ', organ, '...'))
+
+    # save data
     if (!troubleshooting) {
         dirpath <- file.path(wd, opt[['output-dir']], 'data',
-            gsub(',', '_', opt[['group-by']]), opt[['metric']])
+            gsub(',', '_', opt[['group-by']]), 'tvd')
         filepath = file.path(dirpath, paste0("tvd-", organ, '.csv'))
         if (!dir.exists(dirpath)) { dir.create(dirpath, recursive=TRUE) }
         write.table(tvd_df[(tvd_df[['organ']]==organ), ], file=filepath, row.names=FALSE, sep=',')
@@ -262,7 +275,8 @@ for (organ in sort(organs)) {
 
     if (!troubleshooting) {
         dirpath <- file.path(wd, opt[['output-dir']], 'figures',
-            gsub(',', '_', opt[['group-by']]), 'tvd', 'interactive')
+            gsub(',', '_', opt[['group-by']]), 
+            'overview', 'tvd')
         if (!dir.exists(dirpath)) { dir.create(dirpath, recursive=TRUE) }
         save_fig(
             fig=fig,
@@ -278,7 +292,6 @@ for (organ in sort(organs)) {
 # ----------------------------------------------------------------------
 # Polar Area Charts
 
-# group by
 polar_df <- tvd_df[(tvd_df['zygosity'] == 'homo') & (!is.na(tvd_df['cell_type'])), ] %>%
     group_by(organ, cell_type, treatment) %>%
     summarise(
@@ -292,7 +305,8 @@ polar_df <- fillna(polar_df, 'mean_tvd', 0)
 
 organs <- sort(unique(polar_df[['organ']]))
 treatments <- unique(polar_df[['treatment']])
-for (organ in sort(organs)) {
+
+for (organ in organs) {
     for (treatment in treatments) {
         fig <- plot_polar_area(
             polar_df[(polar_df[['organ']]==organ) & (polar_df[['treatment']]==treatment), ],
@@ -307,7 +321,8 @@ for (organ in sort(organs)) {
             save_fig(
                 fig=fig,
                 height=opt[['height']], width=opt[['width']],
-                dirpath=file.path(path.expand(wd), opt[['output-dir']], 'figures', 'polar_area'),
+                dirpath=file.path(path.expand(wd), opt[['output-dir']], 'figures',
+                    'polar_area'),
                 filename=paste(organ, 'polar_area', treatment, sep='-'),
                 save_html=TRUE
             )
@@ -326,7 +341,7 @@ if (n_distinct(tvd_df[['group_name']])==1) {
 } else {
 
     # ----------------------------------------------------------------------
-    # Data
+    # Compute statistics
 
     log_print(paste(Sys.time(), paste0('Computing tvd...')))
 
@@ -355,15 +370,15 @@ if (n_distinct(tvd_df[['group_name']])==1) {
         }
 
         dirpath <- file.path(wd, opt[['output-dir']], 'data',
-            gsub(',', '_', opt[['group-by']]), opt[['metric']])
+            gsub(',', '_', opt[['group-by']]), 'statistics')
         if (!dir.exists(dirpath)) { dir.create(dirpath, recursive=TRUE) }
-        filepath = file.path(dirpath, paste0('tvd-pvals-', opt[['stat']], '.csv'))
+        filepath = file.path(dirpath, paste0('tvd-', opt[['stat']], '.csv'))
         write.table(tmp, file = filepath, row.names = FALSE,  sep = ',' )
     }
 
 
     # ----------------------------------------------------------------------
-    # Multiple Comparison Plots
+    # Plots
 
     log_print(paste(Sys.time(), paste(
         nrow(pval_tbl), 'populations found across',
@@ -385,7 +400,7 @@ if (n_distinct(tvd_df[['group_name']])==1) {
             unique(intersect(
                     c('mouse_id', 'organ', 'cell_type', 'group_name',
                       'subgroup_name', opt[['fluorescence']],
-                       'tvd', 'sdev', 'num_cells', 'abs_count'),
+                       'tvd', 'sdev', 'num_cells'),
                     colnames(tvd_df)
             ))
         ]
@@ -395,7 +410,7 @@ if (n_distinct(tvd_df[['group_name']])==1) {
         }
 
         # ----------------------------------------------------------------------
-        # MFI
+        # TVD
 
         final_group_order <- move_list_items_to_front(
             unique(tvd_df_subset[['group_name']]),
@@ -424,8 +439,8 @@ if (n_distinct(tvd_df[['group_name']])==1) {
         # save
         if (!troubleshooting) {
             dirpath <- file.path(wd, opt[['output-dir']], 'figures',
-                gsub(',', '_', opt[['group-by']]), 'tvd', organ,
-                opt[['stat']]
+                gsub(',', '_', opt[['group-by']]),
+                'multiple_comparisons', 'tvd', organ, opt[['stat']]
             )
             if (!dir.exists(dirpath)) { dir.create(dirpath, recursive=TRUE) }
             
