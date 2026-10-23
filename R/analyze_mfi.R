@@ -135,9 +135,7 @@ if (is.null(flow_metadata)) { stop(paste('No files found in', file.path(wd, opt[
 counts_df <- import_flowjo_export_v2(file.path(wd, counts_dir), metric_name='num_cells', divisor=divisor)
 if (is.null(counts_df)) { warning( paste('No files found in', file.path(wd, counts_dir)) )}
 sdev_df <- import_flowjo_export_v2(file.path(wd, sdev_dir), metric_name='sdev', divisor=NULL)
-if (is.null(sdev_df)) { warning( paste('No files found in', file.path(wd, sdev_dir)) )}
 mouse_db <- append_many_csv(file.path(wd, opt[['ref-dir']]), recursive=TRUE, include_filepath=FALSE)
-if (is.null(mouse_db)) { warning( paste('No files found in', file.path(wd, opt[['ref-dir']])) )}
 
 
 # ----------------------------------------------------------------------
@@ -153,17 +151,16 @@ if (!is.null(sdev_df)) {
         all.x=TRUE, all.y=FALSE, suffixes=c('', '_'))
     df[(is.na(df[['sdev']])), 'sdev'] <- 0  # fillna
 }
-if (!is.null(counts_df)) {
-    log_print(paste(Sys.time(), 'Merging counts data...'))
 
-    counts_df[['pct_cells']] <- round(counts_df[['num_cells']] / counts_df[['divisor']] * 100, 4)
-    counts_cols <- c("fcs_name", "gate", "cell_type",  "num_cells", "pct_cells")  # remove pregates
-    counts_df <- counts_df[, counts_cols]
+log_print(paste(Sys.time(), 'Merging counts data...'))
 
-    df <- merge(df, counts_df,
-        by=c("fcs_name", "gate", "cell_type"),
-        all.x=TRUE, all.y=FALSE, suffixes=c('', '_'))
-}
+counts_df[['pct_cells']] <- round(counts_df[['num_cells']] / counts_df[['divisor']] * 100, 4)
+counts_cols <- c("fcs_name", "gate", "cell_type",  "num_cells", "pct_cells")  # remove pregates
+counts_df <- counts_df[, counts_cols]
+
+df <- merge(df, counts_df,
+    by=c("fcs_name", "gate", "cell_type"),
+    all.x=TRUE, all.y=FALSE, suffixes=c('', '_'))
 
 # inner join flow metadata
 df <- merge(df, flow_metadata, by="fcs_name", all.x=FALSE, all.y=FALSE, suffixes=c('', '_'))

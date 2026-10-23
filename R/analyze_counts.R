@@ -27,8 +27,8 @@ import::from(file.path(wd, 'R', 'config', 'flow.R'),
     'mouse_db_ignore', .character_only=TRUE)
 import::from(file.path(wd, 'R', 'config', 'user_input.R'),
     'min_cells', 'cell_type_to_color',
-    'excluded_cell_types', 'excluded_zygosities', 'included_treatments',
-    'custom_group_order', .character_only=TRUE)
+    'excluded_cell_types', 'included_treatments', 'custom_group_order',
+    .character_only=TRUE)
 
 reticulate::py_config()  # required on linux to access reticulate
 
@@ -69,6 +69,10 @@ option_list = list(
     make_option(c("-d", "--divisor"), default="Live Cells",
                 metavar="Live Cells", type="character",
                 help="Can also choose: 'Single Cells', 'CD45+', etc."),
+
+    make_option(c("-w", "--make-whole"), default=FALSE, action="store_true",
+                metavar="FALSE", type="logical",
+                help="Use this for incomplete panels to add an 'Other' category to the Ribbon chart."),
 
     make_option(c("-t", "--troubleshooting"), default=FALSE, action="store_true",
                 metavar="FALSE", type="logical",
@@ -246,7 +250,6 @@ log_print(paste0(Sys.time(), ' Plotting ribbon charts...'))
 
 tmp_df <- df[
     (!df[['cell_type']] %in% excluded_cell_types) &
-    (!df[['zygosity']] %in% excluded_zygosities) &
     (df[['treatment']] %in% included_treatments), ]
 
 ribbon_df <- tmp_df %>%
@@ -277,7 +280,8 @@ for (organ in organs) {
         show_grid = TRUE,
         show_xlabels = TRUE,
         color=cell_type_to_color,
-        group_order = sort(unique(df[['group_name']]))
+        group_order = sort(unique(df[['group_name']])),
+        fill_remainder=opt[['make-whole']]
     )
 
     if (!troubleshooting) {

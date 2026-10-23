@@ -36,8 +36,8 @@ import::from(file.path(wd, 'R', 'config', 'flow.R'),
     'mouse_db_ignore', .character_only=TRUE)
 import::from(file.path(wd, 'R', 'config', 'user_input.R'),
     'min_cells', 'cell_type_to_color',
-    'excluded_cell_types', 'excluded_zygosities', 'included_treatments',
-    'custom_group_order', .character_only=TRUE)
+    'excluded_cell_types', 'excluded_zygosities', 'custom_group_order',
+    .character_only=TRUE)
 
 
 # ----------------------------------------------------------------------
@@ -92,6 +92,10 @@ option_list = list(
     make_option(c("-d", "--divisor"), default="Live Cells",
                 metavar="Live Cells", type="character",
                 help="Can also choose: 'Single Cells', 'CD45+', etc."),
+
+    make_option(c("-w", "--make-whole"), default=FALSE, action="store_true",
+                metavar="FALSE", type="logical",
+                help="Use this for incomplete panels to add an 'Other' category to the Polar Area plot."),
 
     make_option(c("-t", "--troubleshooting"), default=FALSE, action="store_true",
                 metavar="FALSE", type="logical",
@@ -212,11 +216,16 @@ log_print(paste(Sys.time(), 'Computing TVDs...'))
 
 group_cols <- c('organ', 'gate', 'cell_type', metadata_cols)
 val_cols <- c('gmfi', 'sdev')
+export_cols <- unique(c(
+    'mouse_id', 'fcs_name', group_cols, 'sex', 'treatment', 'zygosity', 'gfp',
+    'group_name', 'subgroup_name',
+    'num_cells', 'pct_cells', val_cols
+))
+
 tvd_df <- df[
     ((df[opt[['fluorescence']]]!='WT') &
      (df[['sdev']] > 0) & (df[['num_cells']] > 5)),
-     c('mouse_id', 'fcs_name', group_cols, 'group_name', 'subgroup_name',
-       'num_cells', 'pct_cells', val_cols)
+    unique(intersect(export_cols, colnames(df)))
 ]
 
 # left join WT mean MFI
@@ -232,12 +241,8 @@ tvd_df <- merge(
     tvd_df, wt_df,
     by=items_in_a_not_b(group_cols, opt[['fluorescence']]),
     all.x=TRUE, all.y=FALSE, suffixes=c('', '_'))[,
-    c('mouse_id', 'fcs_name', group_cols,  'group_name', 'subgroup_name',
-      'num_cells', 'pct_cells', val_cols, 'wt_gmfi', 'wt_sdev')
+    c(export_cols, 'wt_gmfi', 'wt_sdev')
 ]
-# tvd_df[['group_name']] <- apply(
-#     tvd_df[ , metadata_cols , drop = FALSE] , 1 , paste , collapse = ", "
-# )
 
 tvd_df[['tvd']] <- mapply(
     compute_lognormal_tvd,
@@ -339,7 +344,7 @@ tmp_df <- tvd_df[
     (!tvd_df[['cell_type']] %in% excluded_cell_types) &
     (!tvd_df[['zygosity']] %in% excluded_zygosities), ]
 
-polar_df <- tmp_df[(tmp_df['zygosity'] == 'homo') & (!is.na(tmp_df['cell_type'])), ] %>%
+polar_df <- tmp_df[(!is.na(tmp_df['cell_type'])), ] %>%
     group_by(across(all_of(c("organ", "cell_type", metadata_cols)))) %>%
     summarise(
         mean_pct_cells = mean(pct_cells, na.rm = TRUE),
@@ -350,26 +355,30 @@ polar_df <- as.data.frame(polar_df)
 polar_df <- fillna(polar_df, 'mean_tvd', 0)
 
 organs <- sort(unique(polar_df[['organ']]))
+treatments <- unique(polar_df[['treatment']])
 
 for (organ in organs) {
-    fig <- plot_polar_area(
-        polar_df[(polar_df[['organ']]==organ), ],
-        x="mean_pct_cells", y="mean_tvd", group='cell_type',
-        min_label_pct=100,
-        colors=cell_type_to_color,
-        title=organ,
-        show_axes=TRUE
-    )
-
-    if (!troubleshooting) {
-        save_fig(
-            fig=fig,
-            height=opt[['height']], width=opt[['width']],
-            dirpath=file.path(path.expand(wd), opt[['output-dir']], 'figures',
-                'polar_area'),
-            filename=paste(organ, 'polar_area', sep='-'),
-            save_html=TRUE
+    for (treatment in treatments) {
+        fig <- plot_polar_area(
+            polar_df[(polar_df[['organ']]==organ) & (polar_df[['treatment']]==treatment), ],
+            x="mean_pct_cells", y="mean_tvd", group='cell_type',
+            min_label_pct=100,
+            colors=cell_type_to_color,
+            title=organ,
+            show_axes=TRUE,
+            fill_remainder=opt[['make-whole']]
         )
+
+        if (!troubleshooting) {
+            save_fig(
+                fig=fig,
+                height=500, width=800,
+                dirpath=file.path(path.expand(wd), opt[['output-dir']], 'figures',
+                    gsub(',', '_', opt[['group-by']]), 'polar_area'),
+                filename=paste(organ, 'polar_area', treatment, sep='-'),
+                save_html=TRUE
+            )
+        }
     }
 }
 

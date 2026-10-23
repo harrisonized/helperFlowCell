@@ -790,10 +790,6 @@ plot_modal_histograms <- function(df,
 
 
 #' Plot Polar Area
-#' 
-#' Angle represents the number of degrees, radius represents size
-#' 
-#' Plot Polar Area
 #'
 #' Angle represents the number of degrees, radius represents size
 #'
@@ -803,31 +799,37 @@ plot_polar_area <- function(df,
     show_axes = FALSE,
     colors = NULL,
     normalize = TRUE,
-    min_label_pct = 2,  # Minimum percentage to show label
-    min_radius = 0.3,   # Minimum radius to show label inside
-    min_display_pct = 0 # Minimum percentage for display
+    min_label_pct = 2,
+    min_radius = 0.3,
+    min_display_pct = 0,
+    fill_remainder = FALSE
 ) {
 
-    # Default Tailwind palette for categories without an assigned color
-    tailwind_colors <- c(
-        "#3b82f6",  # blue 500
-        "#8b5cf6",  # violet 500
-        "#ec4899",  # pink 500
-        "#f59e0b",  # amber 500
-        "#10b981",  # emerald 500
-        "#ef4444",  # red 500
-        "#06b6d4",  # cyan 500
-        "#f97316",  # orange 500
-        "#6366f1",  # indigo 500
-        "#14b8a6",  # teal 500
-        "#a855f7"   # purple 500
-    )
+    # Add "Other" if category percentages sum to less than 100%
+    if (fill_remainder) {
+        total_pct <- sum(df[[x]], na.rm = TRUE)
+
+        if (total_pct < 100) {
+            other_row <- df[1, , drop = FALSE]
+
+            other_row[[group]] <- "Other"
+            other_row[[x]] <- 100 - total_pct
+            other_row[[y]] <- 0
+
+            df <- rbind(df, other_row)
+        }
+    }
 
     # Complete the color mapping for categories in the data
     if (is.null(colors)) {
         colors <- list()
     } else {
         colors <- as.list(colors)
+    }
+
+    # Explicitly assign gray to "Other"
+    if ("Other" %in% as.character(df[[group]])) {
+        colors[["Other"]] <- "gray"
     }
 
     categories <- unique(as.character(df[[group]]))
@@ -852,7 +854,8 @@ plot_polar_area <- function(df,
     df <- df[order(-df[[y]]), ]
 
     # Normalize to 100%
-    total_pct <- sum(df[[x]])
+    total_pct <- sum(df[[x]], na.rm = TRUE)
+
     if ((normalize && total_pct != 100) || total_pct > 100) {
         df[[x]] <- df[[x]] * 100 / total_pct
     }
@@ -882,10 +885,12 @@ plot_polar_area <- function(df,
     }
 
     df[["angle_degrees"]] <- df[[x]] * (360 / 100)
+
     df[["theta_start"]] <- c(
         0,
         cumsum(df[["angle_degrees"]])[-nrow(df)]
     )
+
     df[["theta_center"]] <-
         df[["theta_start"]] + df[["angle_degrees"]] / 2
 
@@ -1107,10 +1112,35 @@ plot_ribbon_chart <- function(
     colors = NULL,
     ylim = NULL,  # y-axis range, e.g. c(0, 100). NULL = auto (tozero)
     label_format = "format_number",  # "format_number", "round", or "none"
-    num_digits = 3
+    num_digits = 3,
+    fill_remainder = FALSE
 ) {
     df <- dropna(df, y)
-    
+
+    # Add "Other" if category percentages sum to less than 100%
+    if (fill_remainder) {
+        remainder_df <- df %>%
+            group_by(!!sym(x)) %>%
+            summarise(
+                remainder = 100 - sum(!!sym(y), na.rm = TRUE),
+                .groups = "drop"
+            ) %>%
+            filter(remainder > 0)
+
+        if (nrow(remainder_df) > 0) {
+            other_rows <- df[
+                match(remainder_df[[x]], df[[x]]),
+                ,
+                drop = FALSE
+            ]
+
+            other_rows[[y]] <- remainder_df$remainder
+            other_rows[[subcat]] <- "Other"
+
+            df <- rbind(df, other_rows)
+        }
+    }
+
     # Calculate percentages if needed
     if (normalize) {
         df <- df %>%
