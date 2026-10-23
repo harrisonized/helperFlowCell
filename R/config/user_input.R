@@ -1,12 +1,23 @@
 min_cells <- 3  # do not set this less than 3
 
-# exclude from ribbon plots or polar area charts
-composite_gates <- c(
+excluded_cell_types <- c(
     "Single Cells", "Live Cells", "CD45+",
-    "Non-DCs", "DCs",
-    "CD115+", "Monocytes",
-    "T cells", "MCs",
-     "CD45-hi"
+    "Non-DCs", "DCs", "Dendritic Cells", "MHCII+CD11c+", "CD11c+MHCII+",
+    "SiglecH+", "SiglecF+", "F4_80+",
+    "CD115+", "Monocytes", "MCs", "cMoP", "Ly6C-CD172a+",
+    "Ly6G+", "preNeu", "Activated Neutrophils", "Migratory Neutrophils",
+    "Immature Neu", "Immature Neutrophils", "Mature Neu", "Mature Neutrophils",
+    "Ly6C-hi Neutrophils", "Ly6C-lo Neutrophils",
+    "CD19+", "T cells", "Migratory T cells", "Activated T cells",
+    "CD45-hi"
+)
+
+excluded_zygosities <- c(
+    "het"
+)
+
+included_treatments <- c(
+    "DMSO", "PBS", "untreated", "Untreated"
 )
 
 cell_type_to_color <- list(

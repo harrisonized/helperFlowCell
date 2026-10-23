@@ -1,17 +1,21 @@
 ## Graphs MFI for each cell population
+##
+## This script analyzes MFI separately and does not take the SD of the distribution
+## into account. To take the SD into account, use analyze_tvd.R.
 ## 
 ## There are three different ways of calculating MFI
-## 1. Geometric mean: This is the best choice, because the calculation compensates
+## 1. Geometric mean (gmfi): This is the best choice, because the calculation compensates
 ## for extreme skew, which is standard in flow cytometry data due to the logarithmic
 ## nature of flow cytometry data.
-## 2. Median is a good second choice, however, in situations where the distribution
+## 2. Median (med) is a good second choice, however, in situations where the distribution
 ## is an exponential decay with 0 being the most common value, the median will not
 ## accurately represent the distribution
-## 3. The Arithmetic Mean (ie. the Mean) is a bad choice. It will systemically
+## 3. The Arithmetic Mean (mean) is a bad choice. It will systemically
 ## overestimate the representative value due to the logarithmic nature of flow
 ## cytometry data.
 ## This script treats all three kinds of MFI equally, however, you can rename it on
 ## graph using the -y option
+
 
 wd = dirname(this.path::here())  # wd = '~/github/R/helperFlowCell'
 suppressPackageStartupMessages(library('dplyr'))
@@ -23,22 +27,23 @@ import::from(jsonlite, 'toJSON')
 import::from(ggplot2, 'ggsave')
 
 import::from(file.path(wd, 'R', 'functions', 'file_io.R'),
-    'import_flowjo_export_v2', 'import_flow_metadata', .character_only=TRUE)
+    'import_flowjo_export_v2', 'import_flow_metadata',
+    .character_only=TRUE)
 import::from(file.path(wd, 'R', 'tools', 'file_io.R'),
     'append_many_csv', .character_only=TRUE)
 import::from(file.path(wd, 'R', 'tools', 'list_tools.R'),
-    'items_in_a_not_b', 'multiple_replacement', 'move_list_items_to_front',
+    'items_in_a_not_b', 'move_list_items_to_front',
     .character_only=TRUE)
 import::from(file.path(wd, 'R', 'tools', 'math.R'),
     'apply_unpaired_t_test', 'apply_multiple_comparisons',
-    'generate_lognormal_data', .character_only=TRUE)
+    .character_only=TRUE)
 import::from(file.path(wd, 'R', 'tools', 'plotting.R'),
     'save_fig', 'plot_violin', 'plot_multiple_comparisons',
-    'plot_modal_histograms', .character_only=TRUE)
+    .character_only=TRUE)
 import::from(file.path(wd, 'R', 'config', 'flow.R'),
     'mouse_db_ignore', .character_only=TRUE)
 import::from(file.path(wd, 'R', 'config', 'user_input.R'),
-    'composite_gates', 'custom_group_order', 'min_cells',
+    'min_cells', 'custom_group_order',
     .character_only=TRUE)
 
 
@@ -79,17 +84,9 @@ option_list = list(
                 metavar="FALSE", type="logical",
                 help="in violin with significance, show all numbers instead of stars"),
 
-    make_option(c("-p", "--plot-histograms"), default=FALSE, action="store_true",
-                metavar="FALSE", type="logical",
-                help="generate histograms"),
-
-    make_option(c("-x", "--xlabel"), default="Comp-GFP-A :: mNeonGreen",
-                metavar="Comp-GFP-A :: mNeonGreen", type="character",
-                help="x-axis label for histograms"),
-
-    make_option(c("-y", "--metric"), default="gmfi",
+    make_option(c("-y", "--metric-name"), default="gmfi",
                 metavar="gmfi", type="character",
-                help="metric name, eg. opt[['metric']] or 'mode'"),
+                help="metric name, eg. c('gmfi', 'mfi', 'med', 'mode', 'mean')"),
 
     make_option(c("-d", "--divisor"), default="Live Cells",
                 metavar="Live Cells", type="character",
@@ -129,7 +126,7 @@ log_print(paste('Script started at:', start_time))
 log_print(paste(Sys.time(), 'Reading data...'))
 
 # Required files
-df <- import_flowjo_export_v2(file.path(wd, mfi_dir), metric_name=opt[['metric']], divisor=NULL)
+df <- import_flowjo_export_v2(file.path(wd, mfi_dir), metric_name=opt[['metric-name']], divisor=NULL)
 if (is.null(df)) { stop(paste('No files found in', file.path(wd, mfi_dir)))}
 flow_metadata <- import_flow_metadata(file.path(wd, opt[['metadata-dir']]))
 if (is.null(flow_metadata)) { stop(paste('No files found in', file.path(wd, opt[['metadata-dir']])))}
@@ -219,8 +216,8 @@ for (organ in sort(organs)) {
     # save data
     if (!troubleshooting) {
         dirpath <- file.path(wd, opt[['output-dir']], 'data',
-            gsub(',', '_', opt[['group-by']]), opt[['metric']])
-        filepath = file.path(dirpath, paste0(opt[['metric']], "-", organ, '.csv'))
+            gsub(',', '_', opt[['group-by']]), opt[['metric-name']])
+        filepath = file.path(dirpath, paste0(opt[['metric-name']], "-", organ, '.csv'))
         if (!dir.exists(dirpath)) { dir.create(dirpath, recursive=TRUE) }
         write.table(df[(df[['organ']]==organ), ], file = filepath, row.names = FALSE, sep = ',')
     }
@@ -230,8 +227,8 @@ for (organ in sort(organs)) {
 
     fig <- plot_violin(
         df[(df[['organ']]==organ), ],
-        x='cell_type', y=opt[['metric']], group_by='group_name',
-        ylabel=toupper(opt[['metric']]), title=organ,
+        x='cell_type', y=opt[['metric-name']], group_by='group_name',
+        ylabel=toupper(opt[['metric-name']]), title=organ,
         ymin=0,
         hover_data=unique(intersect(
                 c('mouse_id', 'group_name', metadata_cols,
@@ -247,8 +244,8 @@ for (organ in sort(organs)) {
             height=500, width=2000,
             dirpath=file.path(wd, opt[['output-dir']], 'figures',
                 gsub(',', '_', opt[['group-by']]),
-                'overview', opt[['metric']]),
-            filename=paste(organ, opt[['metric']], sep='-'),
+                'overview', opt[['metric-name']]),
+            filename=paste(organ, opt[['metric-name']], sep='-'),
             save_html=TRUE
         )
     }
@@ -275,14 +272,14 @@ if (n_distinct(df[['group_name']])==1) {
             df,
             index_cols=c('organ', 'cell_type'),
             group_name='group_name',
-            metric=opt[['metric']]
+            metric=opt[['metric-name']]
         )
     } else {
         pval_tbl <- apply_multiple_comparisons(
             df,
             index_cols=c('organ', 'cell_type'),
             group_name='group_name',
-            metric=opt[['metric']],
+            metric=opt[['metric-name']],
             correction=opt[['stat']]
         )
     }
@@ -297,7 +294,7 @@ if (n_distinct(df[['group_name']])==1) {
         dirpath <- file.path(wd, opt[['output-dir']], 'data',
             gsub(',', '_', opt[['group-by']]), 'statistics')
         if (!dir.exists(dirpath)) { dir.create(dirpath, recursive=TRUE) }
-        filepath = file.path(dirpath, paste0(opt[['metric']], '-', opt[['stat']], '.csv'))
+        filepath = file.path(dirpath, paste0(opt[['metric-name']], '-', opt[['stat']], '.csv'))
         write.table(tmp, file = filepath, row.names = FALSE,  sep = ',' )
     }
 
@@ -311,9 +308,6 @@ if (n_distinct(df[['group_name']])==1) {
     )
 
     log_print(paste(Sys.time(), paste('Plotting mulitple comparisons using', opt[['stat']])))
-    if (opt[['plot-histograms']] && !is.null(sdev_df)) {
-        log_print(paste(Sys.time(), 'Plotting fluorescence histograms...'))
-    }
 
     pbar <- progress_bar$new(total = nrow(pval_tbl))
     for (idx in 1:nrow(pval_tbl)) {
@@ -326,7 +320,7 @@ if (n_distinct(df[['group_name']])==1) {
             unique(intersect(
                     c('mouse_id', 'organ', 'cell_type', 'group_name',
                       'subgroup_name', opt[['fluorescence']],
-                       opt[['metric']], 'sdev', 'num_cells'),
+                       opt[['metric-name']], 'sdev', 'num_cells'),
                     colnames(df)
             ))
         ]
@@ -342,10 +336,10 @@ if (n_distinct(df[['group_name']])==1) {
 
         withCallingHandlers({
             fig <- plot_multiple_comparisons(
-                df_subset[, c("organ", "cell_type", "group_name", opt[['metric']])],
-                x='group_name', y=opt[['metric']],
-                ymin=min( df_subset[, opt[['metric']]]*1.1, 0 ),
-                ylabel=opt[['metric']],
+                df_subset[, c("organ", "cell_type", "group_name", opt[['metric-name']])],
+                x='group_name', y=opt[['metric-name']],
+                ymin=min( df_subset[, opt[['metric-name']]]*1.1, 0 ),
+                ylabel=opt[['metric-name']],
                 title=paste(toupper(organ), cell_type),
                 test=opt[['stat']],
                 show_numbers=opt[['show-numbers']],
@@ -362,7 +356,7 @@ if (n_distinct(df[['group_name']])==1) {
         if (!troubleshooting) {
             dirpath <- file.path(wd, opt[['output-dir']], 'figures',
                 gsub(',', '_', opt[['group-by']]), 
-                'multiple_comparisons', opt[['metric']], organ, opt[['stat']]
+                'multiple_comparisons', opt[['metric-name']], organ, opt[['stat']]
             )
             if (!dir.exists(dirpath)) { dir.create(dirpath, recursive=TRUE) }
             
@@ -385,71 +379,6 @@ if (n_distinct(df[['group_name']])==1) {
                     invokeRestart("muffleWarning")
                 }
             })
-        }
-
-        # ----------------------------------------------------------------------
-        # Histograms
-
-        if (opt[['plot-histograms']] && !is.null(sdev_df)) {
-
-            subgroups <- unique(df_subset[['subgroup_name']])
-            for (subgroup in subgroups) {
-
-                df_subsubset <- df_subset[
-                    (df_subset['subgroup_name'] == subgroup),
-                    unique(intersect(
-                            c('organ', 'mouse_id', 'group_name', 'subgroup_name', 'zygosity',
-                              'num_cells', 'gmfi', 'sdev'),
-                            colnames(df_subset)
-                    ))
-                ]
-                df_subsubset <- df_subsubset [!duplicated(df_subsubset[c('mouse_id', 'group_name')]), ]
-                df_subsubset[['color']] <- multiple_replacement(
-                    df_subsubset[['zygosity']],
-                    c('homo'='#ACF53B', 'het'='#ACF53B', 'hemi'='#ACF53B', 'WT'='#B0B0B0')
-                )
-
-                sim_fluors <- Map(
-                    generate_lognormal_data,
-                    n = min(df_subsubset[['num_cells']], 1000, na.rm=TRUE),
-                    mean = df_subsubset[['gmfi']],
-                    sd = df_subsubset[['sdev']],
-                    group_name = apply(
-                        df_subsubset[ , c('group_name', 'mouse_id') ],
-                        1 , paste , collapse = ", " )
-                )
-                sim_fluor <- do.call(rbind, sim_fluors)
-
-                fig <- plot_modal_histograms(sim_fluor,
-                    xlabel = opt[['xlabel']],
-                    ylabel = "Normalized to Mode",
-                    title = paste(toupper(organ), cell_type, subgroup),
-                    spar = 0.4,
-                    colors = df_subsubset[['color']],  # autogenerate this
-                    x_ticks = c(0, 250, 500, 1000, 2500, 5000, 10000),
-                    show_bins=FALSE
-                )
-
-                # save
-                if (!troubleshooting) {
-                    dirpath <- file.path(wd, opt[['output-dir']], 'figures',
-                        gsub(',', '_', opt[['group-by']]),
-                        'histograms', opt[['metric']], organ
-                    )
-                    if (!dir.exists(dirpath)) { dir.create(dirpath, recursive=TRUE) }
-                    
-                    filepath = file.path(dirpath,
-                        paste0(gsub(' ', '', tolower(organ)), '-',
-                            gsub(' ', '_', tolower(cell_type)), '-',
-                            gsub(', ', '_', subgroup), '.png' )
-                    )
-                    ggsave(
-                        filepath,
-                        plot=fig, bg='white',
-                        height=1500, width=3000, dpi=200, units='px', scaling=2
-                    )
-                }
-            }
         }
 
         pbar$tick()

@@ -1,5 +1,7 @@
 ## Graphs TVD for each cell population
 ## 
+## This script should only be used for a single experiment. To combine
+## the results of multiple experiments, use combine_tvd.R.
 
 wd = dirname(this.path::here())  # wd = '~/github/R/helperFlowCell'
 suppressPackageStartupMessages(library('dplyr'))
@@ -19,20 +21,23 @@ import::from(file.path(wd, 'R', 'tools', 'df_tools.R'),
 import::from(file.path(wd, 'R', 'tools', 'file_io.R'),
     'append_many_csv', .character_only=TRUE)
 import::from(file.path(wd, 'R', 'tools', 'list_tools.R'),
-    'items_in_a_not_b', 'move_list_items_to_front', .character_only=TRUE)
+    'items_in_a_not_b', 'move_list_items_to_front', 'multiple_replacement',
+    .character_only=TRUE)
 import::from(file.path(wd, 'R', 'tools', 'math.R'),
-    'apply_unpaired_t_test', 'apply_multiple_comparisons', .character_only=TRUE)
-import::from(file.path(wd, 'R', 'tools', 'math.R'),
+    'apply_unpaired_t_test', 'apply_multiple_comparisons',
     'compute_lognormal_tvd',  # 'compute_normal_tvd',
+    'generate_lognormal_data',
     .character_only=TRUE)
 import::from(file.path(wd, 'R', 'tools', 'plotting.R'),
-    'save_fig', 'plot_violin', 'plot_multiple_comparisons',
-    'plot_polar_area', .character_only=TRUE)
+    'save_fig', 'plot_violin', 'plot_polar_area',
+    'plot_multiple_comparisons', 'plot_modal_histograms',
+    .character_only=TRUE)
 import::from(file.path(wd, 'R', 'config', 'flow.R'),
     'mouse_db_ignore', .character_only=TRUE)
 import::from(file.path(wd, 'R', 'config', 'user_input.R'),
-    'min_cells', 'cell_type_to_color', 'composite_gates',  'custom_group_order',
-    .character_only=TRUE)
+    'min_cells', 'cell_type_to_color',
+    'excluded_cell_types', 'excluded_zygosities', 'included_treatments',
+    'custom_group_order', .character_only=TRUE)
 
 
 # ----------------------------------------------------------------------
@@ -111,7 +116,7 @@ divisor <- opt[['divisor']]
 
 # Start Log
 start_time = Sys.time()
-log <- log_open(paste0("analyze_mfi-",
+log <- log_open(paste0("analyze_tvd-",
     strftime(start_time, format="%Y%m%d_%H%M%S"), '.log'))
 log_print(paste('Script started at:', start_time))
 
@@ -210,7 +215,9 @@ val_cols <- c('gmfi', 'sdev')
 tvd_df <- df[
     ((df[opt[['fluorescence']]]!='WT') &
      (df[['sdev']] > 0) & (df[['num_cells']] > 5)),
-    c('mouse_id', 'fcs_name', group_cols, 'num_cells', 'pct_cells', val_cols)]
+     c('mouse_id', 'fcs_name', group_cols, 'group_name', 'subgroup_name',
+       'num_cells', 'pct_cells', val_cols)
+]
 
 # left join WT mean MFI
 wt_df <- group_by_agg(
@@ -225,12 +232,12 @@ tvd_df <- merge(
     tvd_df, wt_df,
     by=items_in_a_not_b(group_cols, opt[['fluorescence']]),
     all.x=TRUE, all.y=FALSE, suffixes=c('', '_'))[,
-    c('mouse_id', 'fcs_name', group_cols,
+    c('mouse_id', 'fcs_name', group_cols,  'group_name', 'subgroup_name',
       'num_cells', 'pct_cells', val_cols, 'wt_gmfi', 'wt_sdev')
 ]
-tvd_df[['group_name']] <- apply(
-    tvd_df[ , metadata_cols , drop = FALSE] , 1 , paste , collapse = ", "
-)
+# tvd_df[['group_name']] <- apply(
+#     tvd_df[ , metadata_cols , drop = FALSE] , 1 , paste , collapse = ", "
+# )
 
 tvd_df[['tvd']] <- mapply(
     compute_lognormal_tvd,
@@ -260,32 +267,66 @@ for (organ in sort(organs)) {
 
     log_print(paste(Sys.time(), 'Plotting', organ, 'tvd...'))
 
-    fig <- plot_violin(
-        tvd_df[(tvd_df[['organ']]==organ), ],
-        x='cell_type', y='tvd', group_by='group_name',
-        ylabel='TVD', title=organ,
-        ymin=0, ymax=1,
-        hover_data=unique(intersect(
-                c('mouse_id', 'group_name', metadata_cols,
-                  'sex', 'treatment', 'weeks_old', 
-                  'Cells', 'num_cells', 'fcs_name'),
-                colnames(df)
-        ))
-    )
+    tryCatch(
+        {
+            R.utils::withTimeout(
+                {
+                    fig <- plot_violin(
+                        tvd_df[
+                            tvd_df[['organ']] == organ &
+                            !is.na(tvd_df[['tvd']]), 
+                        ],
+                        x = 'cell_type',
+                        y = 'tvd',
+                        group_by = 'group_name',
+                        ylabel = 'TVD',
+                        title = organ,
+                        ymin = 0,
+                        ymax = 1,
+                        hover_data = unique(intersect(
+                            c(
+                                'mouse_id', 'group_name', metadata_cols,
+                                'sex', 'treatment', 'weeks_old',
+                                'Cells', 'num_cells', 'fcs_name'
+                            ),
+                            colnames(tvd_df)
+                        ))
+                    )
 
-    if (!troubleshooting) {
-        dirpath <- file.path(wd, opt[['output-dir']], 'figures',
-            gsub(',', '_', opt[['group-by']]), 
-            'overview', 'tvd')
-        if (!dir.exists(dirpath)) { dir.create(dirpath, recursive=TRUE) }
-        save_fig(
-            fig=fig,
-            height=500, width=2000,
-            dirpath=dirpath,
-            filename=paste(organ, 'tvd', sep='-'),
-            save_html=TRUE
-        )
-    }
+                    if (!troubleshooting) {
+                        dirpath <- file.path(
+                            wd, opt[['output-dir']], 'figures',
+                            gsub(',', '_', opt[['group-by']]),
+                            'overview', 'tvd'
+                        )
+
+                        if (!dir.exists(dirpath)) {
+                            dir.create(dirpath, recursive = TRUE)
+                        }
+
+                        save_fig(
+                            fig = fig,
+                            height = 500,
+                            width = 2000,
+                            dirpath = dirpath,
+                            filename = paste(organ, 'tvd', sep = '-'),
+                            save_html = TRUE
+                        )
+                    }
+                },
+                timeout = 5,
+                cpu = Inf,
+                elapsed = 5,
+                onTimeout = "error"
+            )
+        },
+        error = function(e) {
+            log_print(paste0(
+                Sys.time(), " ERROR: Processing ", organ,
+                ": ", conditionMessage(e), ". Skipping."
+            ))
+        }
+    )
 }
 
 
@@ -294,41 +335,41 @@ for (organ in sort(organs)) {
 
 log_print(paste0(Sys.time(), ' Plotting polar area charts...'))
 
-polar_df <- tvd_df[(tvd_df['zygosity'] == 'homo') & (!is.na(tvd_df['cell_type'])), ] %>%
-    group_by(organ, cell_type, treatment) %>%
+tmp_df <- tvd_df[
+    (!tvd_df[['cell_type']] %in% excluded_cell_types) &
+    (!tvd_df[['zygosity']] %in% excluded_zygosities), ]
+
+polar_df <- tmp_df[(tmp_df['zygosity'] == 'homo') & (!is.na(tmp_df['cell_type'])), ] %>%
+    group_by(across(all_of(c("organ", "cell_type", metadata_cols)))) %>%
     summarise(
         mean_pct_cells = mean(pct_cells, na.rm = TRUE),
         mean_tvd = mean(tvd, na.rm = TRUE),
         .groups = 'drop'
     )
-polar_df <- polar_df[!polar_df[['cell_type']] %in% composite_gates, ]
 polar_df <- as.data.frame(polar_df)
 polar_df <- fillna(polar_df, 'mean_tvd', 0)
 
 organs <- sort(unique(polar_df[['organ']]))
-treatments <- unique(polar_df[['treatment']])
 
 for (organ in organs) {
-    for (treatment in treatments) {
-        fig <- plot_polar_area(
-            polar_df[(polar_df[['organ']]==organ) & (polar_df[['treatment']]==treatment), ],
-            x="mean_pct_cells", y="mean_tvd", group='cell_type',
-            min_label_pct=100,
-            colors=cell_type_to_color,
-            title=organ,
-            show_axes=TRUE
-        )
+    fig <- plot_polar_area(
+        polar_df[(polar_df[['organ']]==organ), ],
+        x="mean_pct_cells", y="mean_tvd", group='cell_type',
+        min_label_pct=100,
+        colors=cell_type_to_color,
+        title=organ,
+        show_axes=TRUE
+    )
 
-        if (!troubleshooting) {
-            save_fig(
-                fig=fig,
-                height=opt[['height']], width=opt[['width']],
-                dirpath=file.path(path.expand(wd), opt[['output-dir']], 'figures',
-                    'polar_area'),
-                filename=paste(organ, 'polar_area', treatment, sep='-'),
-                save_html=TRUE
-            )
-        }
+    if (!troubleshooting) {
+        save_fig(
+            fig=fig,
+            height=opt[['height']], width=opt[['width']],
+            dirpath=file.path(path.expand(wd), opt[['output-dir']], 'figures',
+                'polar_area'),
+            filename=paste(organ, 'polar_area', sep='-'),
+            save_html=TRUE
+        )
     }
 }
 
@@ -396,13 +437,12 @@ if (n_distinct(tvd_df[['group_name']])==1) {
         organ <- pval_tbl[idx, 'organ'][[1]]
         cell_type <- pval_tbl[idx, 'cell_type'][[1]]
         tvd_df_subset <- tvd_df[
-            ((tvd_df[['organ']] == organ) &
-             (tvd_df[['cell_type']] == cell_type) & 
+            ((tvd_df[['organ']] == organ) & (tvd_df[['cell_type']] == cell_type) & 
              (!is.na(tvd_df[['tvd']]))),
             unique(intersect(
                     c('mouse_id', 'organ', 'cell_type', 'group_name',
                       'subgroup_name', opt[['fluorescence']],
-                       'tvd', 'sdev', 'num_cells'),
+                       'num_cells', 'gmfi', 'sdev', 'tvd'),
                     colnames(tvd_df)
             ))
         ]
@@ -465,6 +505,73 @@ if (n_distinct(tvd_df[['group_name']])==1) {
                     invokeRestart("muffleWarning")
                 }
             })
+        }
+
+        # ----------------------------------------------------------------------
+        # Histograms
+
+        if (opt[['plot-histograms']] && !is.null(sdev_df)) {
+
+            subgroups <- unique(tvd_df_subset[['subgroup_name']])
+            for (subgroup in subgroups) {
+
+                df_subsubset <- df[
+                    (df[['organ']] == organ) &
+                    (df[['cell_type']] == cell_type) &
+                    (df['subgroup_name'] == subgroup),
+                    unique(intersect(
+                            c('organ', 'mouse_id', 'group_name', 'subgroup_name', 'zygosity',
+                              'num_cells', 'gmfi', 'sdev'),
+                            colnames(tvd_df_subset)
+                    ))
+                ]
+                df_subsubset <- df_subsubset [!duplicated(df_subsubset[c('mouse_id', 'group_name')]), ]
+                df_subsubset[['color']] <- multiple_replacement(
+                    df_subsubset[['zygosity']],
+                    c('homo'='#ACF53B', 'het'='#ACF53B', 'hemi'='#ACF53B', 'WT'='#B0B0B0')
+                )
+
+                sim_fluors <- Map(
+                    generate_lognormal_data,
+                    n = min(df_subsubset[['num_cells']], 1000, na.rm=TRUE),
+                    mean = df_subsubset[['gmfi']],
+                    sd = df_subsubset[['sdev']],
+                    group_name = apply(
+                        df_subsubset[ , c('group_name', 'mouse_id') ],
+                        1 , paste , collapse = ", " )
+                )
+                sim_fluor <- do.call(rbind, sim_fluors)
+
+                fig <- plot_modal_histograms(sim_fluor,
+                    xlabel = opt[['xlabel']],
+                    ylabel = "Normalized to Mode",
+                    title = paste(toupper(organ), cell_type, subgroup),
+                    spar = 0.4,
+                    colors = df_subsubset[['color']],  # autogenerate this
+                    x_ticks = c(0, 250, 500, 1000, 2500, 5000, 10000),
+                    show_bins=FALSE
+                )
+
+                # save
+                if (!troubleshooting) {
+                    dirpath <- file.path(wd, opt[['output-dir']], 'figures',
+                        gsub(',', '_', opt[['group-by']]),
+                        'histograms', opt[['metric']], organ
+                    )
+                    if (!dir.exists(dirpath)) { dir.create(dirpath, recursive=TRUE) }
+                    
+                    filepath = file.path(dirpath,
+                        paste0(gsub(' ', '', tolower(organ)), '-',
+                            gsub(' ', '_', tolower(cell_type)), '-',
+                            gsub(', ', '_', subgroup), '.png' )
+                    )
+                    ggsave(
+                        filepath,
+                        plot=fig, bg='white',
+                        height=1500, width=3000, dpi=200, units='px', scaling=2
+                    )
+                }
+            }
         }
 
         pbar$tick()

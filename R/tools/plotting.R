@@ -1,15 +1,16 @@
 # import::here(rlang, 'sym')
 import::here(magrittr, '%>%')
-import::here(dplyr, 'group_by', 'summarize', 'summarise', 'mutate', 'reframe', 'first', 'n_distinct', 'arrange')
+import::here(dplyr, 'group_by', 'summarize', 'summarise', 'mutate',
+    'reframe', 'first', 'n_distinct', 'arrange')
 import::here(tidyr, 'pivot_wider', 'unnest')
 import::here(tibble, 'tibble')
 import::here(ggplot2,
     'ggplot', 'aes', 'labs', 'theme', 'theme_minimal', 'margin',
-    'geom_boxplot', 'geom_jitter', 'geom_col', 'geom_line', 'geom_area', 'element_text',
-    'stat_summary', 'scale_fill_brewer', 'scale_fill_manual', 'scale_color_manual',
-    'scale_x_continuous', 'scale_x_discrete', 'scale_y_continuous', 'ylim',
-    'guides', 'guide_legend', 'guide_axis', 'expansion', 'ggtitle')
-import::here(cowplot, 'plot_grid', 'get_plot_component')
+    'geom_boxplot', 'geom_jitter', 'geom_col', 'geom_line', 'geom_area',
+    'element_text', 'stat_summary', 'scale_fill_brewer', 'scale_fill_manual',
+    'scale_color_manual', 'scale_x_continuous', 'scale_x_discrete', 'scale_y_continuous',
+    'ylim', 'guides', 'guide_legend', 'guide_axis', 'expansion', 'ggtitle')
+import::here(cowplot, 'plot_grid', 'get_legend', 'get_plot_component')
 import::here(flowCore, 'logicleTransform')
 import::here(RColorBrewer, 'brewer.pal')
 import::here(ggprism, 'theme_prism')
@@ -779,7 +780,8 @@ plot_modal_histograms <- function(df,
         theme_minimal(base_size = 12)
 
     # split then recombine with define widths
-    legend <- get_plot_component(fig, "guide-box", return_all=TRUE)[[1]]  # silence warning
+    # legend <- get_plot_component(fig, "guide-box", return_all=TRUE)[[1]]  # silence warning
+    legend <- get_legend(fig)  # silence warning
     fig <- fig + theme(legend.position="none")
     fig <- plot_grid(fig, legend, ncol = 2, rel_widths = c(3, 1))
 
@@ -803,7 +805,7 @@ plot_polar_area <- function(df,
     normalize = TRUE,
     min_label_pct = 2,  # Minimum percentage to show label
     min_radius = 0.3,   # Minimum radius to show label inside
-    min_display_pct = 1.5 # Minimum percentage for display
+    min_display_pct = 0 # Minimum percentage for display
 ) {
 
     # Default Tailwind palette for categories without an assigned color

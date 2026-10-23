@@ -26,8 +26,9 @@ import::from(file.path(wd, 'R', 'tools', 'plotting.R'),
 import::from(file.path(wd, 'R', 'config', 'flow.R'),
     'mouse_db_ignore', .character_only=TRUE)
 import::from(file.path(wd, 'R', 'config', 'user_input.R'),
-    'min_cells', 'cell_type_to_color', 'composite_gates', 'custom_group_order',
-    .character_only=TRUE)
+    'min_cells', 'cell_type_to_color',
+    'excluded_cell_types', 'excluded_zygosities', 'included_treatments',
+    'custom_group_order', .character_only=TRUE)
 
 reticulate::py_config()  # required on linux to access reticulate
 
@@ -243,7 +244,12 @@ for (organ in sort(organs)) {
 
 log_print(paste0(Sys.time(), ' Plotting ribbon charts...'))
 
-ribbon_df <- df %>%
+tmp_df <- df[
+    (!df[['cell_type']] %in% excluded_cell_types) &
+    (!df[['zygosity']] %in% excluded_zygosities) &
+    (df[['treatment']] %in% included_treatments), ]
+
+ribbon_df <- tmp_df %>%
     group_by(across(all_of(c("organ", "cell_type", metadata_cols)))) %>%
     summarise(
         mean_pct_cells = mean(.data[["pct_cells"]], na.rm = TRUE),
@@ -256,7 +262,6 @@ ribbon_df <- df %>%
     )
 ribbon_df <- as.data.frame(ribbon_df)
 ribbon_df[['group_name']] <- apply( ribbon_df[ , metadata_cols ] , 1 , paste , collapse = ", " )
-ribbon_df <- ribbon_df[!ribbon_df[['cell_type']] %in% composite_gates, ]
 
 for (organ in organs) {
 

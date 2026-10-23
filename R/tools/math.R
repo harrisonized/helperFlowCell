@@ -519,12 +519,20 @@ compute_lognormal_tvd <- function(mean1, sd1, mean2, sd2) {
             function(x) dlnorm(x, meanlog = loc, sdlog = shp)
         })
     }
+    
+    overlap <- tryCatch(
+        integrate(
+            function(x) pmin(curves[[1]](x), curves[[2]](x)),
+            lower = 0,
+            upper = max(mean1 + 10 * sd1, mean2 + 10 * sd2),
+            rel.tol = 1e-8
+        )$value,
+        error = function(e) NA
+    )
 
-    overlap <- integrate(
-        function(x) pmin(curves[[1]](x), curves[[2]](x)),
-        lower = 0, upper = max(mean1 + 10 * sd1, mean2 + 10 * sd2),
-        rel.tol = 1e-8
-    )$value
+    if (is.na(overlap)) {
+        return(NA)
+    }
 
     dissimiliarity <- sign(mean1-mean2)* (1 - overlap)
     return(dissimiliarity)
