@@ -241,7 +241,7 @@ tvd_df <- merge(
     tvd_df, wt_df,
     by=items_in_a_not_b(group_cols, opt[['fluorescence']]),
     all.x=TRUE, all.y=FALSE, suffixes=c('', '_'))[,
-    c(export_cols, 'wt_gmfi', 'wt_sdev')
+    c(colnames(tvd_df), 'wt_gmfi', 'wt_sdev')
 ]
 
 tvd_df[['tvd']] <- mapply(
@@ -355,17 +355,31 @@ polar_df <- as.data.frame(polar_df)
 polar_df <- fillna(polar_df, 'mean_tvd', 0)
 
 organs <- sort(unique(polar_df[['organ']]))
-treatments <- unique(polar_df[['treatment']])
+metadata_combinations <- unique(polar_df[, metadata_cols, drop = FALSE])
 
 for (organ in organs) {
-    for (treatment in treatments) {
+    for (i in seq_len(nrow(metadata_combinations))) {
+
+        metadata <- metadata_combinations[i, , drop = FALSE]
+
+        # Filter by organ and all metadata columns
+        subset_df <- polar_df[polar_df[['organ']] == organ, ]
+
+        for (col in metadata_cols) {
+            subset_df <- subset_df[
+                !is.na(subset_df[[col]]) &
+                subset_df[[col]] == metadata[[col]][1],
+            ]
+        }
+
         fig <- plot_polar_area(
-            polar_df[(polar_df[['organ']]==organ) & (polar_df[['treatment']]==treatment), ],
+            subset_df,
             x="mean_pct_cells", y="mean_tvd", group='cell_type',
-            min_label_pct=100,
-            colors=cell_type_to_color,
             title=organ,
             show_axes=TRUE,
+            colors=cell_type_to_color,
+            min_label_pct=100,
+            min_display_pct=1,
             fill_remainder=opt[['make-whole']]
         )
 
@@ -375,7 +389,7 @@ for (organ in organs) {
                 height=500, width=800,
                 dirpath=file.path(path.expand(wd), opt[['output-dir']], 'figures',
                     gsub(',', '_', opt[['group-by']]), 'polar_area'),
-                filename=paste(organ, 'polar_area', treatment, sep='-'),
+                filename=paste(organ, 'polar_area', paste(metadata, collapse = "_"), sep='-'),
                 save_html=TRUE
             )
         }

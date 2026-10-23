@@ -248,9 +248,7 @@ for (organ in sort(organs)) {
 
 log_print(paste0(Sys.time(), ' Plotting ribbon charts...'))
 
-tmp_df <- df[
-    (!df[['cell_type']] %in% excluded_cell_types) &
-    (df[['treatment']] %in% included_treatments), ]
+tmp_df <- df[(!df[['cell_type']] %in% excluded_cell_types), ]
 
 ribbon_df <- tmp_df %>%
     group_by(across(all_of(c("organ", "cell_type", metadata_cols)))) %>%

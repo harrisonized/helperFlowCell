@@ -58,7 +58,7 @@ metadata_cols <- unlist(strsplit(opt[['group-by']], ','))
 
 # Start Log
 start_time = Sys.time()
-log <- log_open(paste0("analyze_counts-",
+log <- log_open(paste0("combine_tvd-",
     strftime(start_time, format="%Y%m%d_%H%M%S"), '.log'))
 log_print(paste('Script started at:', start_time))
 
@@ -93,12 +93,25 @@ polar_df <- as.data.frame(polar_df)
 polar_df <- fillna(polar_df, 'mean_tvd', 0)
 
 organs <- sort(unique(polar_df[['organ']]))
-treatments <- unique(polar_df[['treatment']])
+metadata_combinations <- unique(polar_df[, metadata_cols, drop = FALSE])
 
 for (organ in organs) {
-    for (treatment in treatments) {
+    for (i in seq_len(nrow(metadata_combinations))) {
+
+        metadata <- metadata_combinations[i, , drop = FALSE]
+
+        # Filter by organ and all metadata columns
+        subset_df <- polar_df[polar_df[['organ']] == organ, ]
+
+        for (col in metadata_cols) {
+            subset_df <- subset_df[
+                !is.na(subset_df[[col]]) &
+                subset_df[[col]] == metadata[[col]][1],
+            ]
+        }
+        
         fig <- plot_polar_area(
-            polar_df[(polar_df[['organ']]==organ) & (polar_df[['treatment']]==treatment), ],
+            subset_df,
             x="mean_pct_cells", y="mean_tvd", group='cell_type',
             min_label_pct=100,
             colors=cell_type_to_color,
@@ -112,7 +125,7 @@ for (organ in organs) {
                 fig=fig,
                 height=500, width=800,
                 dirpath=file.path(path.expand(wd), opt[['output-dir']], 'figures', 'polar_area'),
-                filename=paste(organ, 'polar_area', treatment, sep='-'),
+                filename=paste(organ, 'polar_area', paste(metadata, collapse = "_"), sep='-'),
                 save_html=TRUE
             )
         }
