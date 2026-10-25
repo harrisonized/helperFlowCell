@@ -217,10 +217,20 @@ if (opt[['show-all-channels']]) {
         mutate(all_fluorophores = coalesce(all_fluorophores, channel_name)) %>%
         select(-channel_name)
 }
+
 design_matrix <- design_matrix %>% append_dataframe(
     stranspose(col_metadata, colname='channel_id'),
     infront=TRUE, reset_index=FALSE
 )
+if (opt[['show-all-channels']]) {
+    # filter SSC columns
+    design_matrix <- design_matrix[,
+        items_in_a_not_b(
+            colnames(design_matrix),
+            missing_channels[which(missing_channels[['channel_name']]=='SSC'), 'channel_id'][[1]]
+        )
+    ]
+}
 
 # Rename last row
 row.names(design_matrix)[nrow(design_matrix)] <- 'count'

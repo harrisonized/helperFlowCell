@@ -63,6 +63,7 @@ antibody_replacements <- c(
     # custom exact replacements
     '^\\(CXCR4\\)$' = 'CXCR4',
     ' Fixable Viability Kit' = '',
+    'FasL' = 'CD178',
     'NK cell Pan' = 'CD49b',
     'TCRb TCRcb' = 'TCRb, TCRcb',
     'Vb8.1 Vb8.2' = 'Vb8.1, 2',
