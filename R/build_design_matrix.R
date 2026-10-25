@@ -5,6 +5,7 @@ suppressPackageStartupMessages(library('dplyr'))
 library("openxlsx")
 library('optparse')
 suppressPackageStartupMessages(library('logr'))
+import::from(dplyr, 'mutate')
 import::from(magrittr, '%>%')
 import::from(tidyr, 'separate_rows', 'pivot_wider')
 import::from(reshape2, 'melt')
@@ -41,6 +42,10 @@ option_list = list(
     make_option(c("-o", "--output-dir"), default="data/design",
                 metavar="data/design", type="character",
                 help="set the output directory for the data"),
+
+    make_option(c("-s", "--show-all-channels"), default=FALSE, action="store_true",
+                metavar="FALSE", type="logical",
+                help="show all channels"),
 
     make_option(c("-t", "--troubleshooting"), default=FALSE, action="store_true",
                 metavar="FALSE", type="logical",
@@ -113,8 +118,6 @@ ab_counts <- ab_shortlist[, c('antibody', 'company', 'catalog_no', 'fluorophore'
           by='fluorophore', suffixes=c('', '_'),
           all.x=TRUE, all.y=FALSE, na_matches = 'never') %>% 
     fillna(c('channel_id'), val='other') %>%
-    # group_by(antibody, channel_id) %>%
-    # group_by(.data[['antibody']], .data[['channel_id']]) %>%
     group_by(!!!syms(c('antibody', 'channel_id'))) %>%
     summarise(
         num_fluorophores=n_distinct(fluorophore),
@@ -164,6 +167,13 @@ channel_order <- instr_cfg[
         method = "radix"
     ), 'channel_id'
 ][[1]]
+if (opt[['show-all-channels']]) {
+    # add back the skipped columns, fill all rows with 0
+    missing_cols <- items_in_a_not_b(channel_order, colnames(design_matrix))
+    design_matrix <- mutate(
+        design_matrix, !!!setNames( as.list(rep("0", length(missing_cols))), missing_cols)
+    )
+}
 design_matrix <- design_matrix[ ,
     c(intersect(channel_order, colnames(design_matrix)),
       items_in_a_not_b(colnames(design_matrix), channel_order)
@@ -195,7 +205,18 @@ col_metadata <- ab_counts %>%
     summarise(all_fluorophores = toString(unique(most_common_fluorophore))) %>%
     merge(instr_cfg[, c('channel_id', 'bandpass_filter', 'excitation', 'laser')],
           by='channel_id', suffixes=c('', '_'),
-          all.x=TRUE, all.y=FALSE, na_matches = 'never', sort=FALSE)
+          all.x=TRUE, all.y=TRUE, na_matches = 'never', sort=FALSE)
+if (opt[['show-all-channels']]) {
+    missing_channels <- instr_cfg_long[
+        !duplicated(instr_cfg_long[['channel_id']]),
+        c('channel_id', 'channel_name')
+    ]
+    missing_channels[['channel_id']] <- as.character(missing_channels[['channel_id']])
+    col_metadata <- col_metadata %>%
+        left_join(missing_channels, by = "channel_id") %>%
+        mutate(all_fluorophores = coalesce(all_fluorophores, channel_name)) %>%
+        select(-channel_name)
+}
 design_matrix <- design_matrix %>% append_dataframe(
     stranspose(col_metadata, colname='channel_id'),
     infront=TRUE, reset_index=FALSE
