@@ -93,6 +93,7 @@ fluorophore_replacements <- c(
     '(B[Vv]) {0,1}([0-9]+)' = 'BV\\2',
     'Brilliant Violet( |)' = 'BV',
     '([Dd][Ll]|Dy[Ll]ight) {0,1}-{0,1}([0-9]+)' = 'DL\\2',
+    'E([A-Za-z])FP' = '\\1FP',
     'e[Ff]((l|)uor|) {0,1}([0-9]+)' = 'eF\\3',
     'eVolve {0,1}([0-9]+)' = 'eVolve \\1',
     'Fluos' = 'Annexin-V-FLUOS',

@@ -4,7 +4,8 @@
 ## lasers
 ## color_for_laser
 
-lasers = c('UV', 'Violet', 'Blue', 'Green', 'Red')
+# lasers = c('UV', 'Violet', 'Blue', 'Green', 'Red')
+lasers = c('UV', 'Violet', 'Blue', 'Yellow-Green', 'Red')
 
 color_for_laser <- setNames(
     nm=lasers,  # keys

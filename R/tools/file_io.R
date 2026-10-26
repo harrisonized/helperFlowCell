@@ -141,12 +141,12 @@ join_many_csv <- function(
 #' switch case to read excel or csv based on the extension
 #' 
 #' @export
-read_excel_or_csv <- function(filepath) {
+read_excel_or_csv <- function(filepath, encoding = "UTF-8") {
     ext=tools::file_ext(filepath)
     if (ext == 'xlsx') {
         df <- read_excel(filepath, .name_repair = "unique_quiet")
     } else if (ext == 'csv') {
-        df <- read.csv(filepath, header=TRUE, check.names=FALSE)
+        df <- read.csv(filepath, header=TRUE, check.names=FALSE, encoding=encoding)
     } else {
         stop('Please enter a xlsx or csv file.')
     }

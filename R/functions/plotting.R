@@ -26,38 +26,28 @@ import::here(file.path(wd, 'R', 'config', 'lasers.R'),
 #'
 plot_spectra_by_each_laser <- function(spectra, detectors, laser) {
 
-    excitation <- detectors[(detectors['laser']==laser), ][['excitation']][[1]]
+    laser_spectra <- spectra[(spectra[['laser']] == laser) & (!is.na(spectra[['laser']])), ]
+    laser_detectors <- detectors[(detectors[['laser']] == laser) & (!is.na(detectors[['laser']])), ]
+    excitation <- laser_detectors[['excitation']][[1]]
     laser_color <- do.call(switch, c(laser, color_for_laser, "Black"))  # get color
     # c(xmin, xmax) %<-% c(min(spectra[['Wavelength']]), max(spectra[['Wavelength']]))
     c(xmin, xmax) %<-% c(300, 900)  # standardize this
 
-    fig <- spectra[(spectra['laser']==laser), ] %>%
-        # base plot
-        ggplot( aes(x = .data[['Wavelength']], y = .data[['intensity']], 
-                    fill = .data[['fluorophore']], group = .data[['trace_name']]),
-                show.legend = FALSE ) +
-        # plot lasers
+    fig <- ggplot() +
+        # plot laser excitation
         # note: geom_vline doesn't work well here
-        geom_rect(
-            aes(xmin=excitation-3, xmax=excitation+3, ymin=0, ymax=1),
+        geom_rect(data=data.frame(xmin=excitation-3, xmax=excitation + 3, ymin=0, ymax=1),
+            aes(xmin=xmin, xmax=xmax, ymin=ymin, ymax=ymax),
             fill=laser_color, alpha=0.8,
-            inherit.aes = FALSE
-        )  +
+            inherit.aes=FALSE
+        ) +
         # plot detectors
-        geom_rect(
+        geom_rect(data=laser_detectors,
             aes(xmin=xmin, xmax=xmax, ymin=0, ymax=1),
-            data = detectors[(detectors['laser']==laser), c('xmin', 'xmax')],
             fill="#A3A3A3", alpha=0.6,  # gray
             inherit.aes = FALSE
         ) +
-        # fill curves
-        geom_area(
-            aes(linetype = .data[['spectrum_type']]),
-            position = "identity", 
-            alpha = 0.3,
-            colour = alpha("black", 0.7)
-        ) + 
-        facet_wrap(vars(.data[['laser']]), strip.position="right") +
+        facet_wrap(vars(laser), strip.position = "right") +
         scale_linetype_manual(
             values = c(
                 "AB" = "dotted",
@@ -65,12 +55,28 @@ plot_spectra_by_each_laser <- function(spectra, detectors, laser) {
                 "EM" = "solid"),
             guide = NULL  # disable group as a legend
         ) +
-        guides(fill = guide_legend(order=1)) +  # fluorophore
         theme_classic() +
-        theme(legend.box = "horizontal",
-              legend.justification = c(0, 1)) +  # align legend
-        xlim(xmin, xmax) + 
+        xlim(xmin, xmax) +
         ylim(0, 1)
 
+    # Add spectra
+    if (nrow(laser_spectra) > 0) {
+        # base plot
+        fig <- fig +
+            geom_area(
+                data = laser_spectra,
+                aes(x = .data[["Wavelength"]], y = .data[["intensity"]],
+                    fill = .data[["fluorophore"]], group = .data[["trace_name"]],
+                    linetype = .data[["spectrum_type"]]),
+                position = "identity",
+                alpha = 0.3,
+                colour = alpha("black", 0.7)
+            ) +
+            guides(fill = guide_legend(order = 1)) + 
+            theme(
+                legend.box = "horizontal",
+                legend.justification = c(0, 1)
+            )
+    }
     return(fig)
 }
