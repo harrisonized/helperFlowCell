@@ -3,10 +3,10 @@ import::here(zeallot, '%<-%')
 import::here(magrittr, '%>%')
 import::here(ggplot2,
     'ggplot', 'aes', 
-    'geom_rect', 'geom_area', 'alpha',
+    'geom_rect', 'geom_area', 'geom_segment', 'alpha',
     'facet_wrap', 'scale_linetype_manual',
     'guides', 'guide_legend', 'theme', 'theme_classic',
-    'xlim', 'ylim')
+    'xlim', 'ylim', 'labs')
 import::here(file.path(wd, 'R', 'config', 'lasers.R'),
     'color_for_laser', .character_only=TRUE)
 
@@ -41,12 +41,28 @@ plot_spectra_by_each_laser <- function(spectra, detectors, laser) {
             fill=laser_color, alpha=0.8,
             inherit.aes=FALSE
         ) +
-        # plot detectors
+        # shade detectors
         geom_rect(data=laser_detectors,
             aes(xmin=xmin, xmax=xmax, ymin=0, ymax=1),
             fill="#A3A3A3", alpha=0.6,  # gray
             inherit.aes = FALSE
-        ) +
+        ) + { # add detector boundaries
+            edges <- list(
+                list("xmin", "xmin", 0, 1),  # left
+                list("xmin", "xmax", 1, 1),  # top
+                list("xmax", "xmax", 0, 1)   # right
+            )
+            lapply(edges, function(edge) {
+                geom_segment(
+                    data = laser_detectors,
+                    aes(x = .data[[edge[[1]]]], xend = .data[[edge[[2]]]],
+                        y = edge[[3]], yend = edge[[4]] ),
+                    colour = "#595959",  # dark grey
+                    linewidth = 0.5,
+                    inherit.aes = FALSE
+                )
+            })
+        } +
         facet_wrap(vars(laser), strip.position = "right") +
         scale_linetype_manual(
             values = c(
@@ -57,7 +73,8 @@ plot_spectra_by_each_laser <- function(spectra, detectors, laser) {
         ) +
         theme_classic() +
         xlim(xmin, xmax) +
-        ylim(0, 1)
+        ylim(0, 1) +
+        labs(y = "intensity")
 
     # Add spectra
     if (nrow(laser_spectra) > 0) {
