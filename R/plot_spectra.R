@@ -159,7 +159,7 @@ if (!troubleshooting) {
 # TODO: bugfix for when a fluorophore is available in spectra but not in instr_cfg
 
 # select available lasers
-# lasers <- Reduce(intersect, na.omit(list( lasers, unique(panel[['laser']]))) ) 
+lasers <- Reduce(intersect, na.omit(list( lasers, unique(instr_cfg[['laser']]))) ) 
 plots <- lapply(lasers, FUN = function(laser)
     plot_spectra_by_each_laser(spectra_long, instr_cfg, laser)
 )
@@ -179,8 +179,8 @@ if (!troubleshooting) {
     ggsave(
         file.path(wd, opt[['figures-dir']], 'spectra.png'),  # filename
         plot=fig,
-        height=200+200*length(lasers), width=1200, dpi=200,
-        units="px", scaling=0.5
+        height=1000+1000*length(lasers), width=6600, dpi=300,
+        units="px", scaling=2
     )
 }
 
