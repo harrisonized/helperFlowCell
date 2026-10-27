@@ -4,10 +4,11 @@ import::here(magrittr, '%>%')
 import::here(ggplot2,
     'ggplot', 'aes', 'alpha', 'facet_wrap',
     'geom_rect', 'geom_area', 'geom_segment', 
-    'element_blank', 'element_text', 'unit',
+    'element_blank', 'element_text', 'element_line', 'unit',
     'scale_linetype_manual', 'scale_fill_discrete', 'scale_fill_gradientn',
     'guides', 'guide_legend', 'theme', 'theme_classic',
     'xlim', 'ylim', 'labs')
+# import::here(ggprism, 'theme_prism')
 import::here(scales, 'rescale')
 import::here(file.path(wd, 'R', 'config', 'lasers.R'),
     'color_for_laser', .character_only=TRUE)
@@ -60,7 +61,7 @@ plot_spectra_by_each_laser <- function(spectra, detectors, laser, xmin=300, xmax
         theme_classic() +
         xlim(xmin, xmax) +
         ylim(0, 1) +
-        labs(y = "intensity")
+        labs(x="wavelength", y = "intensity")
 
     # Add spectra
     if (nrow(laser_spectra) > 0) {
@@ -127,22 +128,38 @@ plot_spectra_by_each_laser <- function(spectra, detectors, laser, xmin=300, xmax
             guides(fill = guide_legend(order = 1)) + 
             theme(
                 legend.box = "horizontal",
-                legend.justification = c(0, 1),
-                legend.text = element_text(size = 8),
-                legend.key.size = unit(14, "pt"),
-                legend.key.width = unit(14, "pt"),
-                legend.key.height = unit(14, "pt"),
+                legend.justification = c(0, 1)
             )
     }
 
     # plot laser excitation
     # note: geom_vline doesn't work well here
-    fig <- fig + geom_rect(
+    fig <- fig +
+        geom_rect(
             data=data.frame(xmin=excitation-3, xmax=excitation + 3, ymin=0, ymax=1),
             aes(xmin=xmin, xmax=xmax, ymin=ymin, ymax=ymax),
             fill=laser_color,
             alpha=0.8,
-            inherit.aes=FALSE)
+            inherit.aes=FALSE
+        ) + 
+        theme(
+            axis.title = element_text(face = "plain"),
+            axis.title.x = element_text(size = 11, face = "plain"),
+            axis.title.y = element_text(size = 11, face = "plain"),
+            axis.text = element_text(size = 9, face = "plain"),
+            axis.line = element_line(linewidth = 0.4),
+            axis.ticks = element_line(linewidth = 0.3),
+            legend.position = "right",
+            legend.direction = "vertical",
+            legend.justification = "left",
+            legend.box.just = "top",
+            legend.title = element_text(face = "plain"),
+            legend.text = element_text(size = 9, face = "plain"),
+            legend.key.size = unit(8, "pt"),
+            legend.key.width = unit(14, "pt"),
+            legend.key.height = unit(14, "pt"),
+            legend.spacing.y = unit(14, "pt")
+        )
 
     return(fig)
 }
